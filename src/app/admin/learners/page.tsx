@@ -3,7 +3,7 @@ import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import {
-  Badge, Button, Cell, EmptyState, Input, PageHeader, ProgressRing, Row, Table,
+  Badge, Button, Cell, EmptyState, Input, LinkButton, PageHeader, ProgressRing, Row, Table,
 } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +51,11 @@ export default async function LearnersPage({
   return (
     <div>
       <PageHeader
+        action={
+          <LinkButton href="/admin/learners/import" variant="secondary" size="sm">
+            Import
+          </LinkButton>
+        }
         title="Learners"
         description="Everyone enrolled or registered with the academy."
       />
