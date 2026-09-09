@@ -27,7 +27,7 @@ export default async function AboutPage() {
 
   const page = await db.storefrontPage.findFirst({
     where: { organizationId: site.organizationId, slug: 'about', status: 'PUBLISHED' },
-    select: { title: true, blocks: true },
+    select: { title: true, blocks: true, seoDescription: true },
   });
 
   const [branches, categories, courseCount] = await Promise.all([
@@ -51,7 +51,12 @@ export default async function AboutPage() {
           {blocks.map((b, i) => (
             <section key={i}>
               {b.heading && <h2 className="text-lg font-semibold">{b.heading}</h2>}
-              {b.body && <p className="muted mt-2 leading-relaxed">{b.body}</p>}
+              {b.body &&
+                b.body.split(/\n{2,}/).map((para, j) => (
+                  <p key={j} className="muted mt-2 leading-relaxed">
+                    {para}
+                  </p>
+                ))}
             </section>
           ))}
         </div>
@@ -60,8 +65,8 @@ export default async function AboutPage() {
           <p className="text-sm font-medium">This page has not been written yet</p>
           <p className="t-small muted mt-1 max-w-prose">
             Rather than fill it with claims nobody has approved, it stays empty until someone
-            publishes an <code>about</code> page from the admin. What is below is drawn from the
-            live catalogue, so it is true by construction.
+            publishes an <code>about</code> page from Storefront in the admin. What is below is
+            drawn from the live catalogue, so it is true by construction.
           </p>
         </div>
       )}

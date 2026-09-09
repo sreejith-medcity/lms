@@ -17,7 +17,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const tenant = await getTenantContext();
   if (!tenant) return [{ url: base, changeFrequency: 'weekly', priority: 1 }];
 
-  const [products, categories, policies] = await Promise.all([
+  const [products, categories, policies, posts, pages] = await Promise.all([
     db.product.findMany({
       where: {
         organizationId: tenant.organizationId,
@@ -34,6 +34,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     db.policy.findMany({
       where: { organizationId: tenant.organizationId },
       select: { kind: true, updatedAt: true },
+    }),
+    db.blogPost.findMany({
+      where: { organizationId: tenant.organizationId, status: 'PUBLISHED' },
+      select: { slug: true, publishedAt: true },
+    }),
+    db.storefrontPage.findMany({
+      where: { organizationId: tenant.organizationId, status: 'PUBLISHED', kind: 'STATIC' },
+      select: { slug: true, updatedAt: true },
     }),
   ]);
 
@@ -53,6 +61,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: p.updatedAt,
       changeFrequency: 'weekly' as const,
       priority: 0.9,
+    })),
+    ...(posts.length > 0
+      ? [{ url: `${base}/blog`, changeFrequency: 'weekly' as const, priority: 0.6 }]
+      : []),
+    ...posts.map((p) => ({
+      url: `${base}/blog/${p.slug}`,
+      lastModified: p.publishedAt ?? undefined,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    })),
+    ...pages.map((p) => ({
+      url: `${base}/${p.slug}`,
+      lastModified: p.updatedAt,
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
     })),
     ...policies.map((p) => ({
       url: `${base}/policies/${p.kind.toLowerCase()}`,

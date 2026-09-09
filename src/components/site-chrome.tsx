@@ -123,6 +123,7 @@ export async function SiteFooter() {
         <FooterColumn title="Academy">
           <FooterLink href="/about">About us</FooterLink>
           <FooterLink href="/contact">Contact</FooterLink>
+          <FooterLink href="/blog">Notes</FooterLink>
           <FooterLink href="/help">Help centre</FooterLink>
           <FooterLink href="/login">Sign in</FooterLink>
         </FooterColumn>

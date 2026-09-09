@@ -62,8 +62,8 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Enquiries', href: '/admin/leads' },
       { label: 'Campaigns', href: '#', soon: true },
       { label: 'Announcements', href: '/admin/announcements' },
-      { label: 'Storefront', href: '#', soon: true },
-      { label: 'Blog', href: '#', soon: true },
+      { label: 'Storefront', href: '/admin/storefront' },
+      { label: 'Blog', href: '/admin/storefront' },
     ],
   },
   {
