@@ -8,6 +8,8 @@ export interface NavChild {
   label: string;
   href: string;
   feature?: string;
+  /** Not built yet. Shown so the map of the product is complete, but inert. */
+  soon?: boolean;
 }
 
 export interface NavGroup {
@@ -24,6 +26,9 @@ export const ADMIN_NAV: NavGroup[] = [
     icon: 'box',
     children: [
       { label: 'Courses', href: '/admin/courses' },
+      { label: 'Events', href: '#', feature: 'events', soon: true },
+      { label: 'Memberships', href: '#', feature: 'memberships', soon: true },
+      { label: 'Categories', href: '#', soon: true },
     ],
   },
   {
@@ -33,6 +38,10 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Batches', href: '/admin/batches' },
       { label: 'Sessions', href: '/admin/sessions' },
       { label: 'Media library', href: '/admin/library' },
+      { label: 'Module library', href: '#', soon: true },
+      { label: 'Assessments', href: '#', soon: true },
+      { label: 'Submissions', href: '#', soon: true },
+      { label: 'Certificates', href: '#', soon: true },
     ],
   },
   {
@@ -41,17 +50,52 @@ export const ADMIN_NAV: NavGroup[] = [
     children: [
       { label: 'Learners', href: '/admin/learners' },
       { label: 'Team', href: '/admin/team' },
+      { label: 'Enrolments', href: '#', soon: true },
+      { label: 'Attendance', href: '#', soon: true },
+    ],
+  },
+  {
+    label: 'Growth',
+    icon: 'spark',
+    children: [
+      { label: 'Leads', href: '#', soon: true },
+      { label: 'Campaigns', href: '#', soon: true },
+      { label: 'Announcements', href: '#', soon: true },
+      { label: 'Storefront', href: '#', soon: true },
+      { label: 'Blog', href: '#', soon: true },
+    ],
+  },
+  {
+    label: 'Money',
+    icon: 'card',
+    children: [
+      { label: 'Payments', href: '#', soon: true },
+      { label: 'Invoices', href: '#', soon: true },
+      { label: 'Fee tracking', href: '#', soon: true },
+      { label: 'Refunds', href: '#', soon: true },
+    ],
+  },
+  {
+    label: 'Analytics',
+    icon: 'chart',
+    children: [
+      { label: 'Sales', href: '#', soon: true },
+      { label: 'Learning', href: '#', soon: true },
+      { label: 'Attendance', href: '#', soon: true },
+      { label: 'Engagement', href: '#', soon: true },
     ],
   },
   { label: 'Settings', href: '/admin/settings', icon: 'gear' },
 ];
 
 /**
- * Deliberately short. An entry appears here only once its route does something,
- * because a menu full of blank pages reads as broken rather than as early.
- * BUILD_PLAN.md tracks the rest: events, memberships, module library,
- * assessments, submissions, certificates, enrolments, leads, campaigns,
- * storefront, payments, fee tracking and analytics.
+ * The whole map of the product, including what is not built.
+ *
+ * Every unbuilt entry is marked `soon` and rendered inert with a visible dot, so
+ * the shape of the thing is legible without any of it lying. A menu item that
+ * navigates to a blank page is worse than one that plainly says it is not ready:
+ * the first wastes a click and reads as broken, the second sets an expectation.
+ * BUILD_PLAN.md is the authority on what each of them will do.
  */
 
 const ICONS: Record<string, string> = {
@@ -107,16 +151,33 @@ export function Sidebar({ features, orgName }: { features: Record<string, boolea
                   <ul className="mt-1 space-y-0.5">
                     {(group.children ?? [])
                       .filter((c) => !c.feature || features[c.feature] !== false)
-                      .map((c) => (
-                        <li key={c.href}>
-                          <Link
-                            href={c.href}
-                            className="block rounded-[var(--radius-sm)] py-1.5 pl-9 pr-2.5 text-sm text-[var(--shell-muted)] hover:bg-[var(--shell-2)] hover:text-[var(--shell-ink)]"
-                          >
-                            {c.label}
-                          </Link>
-                        </li>
-                      ))}
+                      .map((c) =>
+                        c.soon ? (
+                          <li key={`${group.label}-${c.label}`}>
+                            <span
+                              aria-disabled="true"
+                              title="Not built yet"
+                              className="flex cursor-default items-center justify-between gap-2 rounded-[var(--radius-sm)] py-1.5 pl-9 pr-2.5 text-sm text-[var(--shell-muted)] opacity-55"
+                            >
+                              {c.label}
+                              <span
+                                aria-hidden
+                                className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--shell-muted)]"
+                              />
+                              <span className="sr-only">not built yet</span>
+                            </span>
+                          </li>
+                        ) : (
+                          <li key={c.href}>
+                            <Link
+                              href={c.href}
+                              className="block rounded-[var(--radius-sm)] py-1.5 pl-9 pr-2.5 text-sm text-[var(--shell-muted)] hover:bg-[var(--shell-2)] hover:text-[var(--shell-ink)]"
+                            >
+                              {c.label}
+                            </Link>
+                          </li>
+                        ),
+                      )}
                   </ul>
                 </>
               )}
@@ -124,6 +185,13 @@ export function Sidebar({ features, orgName }: { features: Record<string, boolea
           ))}
         </ul>
       </nav>
+
+      <div className="border-t border-[var(--shell-line)] px-5 py-3">
+        <p className="flex items-center gap-2 text-[0.6875rem] text-[var(--shell-muted)]">
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--shell-muted)]" />
+          Dimmed items are not built yet
+        </p>
+      </div>
     </aside>
   );
 }
