@@ -178,4 +178,11 @@ async function recomputeProgress(enrollmentId: string, courseId: string, userId:
       ...(progressPercent === 100 ? { completedAt: new Date(), status: 'COMPLETED' } : {}),
     },
   });
+
+  // Finishing a course should not depend on someone remembering to press a
+  // button. Best effort: it never rolls back the progress that triggered it.
+  if (progressPercent === 100) {
+    const { autoIssueOnCompletion } = await import('@/server/certificates');
+    await autoIssueOnCompletion(enrollmentId);
+  }
 }

@@ -42,7 +42,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Question bank', href: '/admin/question-bank' },
       { label: 'Assessments', href: '/admin/assessments' },
       { label: 'Marking', href: '/admin/submissions' },
-      { label: 'Certificates', href: '#', soon: true },
+      { label: 'Certificates', href: '/admin/certificates' },
     ],
   },
   {
