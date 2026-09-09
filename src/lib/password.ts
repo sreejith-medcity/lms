@@ -1,10 +1,25 @@
-import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
-import { promisify } from 'node:util';
-
-const scryptAsync = promisify(scrypt);
+import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto';
 
 const KEY_LENGTH = 64;
-const PARAMS = { N: 16384, r: 8, p: 1 };
+const PARAMS: ScryptOptions = { N: 16384, r: 8, p: 1 };
+
+/**
+ * Wrapped by hand rather than with util.promisify: promisify's type overload for
+ * scrypt only covers the three argument form, so passing options fails to compile.
+ */
+function derive(
+  password: string,
+  salt: Buffer,
+  keyLength: number,
+  options: ScryptOptions,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keyLength, options, (err, derivedKey) => {
+      if (err) reject(err);
+      else resolve(derivedKey);
+    });
+  });
+}
 
 /**
  * scrypt from node:crypto rather than argon2, deliberately. Shared hosting cannot
@@ -13,7 +28,8 @@ const PARAMS = { N: 16384, r: 8, p: 1 };
  */
 export async function hashPassword(plain: string): Promise<string> {
   const salt = randomBytes(16);
-  const derived = (await scryptAsync(plain.normalize('NFKC'), salt, KEY_LENGTH, PARAMS)) as Buffer;
+  const derived = await derive(plain.normalize('NFKC'), salt, KEY_LENGTH, PARAMS);
+
   return [
     'scrypt',
     PARAMS.N,
@@ -31,11 +47,12 @@ export async function verifyPassword(plain: string, stored: string): Promise<boo
 
     const salt = Buffer.from(saltB64, 'base64url');
     const expected = Buffer.from(hashB64, 'base64url');
-    const derived = (await scryptAsync(plain.normalize('NFKC'), salt, expected.length, {
+
+    const derived = await derive(plain.normalize('NFKC'), salt, expected.length, {
       N: Number(n),
       r: Number(r),
       p: Number(p),
-    })) as Buffer;
+    });
 
     return derived.length === expected.length && timingSafeEqual(derived, expected);
   } catch {
