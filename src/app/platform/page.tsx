@@ -1,3 +1,5 @@
+import { headers } from 'next/headers';
+import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { Stat } from '@/components/stat';
 import { formatMoney } from '@/lib/money';
@@ -9,6 +11,12 @@ export const dynamic = 'force-dynamic';
  * never resolve here.
  */
 export default async function PlatformHome() {
+  // Phase 0 has no platform auth yet, so the only gate is the hostname. Until
+  // PLATFORM_HOST is set to a dedicated subdomain, this route stays closed.
+  const host = ((await headers()).get('host') ?? '').split(':')[0].toLowerCase();
+  const platformHost = (process.env.PLATFORM_HOST ?? '').split(':')[0].toLowerCase();
+  if (!platformHost || host !== platformHost) notFound();
+
   const [tenants, active, trialing, subs] = await Promise.all([
     db.tenant.count(),
     db.tenant.count({ where: { status: 'ACTIVE' } }),

@@ -7,6 +7,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { allPermissionKeys } from '../src/lib/permissions';
+import { hashPassword } from '../src/lib/password';
 
 const db = new PrismaClient();
 
@@ -156,11 +157,26 @@ async function main() {
     update: {},
   });
 
-  await db.tenantDomain.upsert({
-    where: { hostname: 'medcity.localhost' },
-    create: { tenantId: tenant.id, hostname: 'medcity.localhost', isPrimary: true },
-    update: {},
-  });
+  // Every hostname the app answers on needs a row here. APP_HOSTNAME lets each
+  // environment add its own without editing the seed.
+  const hostnames = [
+    'medcity.localhost',
+    ...(process.env.APP_HOSTNAME ? [process.env.APP_HOSTNAME] : ['demo.medcitylms.in']),
+  ];
+
+  for (const [i, hostname] of hostnames.entries()) {
+    await db.tenantDomain.upsert({
+      where: { hostname },
+      create: {
+        tenantId: tenant.id,
+        hostname,
+        isPrimary: i === 0,
+        isCustom: !hostname.endsWith('.localhost'),
+        sslStatus: 'ISSUED',
+      },
+      update: { tenantId: tenant.id },
+    });
+  }
 
   const org = await db.organization.upsert({
     where: { slug: 'medcity' },
@@ -239,6 +255,49 @@ async function main() {
         update: {},
       });
     }
+  }
+
+  console.log('Seeding super admin...');
+  const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? 'admin@medcitylms.in').toLowerCase();
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+  if (!adminPassword) {
+    console.warn(
+      'SEED_ADMIN_PASSWORD is not set, so no admin was created. ' +
+        'Set it and run the seed again to be able to sign in.',
+    );
+  } else {
+    const superAdminRole = await db.role.findUniqueOrThrow({
+      where: { organizationId_name: { organizationId: org.id, name: 'Super Admin' } },
+    });
+
+    const admin = await db.user.upsert({
+      where: { organizationId_email: { organizationId: org.id, email: adminEmail } },
+      create: {
+        organizationId: org.id,
+        name: process.env.SEED_ADMIN_NAME ?? 'Medcity Admin',
+        email: adminEmail,
+        emailVerifiedAt: new Date(),
+        kind: 'STAFF',
+        status: 'ACTIVE',
+        passwordHash: await hashPassword(adminPassword),
+      },
+      update: { passwordHash: await hashPassword(adminPassword), kind: 'STAFF', status: 'ACTIVE' },
+    });
+
+    await db.userRole.upsert({
+      where: { userId_roleId: { userId: admin.id, roleId: superAdminRole.id } },
+      create: { userId: admin.id, roleId: superAdminRole.id },
+      update: {},
+    });
+
+    await db.branchMembership.upsert({
+      where: { userId_branchId: { userId: admin.id, branchId: branch.id } },
+      create: { userId: admin.id, branchId: branch.id, isPrimary: true },
+      update: {},
+    });
+
+    console.log(`  admin ready: ${adminEmail}`);
   }
 
   console.log('Seeding notification settings...');
