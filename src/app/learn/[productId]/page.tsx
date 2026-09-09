@@ -28,6 +28,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
           title: true,
           course: {
             select: {
+              id: true,
               modulesArePrerequisite: true,
               modules: {
                 orderBy: { sortOrder: 'asc' },
@@ -66,6 +67,29 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
       })
     : [];
 
+  const assessments = await db.assessment.findMany({
+    where: {
+      organizationId: tenant.organizationId,
+      courses: { some: { courseId: enrollment.product.course.id } },
+      questions: { some: {} },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      title: true,
+      kind: true,
+      durationMinutes: true,
+      passPercent: true,
+      _count: { select: { questions: true } },
+      attempts: {
+        where: { userId: user.id },
+        orderBy: { attemptNo: 'desc' },
+        take: 1,
+        select: { status: true, scorePercent: true, passed: true },
+      },
+    },
+  });
+
   const done = await db.materialProgress.findMany({
     where: { userId: user.id, completedAt: { not: null } },
     select: { materialId: true },
@@ -103,8 +127,49 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
         )}
       </div>
 
-      {materials.length === 0 && recordings.length === 0 && (
+      {materials.length === 0 && recordings.length === 0 && assessments.length === 0 && (
         <EmptyState title="No content yet" hint="Your academy is still preparing this course." />
+      )}
+
+      {assessments.length > 0 && (
+        <Card className="space-y-3">
+          <h2 className="font-medium">Tests and assignments</h2>
+          <ul className="divide-y rounded-[var(--radius-sm)] border">
+            {assessments.map((a) => {
+              const last = a.attempts[0];
+              return (
+                <li key={a.id}>
+                  <Link
+                    href={`/learn/assessment/${a.id}`}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--surface-2)]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm">{a.title}</span>
+                      <span className="t-small faint">
+                        {a._count.questions} question{a._count.questions === 1 ? '' : 's'}
+                        {a.durationMinutes ? ` · ${a.durationMinutes} min` : ''} · pass{' '}
+                        {a.passPercent}%
+                      </span>
+                    </span>
+                    <span className="t-small shrink-0 tabular-nums">
+                      {!last && <span className="faint">Not attempted</span>}
+                      {last?.status === 'IN_PROGRESS' && <span className="faint">In progress</span>}
+                      {last?.status === 'SUBMITTED' && <span className="faint">Awaiting marking</span>}
+                      {last?.status === 'EVALUATED' && last.scorePercent != null && (
+                        <span
+                          className="font-medium"
+                          style={{ color: last.passed ? 'var(--ok)' : 'var(--bad)' }}
+                        >
+                          {last.scorePercent}%
+                        </span>
+                      )}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       )}
 
       {recordings.length > 0 && (
