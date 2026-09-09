@@ -28,7 +28,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Courses', href: '/admin/courses' },
       { label: 'Events', href: '#', feature: 'events', soon: true },
       { label: 'Memberships', href: '#', feature: 'memberships', soon: true },
-      { label: 'Categories', href: '#', soon: true },
+      { label: 'Categories', href: '/admin/categories' },
     ],
   },
   {
@@ -38,7 +38,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Batches', href: '/admin/batches' },
       { label: 'Sessions', href: '/admin/sessions' },
       { label: 'Media library', href: '/admin/library' },
-      { label: 'Module library', href: '#', soon: true },
+      { label: 'Module library', href: '/admin/modules' },
       { label: 'Question bank', href: '/admin/question-bank' },
       { label: 'Assessments', href: '/admin/assessments' },
       { label: 'Marking', href: '/admin/submissions' },
