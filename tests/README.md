@@ -47,9 +47,30 @@ would fail quietly rather than loudly.
   academy seeing another's learners, and it is invisible while there is only one
   academy in the database.
 
+- **`build-safety`** — the three mistakes that have actually broken this
+  project: a directive that drifted below an import and took a deploy down, a
+  non-async export from a `'use server'` file that published an array as an
+  endpoint, and a client component that could pull the key-unsealing module into
+  the browser bundle. None of these are things a type system can see.
+
+Both audits test their own detectors against deliberately broken input as well
+as against the codebase. An audit that reports nothing is either a clean
+codebase or a broken check, and from the outside those look identical.
+
 ## What is not tested yet, and should be
 
 Anything that needs the database: fulfilment, the drain, entitlement, the
-curriculum gate. Those are the highest-value tests in the product and they need
-a throwaway Postgres to run against, which is the next piece of work rather than
-something to fake with mocks. A mocked fulfilment test proves the mock works.
+curriculum gate. Those are the highest-value tests in the product.
+
+They need a throwaway Postgres, and there is a specific obstacle. Prisma
+downloads its query engine from `binaries.prisma.sh`, which is blocked by policy
+in the sandbox these were written in, so a Prisma client cannot be generated
+there and the tests could be written but never run. Shipping tests nobody has
+executed is worse than shipping none, so they are not here yet.
+
+On a machine with a working `prisma generate` the path is short: a Neon branch
+or a local Postgres, `TEST_DATABASE_URL` pointing at it, `prisma db push`, and a
+harness that truncates between tests. The first four worth writing are the money
+ones: that fulfilment is idempotent under a replayed webhook, that an amount
+mismatch grants nothing, that a refund expires access without deleting progress,
+and that a promo code capped at fifty cannot be claimed fifty-one times.
