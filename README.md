@@ -84,23 +84,78 @@ Migration from Edmingle and WooCommerce is deliberately deferred until the produ
 is built; `MigrationRecord` exists so the cutover can be verified row by row when
 that time comes.
 
-## Deploying to Vercel
+## Deploying
 
-Set these in the Vercel project before the first build:
+### Database first, wherever the app runs
+
+The schema needs PostgreSQL with the `pgvector` extension. Shared hosting gives you
+MySQL, so the database lives off-host. Neon's free tier supports pgvector and is the
+default choice here; Supabase works identically.
+
+```sql
+create extension if not exists vector;
+create extension if not exists pg_trgm;
+create extension if not exists pgcrypto;
+```
+
+Then from your machine, pointed at that database:
+
+```bash
+npm run db:push
+npm run db:seed
+```
+
+### Hostinger shared hosting, Node.js app
+
+hPanel > Advanced > Node.js. Create an app with Node 20 or newer, application root
+`lms`, and the startup file `server.js`.
+
+```bash
+# locally, or in CI
+npm ci
+npm run build
+
+# what gets uploaded to the application root:
+.next/standalone/*      -> becomes server.js and node_modules at the root
+.next/static/           -> .next/static/
+public/                 -> public/
+prisma/                 -> prisma/
+```
+
+`output: 'standalone'` keeps the upload small and means the server starts with plain
+`node server.js` on the PORT hPanel supplies. Build locally rather than on shared
+hosting: `next build` wants more memory than these plans like to give.
+
+Environment variables, set in the Node.js app panel:
 
 | Variable | Notes |
 |---|---|
-| `DATABASE_URL` | Postgres with `pgvector`. Neon, Supabase or RDS. Use the pooled URL for the app. |
-| `DIRECT_URL` | Unpooled URL, needed by `prisma migrate` |
-| `APP_BASE_DOMAIN` | e.g. `medcitylms.app` — tenant subdomains hang off this |
-| `PLATFORM_HOST` | e.g. `admin.medcitylms.app` |
-| `AUTH_SECRET` | any 32+ char random string |
+| `DATABASE_URL` | the Neon pooled connection string |
+| `DIRECT_URL` | Neon unpooled, used by `prisma migrate` |
+| `APP_BASE_DOMAIN` | the subdomain's parent, e.g. `medcitylms.in` |
+| `PLATFORM_HOST` | e.g. `platform.medcitylms.in` |
+| `AUTH_SECRET` | any 32+ character random string |
+| `NODE_ENV` | `production` |
 
-`postinstall` runs `prisma generate`, so the client is built during Vercel's install
-step. Run `npm run db:push && npm run db:seed` once against the database before the
-first request, otherwise every page renders empty.
+Point the subdomain at the Node.js app in hPanel, and add its hostname as a
+`TenantDomain` row so tenant resolution matches it.
 
-Wildcard domains: add `*.<APP_BASE_DOMAIN>` in Vercel's domain settings so tenant
-subdomains resolve without adding each one by hand. Custom tenant domains
-(`lms.medcitylms.in` and friends) are added per domain and matched by the
-`TenantDomain` table.
+### Known limits of shared hosting
+
+Fine for building and demoing, not for the live academy:
+
+- one process, so background work (transcription, campaign sends, nightly rollups)
+  has nowhere to run
+- no Postgres, hence the external database
+- disk is not the place for 281 GB of recordings; that belongs in S3 or R2 from the start
+- restarts are manual and cold starts are slow
+
+A VPS becomes necessary before real learners arrive. Nothing in the code changes when
+that happens, only where it runs.
+
+### Vercel, if you prefer
+
+Same environment variables. `postinstall` runs `prisma generate` during the install
+step, and every database-touching page is `force-dynamic`, so the build does not need
+a database. Add `*.<APP_BASE_DOMAIN>` as a wildcard domain so tenant subdomains resolve
+without adding each one by hand.
