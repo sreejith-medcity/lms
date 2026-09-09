@@ -23,7 +23,7 @@ certificates can be checked by a stranger with only the code.
 
 ---
 
-## Phase 1 — Course and batch depth · BUILT, AWAITING PUSH
+## Phase 1 — Course and batch depth · DONE, DEPLOYED
 
 The audit calls these "the two structures the clone lives or dies on", and both
 are currently shallower here than in Edmingle.
@@ -50,7 +50,7 @@ locks are enforced on the asset route and the progress actions as well as in the
 UI, and progress percentage counts only the curriculum a given enrolment was
 actually handed.
 
-## Phase 2 — Scheduling and recordings · BUILT, AWAITING PUSH
+## Phase 2 — Scheduling and recordings · DONE, DEPLOYED
 
 Calendar with day, week, month and list views, filtered by trainer and batch,
 which is Edmingle's actual scheduling screen and the one trainers live in. Mark
@@ -65,7 +65,7 @@ date arithmetic in the academy's timezone rather than the server's, because a
 outbox writes a row per intended message before any provider exists, so "did she
 get the reminder" stays answerable rather than becoming a provider's problem.
 
-## Phase 3 — Marketing and sales completeness · BUILT (two items parked), AWAITING PUSH
+## Phase 3 — Marketing and sales completeness · DONE, DEPLOYED (two items parked)
 
 Promo codes: single and multiple use, percent and cap, date window, per course,
 with redemptions. Marketing banners. Testimonials moved into the admin so the 15
@@ -74,7 +74,7 @@ which needs the cart to persist first, with a recovery list. Cheque management.
 Payment settlements. Pricing templates and miscellaneous fees. Campaigns,
 workflows and message templates, composed and logged here, sending in Phase 7.
 
-## Phase 4 — Engagement · BUILT, AWAITING PUSH
+## Phase 4 — Engagement · DONE, DEPLOYED
 
 Segments, dynamic and static, so "Disengaged" becomes a rule rather than a list
 someone maintains. Community with posts, comments and moderation. Per-course
@@ -82,13 +82,17 @@ discussions. Loyalty points and the referral wallet with its credit ledger.
 Learner portal sidebar ordering. Learner export and impersonation. Instructor
 profiles.
 
-## Phase 5 — The analytics suite
+## Phase 5 — The analytics suite · BUILT, AWAITING PUSH
 
 Roughly thirty reports across eight categories: sales and enrolment, batch and
 progress, feedback and rating, marketing, trainer, notification logs, advanced,
 and the operational ones (branch statistics, storage, bandwidth, scheduled
 tasks). Every one with its metric definitions on the page and a CSV export,
 which is also the migration path out of here.
+
+Built as a catalogue rather than thirty pages: a report is a declaration with a
+run function, one page renders any of them and one route exports any of them.
+Thirty-one so far, and the thirty-second is a function rather than a screen.
 
 ## Phase 6 — Settings depth
 
@@ -117,6 +121,46 @@ a landing page per course, and a redirect for every old URL so the SEO survives.
 Then the release work: Postgres row-level security, a test suite, an
 accessibility pass, performance measurement, and the migration itself.
 
+## Phase 9 — Loyalty as a product of its own
+
+Modelled on Reward Loyalty (rewardloyalty.co/docs/5.x), a self-hosted loyalty
+platform, and scoped to the parts that make sense for an institute rather than a
+coffee shop. Phase 4 already built the half that an LMS needs on its own: a
+points ledger, referral codes, and redemption capped at checkout. This is the
+rest of it, and it is the first phase that is not about catching Edmingle.
+
+**Stamp cards.** Attend eight classes, get the ninth free. Closer to how a
+coaching institute actually rewards regulars than a points balance is, because
+it is legible without arithmetic.
+
+**Vouchers.** Batch-generated codes with QR claiming, distinct from promo codes:
+a promo code is a price rule anybody may use, a voucher is an instrument issued
+to one person and spent once. Both exist in mature systems and conflating them
+is why refunds get argued about.
+
+**Prepaid passes.** A ten-class pass sold at the counter and drawn down by
+attendance, with an expiry. Medcity sells this shape already; it currently lives
+in a register.
+
+**Achievements.** Finished a module, sat every class in a month, passed at the
+first attempt. Optional credit attached. Worth building only after Phase 5,
+because an achievement nobody can measure is a badge nobody trusts.
+
+**Member cards.** One identity a learner can present at the counter: QR,
+barcode, NFC, or a plain number for the branch that has no scanner. This is the
+piece that makes the front desk faster rather than the app prettier.
+
+**Wallet passes.** Apple and Google Wallet, which needs an Apple developer
+certificate and a Google service account before a line of it is worth writing.
+
+**A QR studio** to make the codes look like Medcity's rather than like a
+default, and **POS or counter mode** for staff issuing and redeeming at a branch.
+
+Sequencing: this needs new models for every noun above, so it belongs after
+Phase 8's migration rather than in the middle of it. Two pieces could be pulled
+forward if the front desk wants them sooner, and both are self-contained: member
+cards, and prepaid passes.
+
 ---
 
 ## Ordering, and why
@@ -131,3 +175,7 @@ deep and mostly configuration. Phase 7 unblocks the sending that phases 2, 3 and
 Two things are worth pulling forward out of order if the demo needs them, and
 both are one sitting each: the calendar from Phase 2, and promo codes from
 Phase 3.
+
+Phase 9 sits outside that ordering on purpose. It is the first phase that is not
+parity work, it needs schema of its own, and none of it is load-bearing for a
+migration off Edmingle.

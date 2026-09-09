@@ -305,18 +305,53 @@ A trainer can ask not to be named publicly and still teach the batch.
 org setting, resolved against a catalogue, so an unknown key is dropped rather
 than rendered as a dead link. My learning cannot be removed.
 
+## Phase 5 — the analytics suite (built, awaiting a push)
+
+Typechecks clean. Not yet exercised against the database.
+
+**31 reports** at `/admin/analytics/reports`, across sales and enrolment,
+batches and progress, feedback, marketing, trainers, notifications, assessments
+and operations.
+
+The shape matters more than the count. Thirty hand-built pages is thirty places
+for a definition to drift, thirty exports to remember and thirty layouts to keep
+in step, so a report here is a declaration: what question it answers, what its
+columns mean, and a function returning rows. One page renders any of them, one
+route exports any of them, and the thirty-second is a function rather than a
+screen.
+
+Three things fall out of that. Every report prints its own definitions, because
+they are part of the declaration rather than something to remember to add. Every
+report exports, and the CSV carries the report's title, its window and its
+definitions in the preamble, since a file opened three weeks later on somebody
+else's laptop has no page around it to explain itself. And the catalogue is
+gated per category against the existing permission keys, so a role with trainer
+reports does not quietly also get collections; a person is never offered a door
+that refuses them.
+
+The reports themselves are written to be hard to misquote. Nothing is called
+revenue. Ratings are shown with the number of answers behind them, and one built
+from three is marked as such rather than ranked as if it were solid. Drop-off
+ignores lessons fewer than three people reached, because one person stopping is
+not a pattern. The lists that exist to be acted on are sorted worst first.
+
 ## Next runnable step
 
-**Push Phase 4.**
+**Push Phase 5.**
 
 ```
 cd ~/Documents/lms && git push origin main
 ```
 
-Then walk it: build a segment and point a campaign at it; post in a course
-discussion as a learner and report it as another; switch points on, give
-yourself credit, and buy something with it; and sign in as a learner from their
-page, check the banner, and come back.
+Then open `/admin/analytics/reports` and walk a few: collections by course,
+where people stop, overdue instalments, the outbox. Export one and check the
+preamble reads properly in Excel.
+
+A note on committing from here: the shell I have on your Mac cannot delete
+files, so git leaves a stale `.git/index.lock` behind after each of my commits.
+I rename it out of the way before committing, but if you ever see "Unable to
+create '.git/index.lock'", that is the cause and `rm -f .git/index.lock` clears
+it.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another

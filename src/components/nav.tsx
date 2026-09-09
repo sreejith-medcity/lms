@@ -97,6 +97,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Sales', href: '/admin/analytics' },
       { label: 'Learning', href: '/admin/analytics/learning' },
       { label: 'Attendance', href: '/admin/analytics/attendance' },
+      { label: 'All reports', href: '/admin/analytics/reports' },
     ],
   },
   { label: 'Settings', href: '/admin/settings', icon: 'gear' },

@@ -147,6 +147,7 @@ None is started; the schema anticipates all of them.
 | 5.2 | Seat allocation and bulk invite | new models | Invitations, cohort progress, scoped reports | `missing` |
 | 5.3 | Custom domains | `TenantDomain` | Ownership validated before enabling | `partial` — resolution works; no validation flow, no SSL job |
 | 5.4 | Notification engine | `MessageTemplate`, `Campaign`, `Workflow`, `NotificationLog` | Preferences, consent, quiet hours, opt-out, duplicate prevention | `partial` — everything up to the send is built: templates with named variables and a filled-in preview, campaigns whose audience is resolved into named recipients before anything is scheduled, per-event channel settings, and an outbox that deduplicates. Delivery itself needs `SMTP_URL`, `MSG91_AUTH_KEY`, `AISENSY_API_KEY` |
+| 5.5 | Report catalogue | `/admin/analytics/reports`, `/[id]`, `/[id]/export` | every table above | `reports.*`, `analytics.*` | Thirty-odd reports, each printing its definitions and exporting as it stands | `done` — 31 reports across eight categories, declared rather than hand-built: one page renders any of them, one route exports any of them, and the CSV carries the report's own definitions in its preamble. Gated per category, so a role with trainer reports does not also get collections |
 | 5.5 | Leads pipeline | `Lead`, `FollowUp` | Source attribution, owner, follow-up, enrolment outcome | `stub` |
 | 5.6 | PWA and offline | — | Installable; download and sync state visible; conflict resolution and logout cleanup defined | `missing` |
 

@@ -8,6 +8,7 @@ const TABS = [
   { href: '/admin/analytics', label: 'Sales' },
   { href: '/admin/analytics/learning', label: 'Learning' },
   { href: '/admin/analytics/attendance', label: 'Attendance' },
+  { href: '/admin/analytics/reports', label: 'All reports' },
 ];
 
 const RANGES = [
@@ -33,7 +34,11 @@ function Inner() {
     <div className="flex flex-wrap items-center justify-between gap-3 border-b">
       <nav className="flex gap-1" aria-label="Analytics sections">
         {TABS.map((t) => {
-          const active = pathname === t.href;
+          // The report pages live under the reports tab, so it stays lit there.
+          const active =
+            t.href === '/admin/analytics/reports'
+              ? pathname.startsWith(t.href)
+              : pathname === t.href;
           return (
             <Link
               key={t.href}
