@@ -59,9 +59,9 @@ export const ADMIN_NAV: NavGroup[] = [
     label: 'Growth',
     icon: 'spark',
     children: [
-      { label: 'Leads', href: '#', soon: true },
+      { label: 'Enquiries', href: '/admin/leads' },
       { label: 'Campaigns', href: '#', soon: true },
-      { label: 'Announcements', href: '#', soon: true },
+      { label: 'Announcements', href: '/admin/announcements' },
       { label: 'Storefront', href: '#', soon: true },
       { label: 'Blog', href: '#', soon: true },
     ],

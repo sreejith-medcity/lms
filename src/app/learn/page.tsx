@@ -53,6 +53,20 @@ export default async function MyLearning() {
   const done = enrollments.filter((e) => e.progressPercent >= 100);
   const resume = inProgress[0];
 
+  // Targeted at a batch they are in, or at everyone. Nothing else.
+  const announcements = await db.announcement.findMany({
+    where: {
+      organizationId: tenant.organizationId,
+      publishAt: { lte: new Date() },
+      targets: {
+        some: { OR: [{ batchId: { in: batchIds } }, { batchId: null }] },
+      },
+    },
+    orderBy: { publishAt: 'desc' },
+    take: 5,
+    select: { id: true, title: true, bodyHtml: true, urgency: true, publishAt: true },
+  });
+
   const certificates = await db.issuedCertificate.findMany({
     where: { userId: user.id, revokedAt: null },
     orderBy: { issuedAt: 'desc' },
@@ -126,6 +140,32 @@ export default async function MyLearning() {
       {notStarted.length > 0 && (
         <Section title="Not started">
           <CourseGrid items={notStarted} cta="Start" />
+        </Section>
+      )}
+
+      {announcements.length > 0 && (
+        <Section title="Notices">
+          <ul className="space-y-2">
+            {announcements.map((a) => (
+              <li
+                key={a.id}
+                className="rounded-[var(--radius)] border bg-[var(--surface)] p-4"
+                style={
+                  a.urgency === 'HIGH'
+                    ? { borderColor: 'var(--warn)', background: 'var(--warn-soft)' }
+                    : undefined
+                }
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-sm font-medium">{a.title}</p>
+                  <span className="t-small faint">
+                    {a.publishAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+                <p className="t-small muted mt-1 whitespace-pre-wrap">{a.bodyHtml}</p>
+              </li>
+            ))}
+          </ul>
         </Section>
       )}
 
