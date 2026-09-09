@@ -1,3 +1,4 @@
+import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 
@@ -16,7 +17,7 @@ export default async function LearnersPage({
       organizationId: tenant.organizationId,
       kind: 'LEARNER',
       deletedAt: null,
-      ...(status ? { status: status as never } : {}),
+      ...(status ? { status: status as $Enums.UserStatus } : {}),
       ...(q
         ? {
             OR: [

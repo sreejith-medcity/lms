@@ -85,7 +85,7 @@ async function main() {
         code: p.code,
         name: p.name,
         monthlyPaise: p.monthly,
-        quarterlyPaise: p.monthly * 3 * 0.95,
+        quarterlyPaise: Math.round(p.monthly * 3 * 0.95),
         annualPaise: Math.round(p.monthly * 12 * 0.85),
         sortOrder: i,
       },

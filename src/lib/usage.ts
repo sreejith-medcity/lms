@@ -1,10 +1,7 @@
+import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
 
-export type UsageMetric =
-  | 'ACTIVE_LEARNERS' | 'STAFF_SEATS' | 'BRANCHES' | 'COURSES'
-  | 'STORAGE_BYTES' | 'BANDWIDTH_BYTES' | 'LIVE_SESSION_MINUTES'
-  | 'RECORDING_MINUTES' | 'EMAIL_SENDS' | 'SMS_SENDS' | 'WHATSAPP_SENDS'
-  | 'PUSH_SENDS' | 'AI_TOKENS' | 'TRANSCRIPTION_MINUTES' | 'API_CALLS';
+export type UsageMetric = $Enums.UsageMetric;
 
 /**
  * Every billable action calls this. Rolled up per tenant per day so the billing
@@ -20,8 +17,8 @@ export async function meter(
   day.setUTCHours(0, 0, 0, 0);
 
   await db.usageRecord.upsert({
-    where: { tenantId_metric_day: { tenantId, metric: metric as never, day } },
-    create: { tenantId, metric: metric as never, day, quantity: BigInt(quantity), costPaise },
+    where: { tenantId_metric_day: { tenantId, metric, day } },
+    create: { tenantId, metric, day, quantity: BigInt(quantity), costPaise },
     update: {
       quantity: { increment: BigInt(quantity) },
       costPaise: { increment: costPaise },
@@ -48,9 +45,9 @@ export async function checkLimit(
     include: { plan: { include: { limits: true } } },
   });
 
-  const planLimit = sub?.plan.limits.find((l) => l.metric === (metric as never));
+  const planLimit = sub?.plan.limits.find((l) => l.metric === metric);
   const override = await db.tenantEntitlement.findFirst({
-    where: { tenantId, metric: metric as never },
+    where: { tenantId, metric },
   });
 
   const included = Number(override?.included ?? planLimit?.included ?? 0);
@@ -61,7 +58,7 @@ export async function checkLimit(
   since.setUTCHours(0, 0, 0, 0);
 
   const agg = await db.usageRecord.aggregate({
-    where: { tenantId, metric: metric as never, day: { gte: since } },
+    where: { tenantId, metric, day: { gte: since } },
     _sum: { quantity: true },
   });
 

@@ -69,13 +69,3 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
 
   redirect(user.kind === 'STAFF' ? '/admin' : '/');
 }
-
-export async function logout() {
-  const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE)?.value;
-  if (token) {
-    await db.authSession.deleteMany({ where: { sessionToken: token } });
-    jar.delete(SESSION_COOKIE);
-  }
-  redirect('/login');
-}
