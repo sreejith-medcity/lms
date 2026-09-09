@@ -131,8 +131,10 @@ const material = z.object({
   title: z.string().trim().min(2, 'Give the material a title').max(160),
   type: z.enum(MATERIAL_TYPES),
   externalUrl: z.string().trim().url('That does not look like a full URL').optional().or(z.literal('')),
+  assetId: z.string().trim().optional().or(z.literal('')),
   durationMinutes: z.coerce.number().min(0).optional(),
   isFreePreview: z.boolean(),
+  isDownloadable: z.boolean(),
 });
 
 export async function addMaterial(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -145,8 +147,10 @@ export async function addMaterial(_prev: ActionState, formData: FormData): Promi
       title: formData.get('title'),
       type: formData.get('type'),
       externalUrl: formData.get('externalUrl') || '',
+      assetId: formData.get('assetId') || '',
       durationMinutes: formData.get('durationMinutes') || undefined,
       isFreePreview: formData.get('isFreePreview') === 'on',
+      isDownloadable: formData.get('isDownloadable') === 'on',
     });
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -161,16 +165,48 @@ export async function addMaterial(_prev: ActionState, formData: FormData): Promi
     const needsUrl = d.type === 'YOUTUBE' || d.type === 'LINK_EMBED';
     if (needsUrl && !d.externalUrl) return { error: 'That material type needs a URL.' };
 
+    // An uploaded file wins over everything else: its own type is authoritative,
+    // so a video uploaded under the wrong dropdown still plays as a video.
+    let type = d.type;
+    let assetId: string | null = null;
+    let durationSeconds = d.durationMinutes ? Math.round(d.durationMinutes * 60) : null;
+
+    if (d.assetId) {
+      const asset = await db.asset.findFirst({
+        where: {
+          id: d.assetId,
+          organizationId: tenant.organizationId,
+          deletedAt: null,
+          transcodeStatus: { not: 'UPLOADING' },
+        },
+        select: { id: true, type: true, durationSeconds: true },
+      });
+      if (!asset) return { error: 'That file is still uploading, or is no longer available.' };
+
+      assetId = asset.id;
+      type = asset.type;
+      durationSeconds = durationSeconds ?? asset.durationSeconds;
+
+      await db.asset.update({
+        where: { id: asset.id },
+        data: { usageCount: { increment: 1 } },
+      });
+    } else if (!needsUrl && d.type !== 'TEXT_HTML' && d.type !== 'LIVE_SESSION' && d.type !== 'ASSESSMENT' && !d.externalUrl) {
+      return { error: 'Upload a file, or paste a link, for this material.' };
+    }
+
     const count = await db.material.count({ where: { sectionId: d.sectionId } });
 
     await db.material.create({
       data: {
         sectionId: d.sectionId,
         title: d.title,
-        type: d.type,
-        externalUrl: d.externalUrl || null,
-        durationSeconds: d.durationMinutes ? Math.round(d.durationMinutes * 60) : null,
+        type,
+        assetId,
+        externalUrl: assetId ? null : d.externalUrl || null,
+        durationSeconds,
         isFreePreview: d.isFreePreview,
+        isDownloadable: d.isDownloadable,
         sortOrder: count,
       },
     });
@@ -188,11 +224,20 @@ export async function deleteMaterial(materialId: string, productId: string): Pro
 
     const owned = await db.material.findFirst({
       where: { id: materialId, section: { module: { organizationId: tenant.organizationId } } },
-      select: { id: true },
+      select: { id: true, assetId: true },
     });
     if (!owned) return { error: 'Material not found.' };
 
     await db.material.delete({ where: { id: materialId } });
+
+    // The file stays in the library. Only its use count drops, which is what
+    // makes the "unused" filter there trustworthy.
+    if (owned.assetId) {
+      await db.asset.update({
+        where: { id: owned.assetId },
+        data: { usageCount: { decrement: 1 } },
+      });
+    }
 
     revalidatePath(`/admin/courses/${productId}/curriculum`);
     return { ok: true };

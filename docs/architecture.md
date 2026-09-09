@@ -96,7 +96,14 @@ every recorded class.
 
 - Assets go to S3-compatible object storage (Cloudflare R2 is the cheap answer because
   egress is free, which matters when learners stream recordings).
-- Uploads are direct-to-storage with presigned URLs, never through the app server.
+- Uploads are direct-to-storage with presigned URLs, never through the app server. The
+  signing is hand-rolled SigV4 in `src/lib/storage.ts` rather than the AWS SDK: 20 MB of
+  dependency for sixty lines of HMAC is a bad trade on a shared host where install time
+  is most of a deploy. Any S3-compatible provider works on four environment variables.
+- The bucket is private and has no public path. `/api/assets/<id>` resolves the tenant,
+  checks the viewer's enrolment (or staff role, or a free-preview flag), and only then
+  redirects to a short-lived signed URL: two hours for video and audio so seeking does
+  not stall mid-class, five minutes for everything else.
 - Video is transcoded to HLS with signed, short-lived playback URLs, plus the dynamic
   watermark Edmingle offers (learner name and ID burnt into the player overlay, not the
   file, so one transcode serves everyone).

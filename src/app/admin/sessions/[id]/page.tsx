@@ -4,7 +4,8 @@ import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { Badge, Card, EmptyState, Section } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
-import { AttendanceRow, CancelSession } from './controls';
+import { storageConfigured } from '@/lib/storage';
+import { AttendanceRow, CancelSession, Recordings } from './controls';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,10 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
         },
       },
       attendances: true,
+      recordings: {
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, title: true, assetId: true, asset: { select: { type: true } } },
+      },
     },
   });
   if (!session) notFound();
@@ -101,6 +106,19 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
           Sign-ins are recorded automatically when a learner joins. Use these buttons only for the
           cases the system cannot see.
         </p>
+      </Section>
+
+      <Section title="Recording">
+        <Recordings
+          sessionId={session.id}
+          storageReady={storageConfigured()}
+          recordings={session.recordings.map((r) => ({
+            id: r.id,
+            title: r.title,
+            assetId: r.assetId,
+            type: r.asset.type as string,
+          }))}
+        />
       </Section>
     </div>
   );

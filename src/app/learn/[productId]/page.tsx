@@ -50,6 +50,22 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
   });
   if (!enrollment?.product.course) notFound();
 
+  // Recordings of the classes this learner's batch actually sat in. Edmingle buries
+  // these; here they sit on the course page next to the material that came with them.
+  const recordings = enrollment.batchId
+    ? await db.recording.findMany({
+        where: { isPublished: true, session: { batchId: enrollment.batchId } },
+        orderBy: { session: { startsAt: 'desc' } },
+        take: 30,
+        select: {
+          id: true,
+          title: true,
+          assetId: true,
+          session: { select: { title: true, startsAt: true } },
+        },
+      })
+    : [];
+
   const done = await db.materialProgress.findMany({
     where: { userId: user.id, completedAt: { not: null } },
     select: { materialId: true },
@@ -86,8 +102,37 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
         )}
       </div>
 
-      {materials.length === 0 && (
+      {materials.length === 0 && recordings.length === 0 && (
         <EmptyState title="No content yet" hint="Your academy is still preparing this course." />
+      )}
+
+      {recordings.length > 0 && (
+        <Card className="space-y-3">
+          <h2 className="font-medium">Class recordings</h2>
+          <ul className="divide-y rounded-[var(--radius-sm)] border">
+            {recordings.map((r) => (
+              <li key={r.id}>
+                <a
+                  href={`/api/assets/${r.assetId}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--surface-2)]"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm">{r.title}</span>
+                    <span className="t-small faint">{r.session.title}</span>
+                  </span>
+                  <span className="t-small faint shrink-0">
+                    {r.session.startsAt.toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       {enrollment.product.course.modules.map((cm) => (

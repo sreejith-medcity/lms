@@ -232,3 +232,78 @@ export async function markAttendance(
     return fail(err);
   }
 }
+
+/**
+ * Attaches an uploaded file to a class as its recording. Edmingle holds 1,089 of
+ * these behind a player that will not seek; here they are ordinary library assets,
+ * so the same file can also be dropped into a course as catch-up material.
+ */
+export async function attachRecording(
+  sessionId: string,
+  assetId: string,
+  title?: string,
+): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('class_recording.publish_recordings', 'edit');
+
+    const [session, asset] = await Promise.all([
+      db.liveSession.findFirst({
+        where: { id: sessionId, organizationId: tenant.organizationId },
+        select: { id: true, title: true },
+      }),
+      db.asset.findFirst({
+        where: {
+          id: assetId,
+          organizationId: tenant.organizationId,
+          deletedAt: null,
+          transcodeStatus: { not: 'UPLOADING' },
+        },
+        select: { id: true, name: true, type: true },
+      }),
+    ]);
+
+    if (!session) return { error: 'Class not found.' };
+    if (!asset) return { error: 'That file is still uploading, or is no longer available.' };
+    if (asset.type !== 'VIDEO' && asset.type !== 'AUDIO') {
+      return { error: 'A recording has to be a video or an audio file.' };
+    }
+
+    await db.recording.create({
+      data: {
+        sessionId: session.id,
+        assetId: asset.id,
+        title: (title?.trim() || asset.name || session.title).slice(0, 160),
+      },
+    });
+
+    await db.asset.update({ where: { id: asset.id }, data: { usageCount: { increment: 1 } } });
+
+    revalidatePath(`/admin/sessions/${sessionId}`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function removeRecording(recordingId: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('class_recording.publish_recordings', 'delete');
+
+    const recording = await db.recording.findFirst({
+      where: { id: recordingId, session: { organizationId: tenant.organizationId } },
+      select: { id: true, sessionId: true, assetId: true },
+    });
+    if (!recording) return { error: 'Recording not found.' };
+
+    await db.recording.delete({ where: { id: recording.id } });
+    await db.asset.update({
+      where: { id: recording.assetId },
+      data: { usageCount: { decrement: 1 } },
+    });
+
+    revalidatePath(`/admin/sessions/${recording.sessionId}`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}

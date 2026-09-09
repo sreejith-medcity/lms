@@ -11,26 +11,15 @@ import {
 } from '@/server/curriculum';
 import type { ActionState } from '@/server/courses';
 import { Badge, Button, Field, FormError, Input, Select, brandStyle } from '@/components/ui';
+import { Uploader, type UploadedAsset } from '@/components/uploader';
 
 const initial: ActionState = {};
 
-const MATERIAL_TYPES: { value: string; label: string }[] = [
-  { value: 'VIDEO', label: 'Video' },
-  { value: 'AUDIO', label: 'Audio' },
-  { value: 'PDF', label: 'PDF' },
+const LINK_TYPES: { value: string; label: string }[] = [
   { value: 'YOUTUBE', label: 'YouTube' },
-  { value: 'IMAGE', label: 'Image' },
-  { value: 'DOC', label: 'Document' },
-  { value: 'SHEET', label: 'Spreadsheet' },
-  { value: 'SLIDE', label: 'Slides' },
-  { value: 'TEXT_HTML', label: 'Text / HTML' },
-  { value: 'ZIP', label: 'Zip' },
-  { value: 'SCORM', label: 'SCORM package' },
   { value: 'LINK_EMBED', label: 'Link or embed' },
-  { value: 'EPUB', label: 'ePub' },
-  { value: 'LIVE_SESSION', label: 'Live session' },
-  { value: 'ASSESSMENT', label: 'Assessment' },
 ];
+
 
 export function AddModule({
   productId,
@@ -135,42 +124,108 @@ export function AddSection({ productId, moduleId }: { productId: string; moduleI
   );
 }
 
-export function AddMaterial({ productId, sectionId }: { productId: string; sectionId: string }) {
+export function AddMaterial({
+  productId,
+  sectionId,
+  storageReady,
+}: {
+  productId: string;
+  sectionId: string;
+  storageReady: boolean;
+}) {
   const [state, action, pending] = useActionState(addMaterial, initial);
-  const [type, setType] = useState('VIDEO');
-  const needsUrl = type === 'YOUTUBE' || type === 'LINK_EMBED';
+  const [source, setSource] = useState<'file' | 'link'>(storageReady ? 'file' : 'link');
+  const [linkType, setLinkType] = useState('YOUTUBE');
+  const [asset, setAsset] = useState<UploadedAsset | null>(null);
+  const [title, setTitle] = useState('');
 
   return (
-    <form action={action} className="space-y-3">
+    <form
+      action={action}
+      className="space-y-3"
+      onSubmit={() => {
+        // The form resets on success, so the picked file must not linger.
+        setTimeout(() => setAsset(null), 0);
+      }}
+    >
       <input type="hidden" name="productId" value={productId} />
       <input type="hidden" name="sectionId" value={sectionId} />
+      <input type="hidden" name="assetId" value={source === 'file' ? (asset?.id ?? '') : ''} />
+      <input type="hidden" name="type" value={source === 'file' ? 'VIDEO' : linkType} />
       <FormError message={state.error} />
+
+      <div className="flex gap-4 text-sm">
+        <label className="flex items-center gap-2">
+          <input
+            type="radio"
+            checked={source === 'file'}
+            onChange={() => setSource('file')}
+            disabled={!storageReady}
+          />
+          Upload a file
+          {!storageReady && <span className="t-small faint">(storage not connected)</span>}
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="radio" checked={source === 'link'} onChange={() => setSource('link')} />
+          Link or embed
+        </label>
+      </div>
+
+      {source === 'file' &&
+        (asset ? (
+          <div className="flex items-center justify-between gap-3 rounded-[var(--radius-sm)] border bg-[var(--surface-2)] px-3 py-2">
+            <span className="t-small truncate">{asset.fileName}</span>
+            <button
+              type="button"
+              className="t-small faint hover:underline"
+              onClick={() => setAsset(null)}
+            >
+              Choose another
+            </button>
+          </div>
+        ) : (
+          <Uploader
+            label="Drop the file here"
+            hint="It uploads straight to storage. The material type is set from the file."
+            onUploaded={(a) => {
+              setAsset(a);
+              setTitle((t) => t || a.name);
+            }}
+          />
+        ))}
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-56 flex-1">
           <Field label="Material">
-            <Input name="title" placeholder="A1 Textbook (Kursbuch)" maxLength={160} />
+            <Input
+              name="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="A1 Textbook (Kursbuch)"
+              maxLength={160}
+            />
           </Field>
         </div>
 
-        <div className="w-44">
-          <Field label="Type">
-            <Select name="type" value={type} onChange={(e) => setType(e.target.value)}>
-              {MATERIAL_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-
-        {needsUrl && (
-          <div className="min-w-56 flex-1">
-            <Field label="URL">
-              <Input name="externalUrl" type="url" placeholder="https://" />
-            </Field>
-          </div>
+        {source === 'link' && (
+          <>
+            <div className="w-40">
+              <Field label="Type">
+                <Select value={linkType} onChange={(e) => setLinkType(e.target.value)}>
+                  {LINK_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <div className="min-w-56 flex-1">
+              <Field label="URL">
+                <Input name="externalUrl" type="url" placeholder="https://" />
+              </Field>
+            </div>
+          </>
         )}
 
         <div className="w-28">
@@ -179,19 +234,20 @@ export function AddMaterial({ productId, sectionId }: { productId: string; secti
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 pb-2 t-small muted">
+        <label className="t-small muted flex items-center gap-2 pb-2">
           <input type="checkbox" name="isFreePreview" />
           Free preview
         </label>
 
-        <Button type="submit" variant="secondary" disabled={pending}>
+        <label className="t-small muted flex items-center gap-2 pb-2">
+          <input type="checkbox" name="isDownloadable" />
+          Downloadable
+        </label>
+
+        <Button type="submit" variant="secondary" disabled={pending || (source === 'file' && !asset)}>
           {pending ? 'Adding...' : 'Add'}
         </Button>
       </div>
-
-      <p className="t-small faint">
-        File uploads arrive with the asset library. For now, link YouTube or an external URL.
-      </p>
     </form>
   );
 }

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
+import { storageConfigured } from '@/lib/storage';
 import { Card, EmptyState } from '@/components/ui';
 import { AddModule, AddSection, AddMaterial, MaterialRow, UnlinkModule } from './editors';
 
@@ -9,6 +10,7 @@ export const dynamic = 'force-dynamic';
 export default async function CurriculumPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const tenant = await requireTenant();
+  const storageReady = storageConfigured();
 
   const product = await db.product.findFirst({
     where: { id, organizationId: tenant.organizationId, type: 'COURSE' },
@@ -101,7 +103,7 @@ export default async function CurriculumPage({ params }: { params: Promise<{ id:
                 </ul>
 
                 <div className="border-t bg-[var(--surface-2)] px-4 py-3">
-                  <AddMaterial productId={product.id} sectionId={section.id} />
+                  <AddMaterial productId={product.id} sectionId={section.id} storageReady={storageReady} />
                 </div>
               </div>
             ))}
