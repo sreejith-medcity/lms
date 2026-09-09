@@ -9,6 +9,8 @@ import type { ActionState } from '@/server/courses';
 import { recordAudit } from '@/lib/audit';
 import { dayStart, dayEnd } from '@/lib/clock';
 import { queueNotifications, describeQueue } from '@/lib/notify';
+import { provisionMeetings, releaseMeeting } from '@/lib/zoom-sessions';
+import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 
 /** Sign-in is "in time" if it lands within this many minutes of the start. */
 const IN_TIME_GRACE_MINUTES = 10;
@@ -121,9 +123,32 @@ export async function scheduleSessions(_prev: ActionState, formData: FormData): 
       })),
     });
 
+    // A handful of classes get their Zoom meetings now, because waiting for the
+    // next scheduled run to see a join link would be baffling. A whole term does
+    // not: fifty Zoom calls inside one form submission is a request that times
+    // out with half the term provisioned. Those are picked up a fortnight out.
+    let zoomNote = '';
+    if (!d.joinUrl) {
+      const provisioned = await provisionMeetings(tenant.organizationId, {
+        limit: occurrences.length <= 8 ? occurrences.length : 4,
+      });
+
+      if (provisioned.created > 0) {
+        zoomNote =
+          provisioned.created === occurrences.length
+            ? ' Zoom meetings created.'
+            : ` Zoom meetings created for the first ${provisioned.created}; the rest are made a fortnight before each class.`;
+      } else if (provisioned.reason) {
+        zoomNote = ` ${provisioned.reason}`;
+      }
+    }
+
     revalidatePath('/admin/sessions');
     revalidatePath('/learn');
-    return { ok: true };
+    return {
+      ok: true,
+      message: `${occurrences.length} ${occurrences.length === 1 ? 'class' : 'classes'} scheduled.${zoomNote}`,
+    };
   } catch (err) {
     return fail(err);
   }
@@ -144,9 +169,17 @@ export async function cancelSession(sessionId: string, reason?: string): Promise
       data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason ?? null },
     });
 
+    // The room goes with the class. A learner who kept the old email should find
+    // nothing rather than sit alone in a meeting that still opens.
+    await releaseMeeting(tenant.organizationId, sessionId);
+
+    const queued = await tellTheRoll(tenant.organizationId, sessionId, 'session.cancelled', {
+      reason: reason?.trim() || 'Your trainer will confirm the new date.',
+    });
+
     revalidatePath('/admin/sessions');
     revalidatePath('/learn');
-    return { ok: true };
+    return { ok: true, message: queued };
   } catch (err) {
     return fail(err);
   }
@@ -603,4 +636,57 @@ export async function remindRoster(sessionId: string): Promise<ActionState> {
   } catch (err) {
     return fail(err);
   }
+}
+
+/**
+ * Telling everyone on the roll about a class.
+ *
+ * Context is written onto each queued row rather than looked up when it is sent,
+ * so a cancellation still names the right class after somebody renames it, and
+ * still says the right time after the calendar is rearranged around it.
+ */
+async function tellTheRoll(
+  organizationId: string,
+  sessionId: string,
+  eventKey: string,
+  extra: Record<string, string> = {},
+): Promise<string> {
+  const session = await rosterOf(sessionId, organizationId);
+  if (!session) return '';
+
+  const people = session.batch.enrollments.map((row) => row.user);
+  if (!people.length) return 'Nobody is enrolled, so there was nobody to tell.';
+
+  const names = await db.user.findMany({
+    where: { id: { in: people.map((p) => p.id) } },
+    select: { id: true, name: true },
+  });
+  const nameOf = new Map(names.map((row) => [row.id, row.name]));
+
+  const organization = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: { timezone: true, name: true },
+  });
+  const zone = organization?.timezone ?? 'Asia/Calcutta';
+
+  const result = await queueNotifications({
+    organizationId,
+    eventKey,
+    recipients: people.map((person) => ({
+      userId: person.id,
+      email: person.email,
+      phone: person.phone,
+    })),
+    dedupeKey: `${eventKey}:${sessionId}`,
+    context: {
+      title: session.title,
+      date: formatDayLabel(dayKey(session.startsAt, zone), zone, true),
+      time: formatTime(session.startsAt, zone),
+      organization: organization?.name ?? '',
+      ...extra,
+    },
+    contextFor: (person) => ({ name: nameOf.get(person.userId) ?? 'there' }),
+  });
+
+  return describeQueue(result);
 }

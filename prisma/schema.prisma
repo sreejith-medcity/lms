@@ -59,6 +59,7 @@ model Organization {
   featureFlags  FeatureFlag[]
   integrations  Integration[]
   integrationEvents IntegrationEvent[]
+  utilityWallet     UtilityWallet?
 
   @@index([tenantId])
   @@map("organizations")
@@ -164,6 +165,12 @@ model User {
   kind             UserKind  @default(LEARNER)
   status           UserStatus @default(ACTIVE)
   mustResetPassword Boolean  @default(false)
+  /// Two factor. The secret is sealed with AUTH_SECRET before it is written, the
+  /// same as an integration credential, because a plaintext TOTP secret in the
+  /// database is a password in the database.
+  twoFactorSecret        String?
+  twoFactorEnabledAt     DateTime?
+  twoFactorRecoveryCodes String[] @default([])
   registrationNo   Int? // Edmingle's sequential learner number, preserved on migration
   legacyEdmingleId String? // for reconciliation during and after migration
   legacyWooId      String?
@@ -855,6 +862,11 @@ model LiveSession {
   provider       String        @default("ZOOM") // ZOOM | MEET | JITSI | NATIVE
   joinUrl        String?
   hostUrl        String?
+  /// The provider's own id for this meeting. Without it a Zoom webhook has no
+  /// way to say which class it is talking about, and a recording cannot be
+  /// pulled back to the session that produced it.
+  providerMeetingId String?
+  providerHostId    String?
   recurrenceId   String?
   isHoliday      Boolean       @default(false)
   cancelledAt    DateTime?
@@ -871,6 +883,7 @@ model LiveSession {
 
   @@index([organizationId, startsAt])
   @@index([batchId, startsAt])
+  @@index([organizationId, providerMeetingId])
   @@map("live_sessions")
 }
 
@@ -2062,16 +2075,30 @@ model NotificationLog {
   channel        Channel
   eventKey       String
   target         String
-  status         String   @default("QUEUED") // QUEUED | SENT | DELIVERED | READ | FAILED
+  status         String   @default("QUEUED") // QUEUED | SENT | DELIVERED | READ | FAILED | CANCELLED
   provider       String?
   providerRef    String?
   costPaise      Int      @default(0)
   error          String?
+  /// What the message is about, so the sender can render it without going back
+  /// to the tables the event was raised from. A queued row has to survive the
+  /// class being renamed.
+  context        Json?
+  templateKey    String?
+  /// Stops the same event reaching the same person twice. Was overloaded onto
+  /// `provider`, which then could not also record who sent it.
+  dedupeKey      String?
+  attempts       Int      @default(0)
+  sentAt         DateTime?
+  /// When the drain should next look at this row. Backoff lives here rather
+  /// than in a worker's memory, so a restart does not retry everything at once.
+  nextAttemptAt  DateTime?
   createdAt      DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
   @@index([organizationId, channel, createdAt])
+  @@index([organizationId, status, nextAttemptAt])
   @@index([userId])
   @@map("notification_logs")
 }
@@ -2329,6 +2356,74 @@ model IntegrationEvent {
 
   @@index([organizationId, provider, createdAt])
   @@map("integration_events")
+}
+
+/// What the academy has left to spend on messages.
+///
+/// Every SMS and WhatsApp template costs real money, and an institute that finds
+/// out it ran dry when a batch of reminders silently failed has been let down by
+/// its software. So the balance is a number on a screen, spending is a ledger,
+/// and the drain refuses to send rather than going negative.
+///
+/// Email is metered too but usually priced at zero, because most plans bundle
+/// it. A zero price still writes a row, so "how many did we send" is answerable.
+model UtilityWallet {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  balancePaise   Int      @default(0)
+  /// Warn below this. Zero means never warn, which is a choice rather than a
+  /// default.
+  lowBalancePaise Int     @default(50000)
+  /// Refuse to send below this instead of going negative. Usually zero.
+  floorPaise     Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions UtilityTransaction[]
+
+  @@map("utility_wallets")
+}
+
+model UtilityTransaction {
+  id        String   @id @default(cuid())
+  walletId  String
+  /// Signed. A top-up is positive, a message is negative.
+  paise     Int
+  reason    String // TOPUP, SMS, WHATSAPP, EMAIL, ADJUSTMENT
+  channel   String?
+  /// The notification this paid for, where there is one.
+  logId     String?
+  note      String?
+  createdById String?
+  createdAt DateTime @default(now())
+
+  wallet UtilityWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([walletId, createdAt])
+  @@map("utility_transactions")
+}
+
+/// Inbound events from any provider that is not the payment gateway.
+///
+/// Zoom retries, reorders and duplicates exactly as Razorpay does, and a join
+/// event processed twice marks attendance twice. `GatewayEvent` already does
+/// this job for payments; this is the same idea for everyone else, kept separate
+/// so a noisy webhook cannot bury the money trail.
+model ProviderEvent {
+  id             String    @id @default(cuid())
+  organizationId String
+  provider       String // zoom, meta, google_ads, ninja_forms
+  eventId        String // the provider's own id for this delivery
+  event          String
+  payload        Json
+  signatureOk    Boolean   @default(true)
+  processedAt    DateTime?
+  error          String?
+  createdAt      DateTime  @default(now())
+
+  @@unique([provider, eventId])
+  @@index([organizationId, provider, createdAt])
+  @@map("provider_events")
 }
 
 /// Inbound gateway events. Razorpay retries, reorders and duplicates; this is the

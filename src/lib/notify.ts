@@ -1,17 +1,21 @@
 import { db } from '@/lib/db';
-import type { $Enums } from '@prisma/client';
+import type { $Enums, Prisma } from '@prisma/client';
 
 /**
  * The outbox.
  *
- * No provider is connected yet, so nothing here sends anything: it writes a row
- * per intended message with status QUEUED. That is deliberate rather than a
- * placeholder. The hard parts of messaging are deciding who gets what and not
- * sending it twice, and both of those are decided here; when a provider arrives
- * in Phase 7 it drains this table and moves rows to SENT.
+ * Queueing and sending are separate on purpose. This writes a row per intended
+ * message with status QUEUED and returns; `drain.ts` picks the rows up, renders
+ * them, calls a provider and moves them to SENT or FAILED. The hard parts of
+ * messaging are deciding who gets what and not sending it twice, and both of
+ * those are settled here, before any provider is involved.
  *
- * The alternative — wiring the send first and the record second — is how an
+ * The alternative, wiring the send first and the record second, is how an
  * institute ends up unable to answer "did she get the reminder or not".
+ *
+ * Context is written onto the row rather than looked up at send time, so a
+ * reminder queued on Monday still says the right thing after the class is
+ * renamed on Tuesday.
  */
 
 export interface Recipient {
@@ -24,10 +28,14 @@ export interface QueueRequest {
   organizationId: string;
   eventKey: string;
   recipients: Recipient[];
-  /** Written on the row so a later provider knows what to render. */
+  /** Written on the row so the sender can render without going back to the tables. */
   context?: Record<string, string>;
   /** Skip anyone already queued or sent this event for this context key. */
   dedupeKey?: string;
+  /** Per-recipient context, merged over the shared context. */
+  contextFor?: (person: Recipient) => Record<string, string>;
+  /** Hold the message until this time. A reminder is not sent when it is written. */
+  sendAt?: Date;
 }
 
 const DEFAULT_CHANNELS: $Enums.Channel[] = ['EMAIL'];
@@ -78,7 +86,7 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
               eventKey: request.eventKey,
               userId: { in: request.recipients.map((r) => r.userId) },
               status: { in: ['QUEUED', 'SENT', 'DELIVERED', 'READ'] },
-              provider: dedupe,
+              dedupeKey: dedupe,
             },
             select: { userId: true, channel: true },
           })
@@ -93,8 +101,9 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
     eventKey: string;
     target: string;
     status: string;
-    provider: string | null;
-    error: string | null;
+    dedupeKey: string | null;
+    context: Prisma.InputJsonValue;
+    nextAttemptAt: Date;
   }[] = [];
 
   let skipped = 0;
@@ -118,9 +127,14 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
         eventKey: request.eventKey,
         target,
         status: 'QUEUED',
-        // provider carries the dedupe key until a real provider claims the row.
-        provider: dedupe,
-        error: null,
+        dedupeKey: dedupe,
+        context: {
+          ...(request.context ?? {}),
+          ...(request.contextFor?.(person) ?? {}),
+        } as Prisma.InputJsonValue,
+        // Due immediately unless the caller said otherwise. A class reminder is
+        // decided now and sent an hour before the class.
+        nextAttemptAt: request.sendAt ?? new Date(),
       });
     }
   }
@@ -143,5 +157,5 @@ export function describeQueue(result: QueueResult, noun = 'message'): string {
   ];
   if (result.skipped > 0) parts.push(`${result.skipped} already sent`);
   if (result.unreachable > 0) parts.push(`${result.unreachable} with no contact details`);
-  return `${parts.join(', ')}. They go out when a messaging provider is connected.`;
+  return `${parts.join(', ')}. They go out on the next send, or when a provider is connected if none is yet.`;
 }

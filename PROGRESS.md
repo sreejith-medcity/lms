@@ -497,29 +497,115 @@ Disconnect and reconnect are both there, disconnect gated on the delete
 permission rather than edit, so a staff member who can update a key cannot clear
 one.
 
+## Phase 7 — the phase that makes everything else send
+
+Six phases have been queueing messages, scheduling classes with a join link
+typed in by hand, and reporting conversions only from a browser tag that half
+the traffic blocks. This is the phase where all of that becomes real.
+
+**Providers, thirteen of them, behind one interface.** Email through SMTP,
+Resend, SendGrid, SES or Postmark. SMS through MSG91, Twilio or Exotel. WhatsApp
+through AiSensy, WATI, Gupshup, the Meta Cloud API or Interakt. An academy
+connects whichever it has and the first complete one in priority order carries
+the channel, rather than making somebody pick a default in a dropdown they will
+never revisit.
+
+Each adapter classifies its own failures. A number that is not on WhatsApp will
+never be on WhatsApp, and retrying it costs money and buries the real failures
+underneath it, so a permanent refusal is not retried and a 503 is. MSG91 with no
+DLT template id says so in those words rather than passing on a number, because
+that specific misconfiguration is the one that fails silently at the carrier.
+
+**The drain.** Rows are claimed before they are sent, so two overlapping runs
+cannot both send the same reminder. Retries back off, one minute then five then
+twenty five. A row stuck in SENDING because a run died is put back after ten
+minutes. And nothing is sent that cannot be rendered: a template variable with
+nothing to fill it stops the message and says which variable it was, because
+"Hi ," going out to four hundred people is always caused by rendering being
+forgiving.
+
+**A utility wallet, because messages cost money.** Every send writes a ledger
+row and debits an estimate, and the balance is a number on a screen rather than
+something discovered from an invoice five weeks later. Charged before the
+provider is called and refunded if it fails, which is the safe order: a timeout
+that actually delivered is worse unbilled than double counted. SMS is costed per
+segment and counts unicode, since one Malayalam character cuts the segment from
+160 characters to 70 and empties a wallet three times faster than expected.
+The whole thing is described as an estimate everywhere it appears.
+
+**Zoom, server to server.** Meetings are created from the class rather than
+pasted into it, with the trainer as host where they have their own seat, cloud
+recording on where the plan allows it, and a waiting room. Not all at once: a
+term of fifty classes is fifty API calls inside one form submission and a
+request that times out with half the term provisioned, so a handful are made
+immediately and the rest a fortnight before each class. Cancelling a class
+deletes the meeting, so a learner with the old email finds nothing rather than
+sitting alone in a room that still opens.
+
+**Attendance from the source.** Zoom's join and leave webhooks now mark
+attendance directly, signature checked, replay window enforced, every delivery
+recorded before it is processed. A rejoin after a dropped connection does not
+overwrite the first arrival, so a bad line no longer turns a punctual learner
+into a late one.
+
+**One-time codes and two factor.** Codes are hashed before storage, compared in
+constant time, burned after five wrong guesses, and a new request invalidates
+the old code rather than leaving two valid. Wrong code, expired code and no code
+give the same sentence, so this cannot be used to find out which addresses have
+an account. Two factor is RFC 6238 written against node:crypto rather than a
+dependency, with recovery codes, because an academy whose only admin lost their
+phone is a support request nobody can safely act on.
+
+**Conversions reported from the server.** GA4 through the Measurement Protocol
+and Meta through the Conversions API, both keyed with our own id so they
+deduplicate against the browser tag instead of double counting. This is the
+difference between a cost per enrolment that looks terrible and one that is
+true.
+
+**Outbound webhooks**, signed and timestamped, queued rather than sent inline so
+a slow endpoint on somebody else's server cannot make enrolling slow here, with
+every delivery recorded because "we never got it" is the first thing anyone says.
+
+**Class reminders queue themselves** an hour ahead, deduplicated per class, so
+running the job every few minutes queues each reminder exactly once. The manual
+button stays for the trainer moving a class at short notice.
+
+**A Messaging screen** under Settings answers the three questions in the order
+people ask them: can we send at all, what is waiting, and what has it cost.
+Addresses are masked, because that screen is for checking delivery, not for
+copying a contact list out of the product.
+
 ## Next runnable step
 
-**Push, then run one database command.**
+**Install, push, and set up two cron jobs.**
 
 ```
-cd ~/Documents/lms && rm -f .git/*.lock* && git push origin main
+cd ~/Documents/lms && npm install
 ```
 
-The new `integration_events` table needs creating before history records
-anything. Prisma's engines cannot be fetched from this machine, so run it where
-the database is reachable, or let the deploy do it:
+That adds nodemailer, which SMTP needs, and re-runs prisma generate through
+postinstall. Then:
 
 ```
 npx prisma db push
+rm -f .git/*.lock* && git push origin main
 ```
 
-Until that runs, the history panel says nothing has happened yet, which is the
-truth rather than an error.
+In Hostinger, set `CRON_SECRET` to a long random string
+(`openssl rand -hex 32`) and add two cron jobs:
 
-Then open Settings, Integrations, and put in whatever you already have:
-Zoom, MSG91, AiSensy, GA4, the WhatsApp Cloud credentials. They will be sealed
-and waiting when Phase 7 wires the senders, which is the point of entering them
-early.
+```
+*/5 * * * *  curl -s "https://YOUR-HOST/api/cron/notifications?key=YOUR_SECRET"
+0   * * * *  curl -s "https://YOUR-HOST/api/cron/scheduled?key=YOUR_SECRET"
+```
+
+Without `CRON_SECRET` the routes refuse rather than run, which is the right way
+round for a URL on the public internet that spends money.
+
+Then in Zoom, add the webhook `https://YOUR-HOST/api/webhooks/zoom` subscribed
+to meeting.started, meeting.ended, meeting.participant_joined,
+meeting.participant_left and recording.completed, and paste the secret token
+onto the Zoom card in Settings, Integrations.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another

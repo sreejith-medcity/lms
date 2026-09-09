@@ -15,6 +15,7 @@ const TABS = [
   { href: '/admin/settings/website', label: 'Website' },
   { href: '/admin/settings/grading', label: 'Grading' },
   { href: '/admin/settings/integrations', label: 'Integrations' },
+  { href: '/admin/settings/messaging', label: 'Messaging' },
 ];
 
 export function SettingsTabs() {

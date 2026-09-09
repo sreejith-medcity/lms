@@ -105,13 +105,26 @@ video threshold, leaderboards, DRM and dynamic watermark. Website and app setup:
 signup primary field, login modes, brand, social links, policies editor. Grading
 system. International selling.
 
-## Phase 7 — Auth and integrations
+## Phase 7 — Auth and integrations · BUILT, AWAITING PUSH
 
 The phase that makes several earlier ones actually send. OTP signup and login,
 Google SSO, two-factor, secondary field validation. Zoom server-to-server for
 real meetings, recording pull and join webhooks. Email, SMS and WhatsApp
 providers, and the notification engine behind them. Webhooks, Zapier, GA4.
 Utility wallet metering, so notification cost is visible rather than a surprise.
+
+Built. Thirteen messaging providers behind one interface, a drain that claims
+before it sends and backs off when it fails, Zoom meetings created from the
+class and attendance taken from Zoom's own webhooks, OTP and TOTP written
+against node:crypto, server-side conversions to GA4 and Meta keyed to
+deduplicate against the browser tag, signed outbound webhooks, and a Messaging
+screen that says whether any of it is actually working.
+
+Two departures from the brief. Meetings are provisioned a fortnight ahead rather
+than at scheduling time, because fifty Zoom calls in one form submission is a
+timeout. And the wallet charges before the provider is called and refunds on
+failure, rather than the other way round, because a timeout that actually
+delivered is worse unbilled than double counted.
 
 ## Phase 8 — One system, and go-live
 

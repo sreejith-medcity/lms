@@ -20,11 +20,13 @@
   "dependencies": {
     "@prisma/client": "^6.7.0",
     "@types/node": "^22.15.0",
+    "@types/nodemailer": "^6.4.17",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "autoprefixer": "^10.4.21",
     "date-fns": "^4.1.0",
     "next": "^15.3.0",
+    "nodemailer": "^6.9.16",
     "postcss": "^8.5.3",
     "prisma": "^6.7.0",
     "react": "^19.1.0",

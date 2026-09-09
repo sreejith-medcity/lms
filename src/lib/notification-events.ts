@@ -21,7 +21,7 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
     events: [
       { key: 'session.reminder', label: 'A class is coming up', who: 'Everyone on the roll', live: true },
       { key: 'session.absent', label: 'They missed a class', who: 'Whoever did not sign in', live: true },
-      { key: 'session.cancelled', label: 'A class was called off', who: 'Everyone on the roll', live: false, waitingOn: 'the cancel flow to emit it' },
+      { key: 'session.cancelled', label: 'A class was called off', who: 'Everyone on the roll', live: true },
       { key: 'session.recording', label: 'A recording was published', who: 'The batch that sat it', live: false, waitingOn: 'the publish flow to emit it' },
     ],
   },
@@ -46,8 +46,10 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
   {
     group: 'Account',
     events: [
+      { key: 'account.otp', label: 'A one-time code was asked for', who: 'Whoever asked for it', live: true },
+      { key: 'account.two_factor', label: 'A sign-in code was asked for', who: 'The account holder', live: true },
       { key: 'account.welcome', label: 'They created an account', who: 'The new account', live: false, waitingOn: 'the signup path to emit it' },
-      { key: 'account.password_reset', label: 'A password was reset', who: 'The account holder', live: false, waitingOn: 'an email provider, in Phase 7' },
+      { key: 'account.password_reset', label: 'A password was reset', who: 'The account holder', live: false, waitingOn: 'the reset flow to emit it' },
       { key: 'announcement.published', label: 'An announcement went out', who: 'Its targets', live: false, waitingOn: 'the announcement path to emit it' },
     ],
   },
