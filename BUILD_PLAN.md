@@ -96,19 +96,19 @@ the reasoning; `docs/edmingle-inventory.md` carries what is being replaced.
 
 | # | Requirement | Routes | Data and backend | Permissions | Acceptance | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 3.1 | Branches | `/admin/settings/branches` | `Branch`, `BranchMembership` | `settings.branches` | A branch manager sees only their branches, enforced in queries | `partial` — modelled and seeded; no UI; scoping not applied |
+| 3.1 | Branches | `/admin/settings/branches` | `Branch`, `BranchMembership` | `settings.branches` | A branch manager sees only their branches, enforced in queries | `partial` — create, edit and deactivate work, and the last active branch cannot be deactivated. Query scoping by branch is still not applied |
 | 3.2 | Batches | `/admin/batches` | `Batch`, `BatchStaff`, `BatchModule` | `batches.*` | Roster, staff, per-batch curriculum | `partial` — list only; no create, no staff assignment |
 | 3.3 | Live classes and attendance | `/admin/sessions`, `/[id]` | `LiveSession`, `SessionRecurrence`, `Attendance` | `scheduling.sessions` | Weekly series; attendance recorded on join with a ten-minute grace | `done` |
 | 3.4 | Zoom integration | — | `Integration` | `settings.integrations` | Real meeting creation, recording pull, join/leave webhooks | `blocked` — needs `ZOOM_*`; currently a manually pasted join URL |
 | 3.5 | Recordings | session page, `/learn/[p]` | `Recording`, `Asset` | `class_recording.*` | Published to the batch that sat the class | `done` |
 | 3.6 | Transcription | — | `Transcript` | — | Segments, summary, chapters, searchable | `missing` |
-| 3.7 | Team and roles UI | `/admin/team` | `Role`, `RoleAssignment` | `settings.roles` | Create a role, tick permissions, assign a person, see it take effect | `stub` |
+| 3.7 | Team and roles UI | `/admin/team`, `/admin/settings/roles` | `Role`, `UserRole`, `RolePermission` | `settings.roles` | Create a role, tick permissions, assign a person, see it take effect | `done` — full 30-group matrix with edit implying view and delete implying edit, enforced client and server side; built-in roles are copy-only; suspension drops live sessions |
 | 3.8 | Learner management | `/admin/learners` | `User`, `LearnerProfile`, `CustomFieldDefinition` | `learner.*` | Search, filter, custom fields, export, impersonate | `partial` — list only |
 | 3.9 | CSV import | `/admin/learners/import` | staged rows, `AuditLog` | `new_enrollment.bulk` | Validation, preview, duplicate handling, row-level errors, downloadable result | `missing` |
 | 3.10 | Storefront CMS | `/admin/storefront` | `StorefrontPage`, `BlogPost`, `Redirect` | `blogs.*`, `banner.*` | Constrained editor, preview, publish, SEO fields | `stub` |
 | 3.11 | Announcements, feedback forms, testimonials | `/admin/*` | `Announcement`, `FeedbackForm`, `Testimonial` | respective | Targeted at a batch or a course | `missing` |
 | 3.12 | Reporting | `/admin/analytics` | aggregates | `analytics.*`, `reports.*` | Metric definitions documented; collections distinguished from revenue | `stub` |
-| 3.13 | Settings | `/admin/settings` | `Organization`, `TaxConfig`, `NotificationSetting` | `settings.*` | Brand colour, taxes, custom fields, notification toggles | `stub` |
+| 3.13 | Settings | `/admin/settings`, `/branches`, `/taxes`, `/roles`, `/integrations` | `Organization`, `Branch`, `TaxConfig`, `Role` | `settings.*` | Organisation details, live brand-colour preview, branches, GST with a worked example, roles, and integration health read from the running process | `partial` — custom fields and notification preferences still to come |
 
 ## Phase 4 — Advanced learning
 

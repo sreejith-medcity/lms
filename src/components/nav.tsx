@@ -40,16 +40,18 @@ export const ADMIN_NAV: NavGroup[] = [
     icon: 'users',
     children: [
       { label: 'Learners', href: '/admin/learners' },
+      { label: 'Team', href: '/admin/team' },
     ],
   },
+  { label: 'Settings', href: '/admin/settings', icon: 'gear' },
 ];
 
 /**
  * Deliberately short. An entry appears here only once its route does something,
  * because a menu full of blank pages reads as broken rather than as early.
  * BUILD_PLAN.md tracks the rest: events, memberships, module library,
- * assessments, submissions, certificates, team, enrolments, leads, campaigns,
- * storefront, payments, fee tracking, analytics and settings.
+ * assessments, submissions, certificates, enrolments, leads, campaigns,
+ * storefront, payments, fee tracking and analytics.
  */
 
 const ICONS: Record<string, string> = {
