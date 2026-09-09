@@ -26,8 +26,8 @@ export const ADMIN_NAV: NavGroup[] = [
     icon: 'box',
     children: [
       { label: 'Courses', href: '/admin/courses' },
-      { label: 'Events', href: '#', feature: 'events', soon: true },
-      { label: 'Memberships', href: '#', feature: 'memberships', soon: true },
+      { label: 'Events', href: '/admin/events', feature: 'events' },
+      { label: 'Memberships', href: '/admin/memberships', feature: 'memberships' },
       { label: 'Categories', href: '/admin/categories' },
     ],
   },
@@ -52,7 +52,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Learners', href: '/admin/learners' },
       { label: 'Team', href: '/admin/team' },
       { label: 'Enrol a learner', href: '/admin/enrol' },
-      { label: 'Attendance', href: '#', soon: true },
+      { label: 'Attendance', href: '/admin/attendance' },
     ],
   },
   {
