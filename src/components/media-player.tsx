@@ -19,6 +19,8 @@ export function MediaPlayer({
   startAt,
   durationSeconds,
   onTimeUpdate,
+  watermark,
+  blockContextMenu = false,
 }: {
   kind: 'video' | 'audio';
   src: string;
@@ -26,10 +28,23 @@ export function MediaPlayer({
   startAt: number;
   durationSeconds: number | null;
   onTimeUpdate?: (seconds: number) => void;
+  /** Who is watching, overlaid on the video when the academy asks for it. */
+  watermark?: string | null;
+  blockContextMenu?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement | HTMLAudioElement>(null);
   const lastSaved = useRef(0);
   const [resumed, setResumed] = useState(startAt < 5);
+  const [corner, setCorner] = useState(0);
+
+  // The mark moves every half minute. A fixed corner is cropped out in one cut;
+  // one that wanders has to be tracked through the whole recording, which is
+  // more trouble than re-recording it.
+  useEffect(() => {
+    if (!watermark) return;
+    const timer = setInterval(() => setCorner((c) => (c + 1) % 4), 30_000);
+    return () => clearInterval(timer);
+  }, [watermark]);
 
   const persist = useCallback(
     (force = false) => {
@@ -83,9 +98,28 @@ export function MediaPlayer({
   return (
     <div className="space-y-2">
       {kind === 'video' ? (
-        <div className="overflow-hidden rounded-[var(--radius)] border bg-black">
+        <div
+          className="relative overflow-hidden rounded-[var(--radius)] border bg-black"
+          onContextMenu={blockContextMenu ? (e) => e.preventDefault() : undefined}
+        >
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video {...common} playsInline className="aspect-video w-full" />
+
+          {watermark && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute select-none text-[0.6875rem] font-medium text-white/45 transition-all duration-1000"
+              style={{
+                top: corner < 2 ? '8%' : undefined,
+                bottom: corner >= 2 ? '12%' : undefined,
+                left: corner === 0 || corner === 3 ? '6%' : undefined,
+                right: corner === 1 || corner === 2 ? '6%' : undefined,
+                textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+              }}
+            >
+              {watermark}
+            </span>
+          )}
         </div>
       ) : (
         <audio {...common} className="w-full" />

@@ -6,6 +6,7 @@ import { Badge, Card, EmptyState, LinkButton, ProgressRing, Section } from '@/co
 import { JoinButton } from './join-button';
 import { RateClass } from './rate-class';
 import { Banners } from '@/components/banners';
+import { Leaderboard } from '@/components/leaderboard';
 import { questionsOf } from '@/lib/feedback';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 
@@ -161,6 +162,13 @@ export default async function MyLearning() {
           }))}
         />
       )}
+
+      <Leaderboard
+        organizationId={tenant.organizationId}
+        userId={user.id}
+        batchIds={batchIds}
+        productIds={enrollments.map((e) => e.productId)}
+      />
 
       {resume && (
         <Card className="flex flex-wrap items-center gap-5 border-[var(--brand-line)] bg-[var(--brand-soft)]">

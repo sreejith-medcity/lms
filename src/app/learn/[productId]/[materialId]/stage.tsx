@@ -39,6 +39,9 @@ export function Stage({
   prevId,
   nextId,
   notes,
+  watermark = null,
+  blockContextMenu = false,
+  allowDownload = true,
 }: {
   productId: string;
   material: Material;
@@ -50,6 +53,10 @@ export function Stage({
   prevId: string | null;
   nextId: string | null;
   notes: NoteRow[];
+  /** Who is watching, when the academy has watermarking on. */
+  watermark?: string | null;
+  blockContextMenu?: boolean;
+  allowDownload?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>('notes');
   const [currentTime, setCurrentTime] = useState<number | null>(null);
@@ -78,6 +85,8 @@ export function Stage({
               <MediaPlayer
                 kind={material.type === 'VIDEO' ? 'video' : 'audio'}
                 src={src}
+                watermark={watermark}
+                blockContextMenu={blockContextMenu}
                 materialId={material.id}
                 startAt={startAt}
                 durationSeconds={material.durationSeconds}

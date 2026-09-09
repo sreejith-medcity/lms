@@ -6,6 +6,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import type { ActionState } from '@/server/courses';
 import { curriculumGate } from '@/lib/curriculum-access';
+import { settingBool, settingNumber } from '@/lib/settings/store';
 
 /**
  * Notes, bookmarks and the resume position.
@@ -190,7 +191,7 @@ export async function savePosition(
 
     const existing = await db.materialProgress.findUnique({
       where: { userId_materialId: { userId: user.id, materialId } },
-      select: { secondsViewed: true, percent: true },
+      select: { secondsViewed: true, percent: true, completedAt: true },
     });
 
     await db.materialProgress.upsert({
@@ -216,6 +217,20 @@ export async function savePosition(
       where: { id: enrollment.id },
       data: { lastActivityAt: new Date() },
     });
+
+    // Past the academy's threshold, the lesson is theirs. Doing it here rather
+    // than in the browser means it survives a closed tab, and a learner who
+    // watched ninety percent of a lesson is not asked to also press a button.
+    const tenant = await requireTenant();
+    const [threshold, auto] = await Promise.all([
+      settingNumber(tenant.organizationId, 'learning.videoCompletePercent'),
+      settingBool(tenant.organizationId, 'learning.autoComplete'),
+    ]);
+
+    if (auto && percent != null && percent >= threshold && !existing?.completedAt) {
+      const { setMaterialComplete } = await import('@/server/enrollment');
+      await setMaterialComplete(enrollment.productId, materialId, true);
+    }
   } catch (err) {
     // Losing a position ping is not worth interrupting a lesson over.
     console.error('[notes] position', err instanceof Error ? err.message : err);

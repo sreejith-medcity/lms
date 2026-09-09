@@ -94,7 +94,7 @@ Built as a catalogue rather than thirty pages: a report is a declaration with a
 run function, one page renders any of them and one route exports any of them.
 Thirty-one so far, and the thirty-second is a function rather than a screen.
 
-## Phase 6 — Settings depth
+## Phase 6 — Settings depth · PART BUILT, AWAITING PUSH
 
 Custom fields across eight entities, typed, independently visible on signup and
 on the offline form, with before-or-after timing and mandatory flags. This is

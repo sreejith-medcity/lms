@@ -11,15 +11,36 @@ import { resolveTenantByHost } from '@/lib/tenant';
 import { authAttemptKeys, checkAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
 import type { ActionState } from '@/server/courses';
 import { creditOnSignup } from '@/lib/wallet';
+import { settingBool, settingText } from '@/lib/settings/store';
+import { saveFieldValues, signupFields } from '@/lib/custom-fields';
 
 const SESSION_DAYS = 30;
 
-const signup = z.object({
-  name: z.string().trim().min(2, 'Please enter your name').max(80),
-  email: z.string().trim().toLowerCase().email('Enter a valid email address'),
-  phone: z.string().trim().max(20).optional(),
-  password: z.string().min(8, 'Use at least 8 characters').max(200),
-});
+/**
+ * The sign-up shape depends on what the academy asks for.
+ *
+ * An institute with a walk-in intake has mobile numbers and no email addresses;
+ * one selling online has the reverse. Forcing either is how a sign-up form
+ * loses people at the first field.
+ */
+function signupShape(primary: string) {
+  const email =
+    primary === 'PHONE'
+      ? z.string().trim().toLowerCase().email('Enter a valid email address').optional().or(z.literal(''))
+      : z.string().trim().toLowerCase().email('Enter a valid email address');
+
+  const phone =
+    primary === 'EMAIL'
+      ? z.string().trim().max(20).optional()
+      : z.string().trim().min(6, 'Enter your mobile number').max(20);
+
+  return z.object({
+    name: z.string().trim().min(2, 'Please enter your name').max(80),
+    email,
+    phone,
+    password: z.string().min(8, 'Use at least 8 characters').max(200),
+  });
+}
 
 export async function register(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
@@ -30,7 +51,16 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     const org = await db.organization.findFirst({ where: { tenantId }, select: { id: true } });
     if (!org) return { error: 'This hostname is not linked to an academy.' };
 
-    const parsed = signup.safeParse({
+    const [primary, selfSignup] = await Promise.all([
+      settingText(org.id, 'auth.primaryField'),
+      settingBool(org.id, 'auth.selfSignup'),
+    ]);
+
+    if (!selfSignup) {
+      return { error: 'This academy enrols people directly. Please contact them to get an account.' };
+    }
+
+    const parsed = signupShape(primary).safeParse({
       name: formData.get('name'),
       email: formData.get('email'),
       phone: formData.get('phone') || undefined,
@@ -43,14 +73,27 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     // Sign-up is cheap to script and creates rows, so it is limited harder than
     // sign-in: three accounts per address per hour.
     const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
-    const limit = checkAll(authAttemptKeys('signup', tenantId, email, ip), 3, 60 * 60);
+    const limit = checkAll(authAttemptKeys('signup', tenantId, email || phone || '', ip), 3, 60 * 60);
     if (!limit.ok) return { error: tooManyAttemptsMessage(limit.retryAfterSeconds) };
 
+    // Whichever field the academy made primary is the one that has to be unique,
+    // because that is the one people will sign in with.
     const existing = await db.user.findFirst({
-      where: { organizationId: org.id, email, deletedAt: null },
+      where: {
+        organizationId: org.id,
+        deletedAt: null,
+        ...(primary === 'PHONE' ? { phone } : { email }),
+      },
       select: { id: true },
     });
-    if (existing) return { error: 'An account with that email already exists. Try signing in.' };
+    if (existing) {
+      return {
+        error:
+          primary === 'PHONE'
+            ? 'An account with that mobile number already exists. Try signing in.'
+            : 'An account with that email already exists. Try signing in.',
+      };
+    }
 
     // Registration numbers continue the institute's own sequence rather than
     // restarting, so they stay meaningful after a migration.
@@ -64,7 +107,7 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
       data: {
         organizationId: org.id,
         name,
-        email,
+        email: email || null,
         phone: phone || null,
         passwordHash: await hashPassword(password),
         kind: 'LEARNER',
@@ -74,6 +117,20 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
       },
       select: { id: true },
     });
+
+    // Whatever the academy added to the form, stored against the new account.
+    const extra = await signupFields(org.id, 'BEFORE');
+    if (extra.length > 0) {
+      await saveFieldValues({
+        organizationId: org.id,
+        entity: 'LEARNER',
+        entityId: user.id,
+        userId: user.id,
+        values: Object.fromEntries(
+          extra.map((f) => [f.key, String(formData.get(`cf_${f.key}`) ?? '')]),
+        ),
+      });
+    }
 
     await creditOnSignup({
       organizationId: org.id,

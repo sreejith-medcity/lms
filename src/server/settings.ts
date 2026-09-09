@@ -8,6 +8,9 @@ import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import type { ActionState } from '@/server/courses';
 import { LEARNER_NAV_ITEMS, LEARNER_NAV_SETTING } from '@/lib/learner-nav';
+import { settingByKey } from '@/lib/settings/registry';
+import { ALL_EVENTS } from '@/lib/notification-events';
+import type { Prisma } from '@prisma/client';
 
 async function guard(permission: string, action: 'view' | 'edit' | 'delete' = 'edit') {
   const [tenant, user] = await Promise.all([requireTenant(), requireStaff(permission, action)]);
@@ -344,6 +347,255 @@ export async function saveLearnerNav(_prev: ActionState, formData: FormData): Pr
     revalidatePath('/learn', 'layout');
     revalidatePath('/admin/settings/learner-portal');
     return { ok: true, message: 'Saved. Learners see it on their next page load.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* Preferences --------------------------------------------------------------- */
+
+/**
+ * Saving one setting at a time.
+ *
+ * Per setting rather than per form, so a page of forty switches does not become
+ * one write that either lands entirely or not at all, and so the audit trail
+ * says which switch moved rather than that "preferences changed".
+ *
+ * A value equal to the default deletes the row instead of storing it, which is
+ * what lets an improved default reach every academy that never touched it.
+ */
+export async function saveSetting(key: string, raw: string): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('settings.preferences');
+
+    const def = settingByKey(key);
+    if (!def) return { error: 'No such setting.' };
+    if (!def.live) {
+      return {
+        error: `Nothing reads this yet — it is waiting on ${def.waitingOn ?? 'work still to come'}.`,
+      };
+    }
+
+    let value: boolean | number | string;
+    if (def.kind === 'boolean') {
+      value = raw === 'true' || raw === 'on';
+    } else if (def.kind === 'number') {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return { error: 'That is not a number.' };
+      if (def.min != null && n < def.min) return { error: `The lowest this goes is ${def.min}.` };
+      if (def.max != null && n > def.max) return { error: `The highest this goes is ${def.max}.` };
+      value = n;
+    } else if (def.kind === 'select') {
+      if (!def.options?.some((o) => o.value === raw)) return { error: 'That is not one of the choices.' };
+      value = raw;
+    } else {
+      value = raw.trim().slice(0, 500);
+    }
+
+    const storageKey = `pref.${def.key}`;
+
+    if (value === def.default) {
+      await db.orgSetting.deleteMany({
+        where: { organizationId: tenant.organizationId, key: storageKey },
+      });
+    } else {
+      await db.orgSetting.upsert({
+        where: { organizationId_key: { organizationId: tenant.organizationId, key: storageKey } },
+        create: { organizationId: tenant.organizationId, key: storageKey, value },
+        update: { value },
+      });
+    }
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'settings.changed',
+      entity: 'OrgSetting',
+      entityId: def.key,
+      after: { value },
+    });
+
+    revalidatePath('/admin/settings/preferences');
+    revalidatePath('/', 'layout');
+
+    return {
+      ok: true,
+      message:
+        value === def.default
+          ? 'Back to the default, so it will follow any future change to it.'
+          : def.effect
+            ? def.effect(value)
+            : 'Saved.',
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * The whole configuration as a file.
+ *
+ * This is a multi-tenant product, so the second academy should not have to
+ * rediscover the first one's choices. Only the settings actually changed are
+ * exported, which keeps an import from freezing the new tenant on today's
+ * defaults.
+ */
+export async function exportSettings(): Promise<ActionState & { json?: string }> {
+  try {
+    const { tenant } = await guard('settings.preferences', 'view');
+
+    const rows = await db.orgSetting.findMany({
+      where: { organizationId: tenant.organizationId, key: { startsWith: 'pref.' } },
+      select: { key: true, value: true },
+    });
+
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      academy: tenant.name,
+      note: 'Only settings that differ from their default. Anything absent follows the default.',
+      settings: Object.fromEntries(rows.map((r) => [r.key.slice('pref.'.length), r.value])),
+    };
+
+    return { ok: true, json: JSON.stringify(payload, null, 2) };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function importSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('settings.preferences');
+
+    const text = String(formData.get('json') ?? '').trim();
+    if (!text) return { error: 'Paste the exported file first.' };
+
+    let parsed: { settings?: Record<string, unknown> };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return { error: 'That is not valid JSON.' };
+    }
+
+    const incoming = parsed.settings;
+    if (!incoming || typeof incoming !== 'object') {
+      return { error: 'That file has no settings block.' };
+    }
+
+    // Unknown keys are reported rather than dropped in silence: a file from a
+    // newer version says so, instead of half-importing and looking fine.
+    const applied: string[] = [];
+    const skipped: string[] = [];
+
+    for (const [key, value] of Object.entries(incoming)) {
+      const def = settingByKey(key);
+      if (!def || !def.live) {
+        skipped.push(key);
+        continue;
+      }
+      const storageKey = `pref.${key}`;
+      if (value === def.default) {
+        await db.orgSetting.deleteMany({
+          where: { organizationId: tenant.organizationId, key: storageKey },
+        });
+      } else {
+        await db.orgSetting.upsert({
+          where: { organizationId_key: { organizationId: tenant.organizationId, key: storageKey } },
+          create: {
+            organizationId: tenant.organizationId,
+            key: storageKey,
+            value: value as Prisma.InputJsonValue,
+          },
+          update: { value: value as Prisma.InputJsonValue },
+        });
+      }
+      applied.push(key);
+    }
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'settings.imported',
+      entity: 'OrgSetting',
+      entityId: 'bulk',
+      after: { applied: applied.length, skipped: skipped.length },
+    });
+
+    revalidatePath('/admin/settings/preferences');
+    revalidatePath('/', 'layout');
+
+    return {
+      ok: true,
+      message:
+        skipped.length === 0
+          ? `${applied.length} settings applied.`
+          : `${applied.length} applied. ${skipped.length} skipped, because this version does not have them: ${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? '…' : ''}`,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * The notification matrix: one event, four channels.
+ *
+ * Saved a cell at a time, because a grid of sixty switches saved as one form is
+ * a form somebody abandons halfway and loses.
+ */
+export async function setNotificationChannel(
+  eventKey: string,
+  channel: 'email' | 'sms' | 'whatsapp' | 'push',
+  enabled: boolean,
+): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('settings.notifications');
+
+    if (!ALL_EVENTS.some((e) => e.key === eventKey)) return { error: 'No such event.' };
+
+    const column =
+      channel === 'email'
+        ? 'emailEnabled'
+        : channel === 'sms'
+          ? 'smsEnabled'
+          : channel === 'whatsapp'
+            ? 'whatsappEnabled'
+            : 'pushEnabled';
+
+    // The unique index includes productId, and Prisma's compound key will not
+    // take a null there, so the org-wide row is found the ordinary way.
+    const existing = await db.notificationSetting.findFirst({
+      where: { organizationId: tenant.organizationId, eventKey, productId: null },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await db.notificationSetting.update({
+        where: { id: existing.id },
+        data: { [column]: enabled },
+      });
+    } else {
+      await db.notificationSetting.create({
+        data: {
+          organizationId: tenant.organizationId,
+          eventKey,
+          emailEnabled: channel === 'email' ? enabled : true,
+          smsEnabled: channel === 'sms' ? enabled : false,
+          whatsappEnabled: channel === 'whatsapp' ? enabled : false,
+          pushEnabled: channel === 'push' ? enabled : true,
+        },
+      });
+    }
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'settings.notification.changed',
+      entity: 'NotificationSetting',
+      entityId: eventKey,
+      after: { channel, enabled },
+    });
+
+    revalidatePath('/admin/settings/notifications');
+    return { ok: true };
   } catch (err) {
     return fail(err);
   }

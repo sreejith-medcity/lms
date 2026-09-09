@@ -5,6 +5,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { MATERIAL_LABELS, formatDuration } from '@/lib/progress';
 import { curriculumGate } from '@/lib/curriculum-access';
+import { settingBool, settingText } from '@/lib/settings/store';
 import { Card } from '@/components/ui';
 import { Rail, type RailModule } from './rail';
 import { Stage } from './stage';
@@ -36,6 +37,33 @@ export default async function MaterialPage({
     },
   });
   if (!enrollment?.product.course) notFound();
+
+  // What the academy's own settings do to the player.
+  const [watermarkOn, watermarkShows, blockDownload, blockMenu] = await Promise.all([
+    settingBool(tenant.organizationId, 'player.watermark'),
+    settingText(tenant.organizationId, 'player.watermarkShows'),
+    settingBool(tenant.organizationId, 'player.blockDownload'),
+    settingBool(tenant.organizationId, 'player.blockContextMenu'),
+  ]);
+
+  const viewer = watermarkOn
+    ? await db.user.findUnique({
+        where: { id: user.id },
+        select: { name: true, email: true, phone: true, registrationNo: true },
+      })
+    : null;
+
+  const watermark = viewer
+    ? watermarkShows === 'NAME'
+      ? viewer.name
+      : watermarkShows === 'EMAIL'
+        ? viewer.email
+        : watermarkShows === 'PHONE'
+          ? viewer.phone
+          : viewer.registrationNo
+            ? `#${viewer.registrationNo}`
+            : viewer.name
+    : null;
 
   const gate = await curriculumGate({
     courseId: enrollment.product.course.id,
@@ -186,7 +214,7 @@ export default async function MaterialPage({
           assetId: material.assetId,
           externalUrl: material.externalUrl,
           bodyHtml: material.bodyHtml,
-          isDownloadable: material.isDownloadable,
+          isDownloadable: material.isDownloadable && !blockDownload,
           durationSeconds: material.durationSeconds,
         }}
         position={index + 1}
@@ -196,6 +224,8 @@ export default async function MaterialPage({
         bookmarked={Boolean(here?.isBookmarked)}
         prevId={prev?.id ?? null}
         nextId={next?.id ?? null}
+        watermark={watermark}
+        blockContextMenu={blockMenu}
         notes={notes.map((n) => ({
           id: n.id,
           body: n.body,

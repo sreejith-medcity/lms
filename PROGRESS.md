@@ -335,23 +335,71 @@ from three is marked as such rather than ranked as if it were solid. Drop-off
 ignores lessons fewer than three people reached, because one person stopping is
 not a pattern. The lists that exist to be acted on are sorted worst first.
 
+## Phase 6 — settings depth (part built, awaiting a push)
+
+Typechecks clean. Not yet exercised against the database.
+
+**Preferences** (`/admin/settings/preferences`) are declared in a registry, the
+same shape as the report catalogue and for the same reason. A setting that lives
+only in a form has no visible default, no explanation of what it changes, no
+history and nothing to search. Declaring them buys all four at once, and the
+screen is rendered from the declaration.
+
+Four things follow that Edmingle does not do.
+
+A setting says what it *does*, not what it is called: "a video counts as watched
+at 70%, so a forty-minute lesson needs twenty-eight minutes of it", updated live
+as the number changes. Each row carries who last moved it and when, read from
+the audit trail. Only values that differ from the default are stored, so an
+improved default reaches every academy that never touched that setting rather
+than freezing them on the day they signed up, and one press puts a setting back
+to it. And a setting nothing reads yet is labelled *not connected yet*, says
+what it waits on, and refuses to save: a switch that quietly does nothing is
+worse than an absent one, because somebody will flip it and believe the product
+changed.
+
+The whole configuration exports and imports as JSON. That is the first thing
+that makes this multi-tenant in practice rather than only in the schema: the
+second academy should not have to rediscover what the first one worked out.
+
+**Custom fields** (`/admin/settings/custom-fields`) across all eight entities,
+seven types, with signup timing whose trade-off is written on the form rather
+than assumed: a field asked *before* signup is a barrier to signing up, one
+asked *after* is a form somebody fills in when they already have a reason to
+care. The key is frozen at creation, so renaming a field is free and answers can
+never be orphaned; a field somebody has answered can be switched off but not
+deleted.
+
+**The notification matrix** (`/admin/settings/notifications`): sixteen events in
+four groups against four channels, saved a cell at a time. Events nothing emits
+yet are marked and say what they wait on, and a channel switched on with no
+template behind it says so.
+
+**What actually changed behaviour.** The settings are wired, not decorative: the
+video threshold now completes lessons server-side (surviving a closed tab), the
+watermark overlays the viewer's registration number and wanders between corners
+every thirty seconds so it cannot be cropped in one cut, downloads and
+right-click follow their switches, the leaderboard appears with the scope and
+name-shortening the academy chose, and the signup form asks for email or mobile
+according to the primary-field setting, with the academy's own custom fields
+underneath.
+
+**Still to do in this phase:** the grading system, international selling, and
+the website and app setup page (brand, social links, policies editor). Next
+sitting rather than parked: none of them need schema or a provider.
+
 ## Next runnable step
 
-**Push Phase 5.**
+**Push what is done of Phase 6.**
 
 ```
-cd ~/Documents/lms && git push origin main
+cd ~/Documents/lms && rm -f .git/index.lock* && git push origin main
 ```
 
-Then open `/admin/analytics/reports` and walk a few: collections by course,
-where people stop, overdue instalments, the outbox. Export one and check the
-preamble reads properly in Excel.
-
-A note on committing from here: the shell I have on your Mac cannot delete
-files, so git leaves a stale `.git/index.lock` behind after each of my commits.
-I rename it out of the way before committing, but if you ever see "Unable to
-create '.git/index.lock'", that is the cause and `rm -f .git/index.lock` clears
-it.
+Then open `/admin/settings/preferences`, search for "watermark", switch it on,
+and open a video lesson as a learner. Drop the video threshold to 30 and watch a
+lesson tick itself off. Then add a custom field on learners, asked after signup,
+and check it appears where you expect.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another
