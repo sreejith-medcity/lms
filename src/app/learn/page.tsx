@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
-import { Card, EmptyState, LinkButton, ProgressRing, Section } from '@/components/ui';
+import { Badge, Card, EmptyState, LinkButton, ProgressRing, Section } from '@/components/ui';
+import { JoinButton } from './join-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,29 @@ export default async function MyLearning() {
     },
   });
 
+  // Classes today for the batches this learner is in. This is the reason most
+  // people open the app at all, so it goes above everything else.
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+
+  const batchIds = enrollments.map((e) => e.batchId).filter((id): id is string => Boolean(id));
+
+  const todayClasses = batchIds.length
+    ? await db.liveSession.findMany({
+        where: {
+          batchId: { in: batchIds },
+          startsAt: { gte: dayStart, lt: dayEnd },
+          status: { not: 'CANCELLED' },
+        },
+        orderBy: { startsAt: 'asc' },
+        include: { batch: { select: { name: true } } },
+      })
+    : [];
+
+  const now = new Date();
+
   const inProgress = enrollments.filter((e) => e.progressPercent > 0 && e.progressPercent < 100);
   const notStarted = enrollments.filter((e) => e.progressPercent === 0);
   const done = enrollments.filter((e) => e.progressPercent >= 100);
@@ -39,6 +63,33 @@ export default async function MyLearning() {
             : `${enrollments.length} course${enrollments.length === 1 ? '' : 's'} on your shelf.`}
         </p>
       </div>
+
+      {todayClasses.length > 0 && (
+        <Section title="Today">
+          <Card padded={false}>
+            <ul className="divide-y">
+              {todayClasses.map((s) => {
+                const live = s.startsAt <= now && s.endsAt >= now;
+                const soon = !live && s.startsAt > now;
+                return (
+                  <li key={s.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
+                    <span className="w-20 shrink-0 tabular-nums">
+                      {s.startsAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="t-body font-medium">{s.title}</p>
+                      <p className="t-small faint truncate">{s.batch.name}</p>
+                    </div>
+                    {live && <Badge tone="ok">live now</Badge>}
+                    {soon && <Badge>upcoming</Badge>}
+                    <JoinButton sessionId={s.id} live={live} />
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        </Section>
+      )}
 
       {resume && (
         <Card className="flex flex-wrap items-center gap-5 border-[var(--brand-line)] bg-[var(--brand-soft)]">
