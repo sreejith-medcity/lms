@@ -1368,6 +1368,7 @@ model Order {
   promoCodeId    String?
   billingAddress Json?
   gstin          String?
+  gatewayOrderId String? // the provider's order id, so a webhook can find us
   placedAt       DateTime    @default(now())
   legacyEdmingleId String?
   legacyWooId    String?
@@ -1381,6 +1382,7 @@ model Order {
 
   @@unique([organizationId, orderNo])
   @@index([userId])
+  @@index([organizationId, gatewayOrderId])
   @@map("orders")
 }
 
@@ -1453,6 +1455,7 @@ model Payment {
   cheque     Cheque?
 
   @@unique([organizationId, receiptNo])
+  @@unique([organizationId, gateway, gatewayRef])
   @@index([organizationId, status, createdAt])
   @@map("payments")
 }
@@ -2273,6 +2276,25 @@ model Integration {
 
   @@unique([organizationId, provider])
   @@map("integrations")
+}
+
+/// Inbound gateway events. Razorpay retries, reorders and duplicates; this is the
+/// record that makes processing idempotent and lets a missed event be replayed.
+model GatewayEvent {
+  id             String    @id @default(cuid())
+  organizationId String
+  gateway        String // RAZORPAY
+  eventId        String // the provider's own id for this delivery
+  event          String // payment.captured, order.paid, refund.processed
+  payload        Json
+  signatureOk    Boolean   @default(true)
+  processedAt    DateTime?
+  error          String?
+  receivedAt     DateTime  @default(now())
+
+  @@unique([gateway, eventId])
+  @@index([organizationId, event, receivedAt])
+  @@map("gateway_events")
 }
 
 model Webhook {

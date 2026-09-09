@@ -398,7 +398,13 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                   Continue learning
                 </LinkButton>
               ) : (
-                <EnrolButton productId={product.id} signedIn={Boolean(user)} fullWidth />
+                <EnrolButton
+                  productId={product.id}
+                  signedIn={Boolean(user)}
+                  isPaid={!isFree}
+                  pricingPlanId={plan?.id}
+                  fullWidth
+                />
               )}
             </div>
 
@@ -432,7 +438,12 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           {enrollment ? (
             <LinkButton href={`/learn/${product.id}`}>Continue</LinkButton>
           ) : (
-            <EnrolButton productId={product.id} signedIn={Boolean(user)} />
+            <EnrolButton
+              productId={product.id}
+              signedIn={Boolean(user)}
+              isPaid={!isFree}
+              pricingPlanId={plan?.id}
+            />
           )}
         </div>
       </div>

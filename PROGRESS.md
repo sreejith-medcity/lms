@@ -99,28 +99,50 @@ screenshotted. Both are Phase 6 items that should start earlier.
   cross-tenant cookie rejection, immediate effect for suspended accounts, and
   rate limiting on sign-in and sign-up.
 
+## Commerce, in test mode
+
+The purchase journey now exists end to end. Razorpay test keys are set locally.
+
+- Prices, discounts and tax are computed on the server. The browser sends a
+  product id and a plan id and nothing else, so there is no amount on the client
+  worth tampering with.
+- The order is written before the gateway is called, so a payment always has
+  something on our side to reconcile against.
+- Two paths reach the same state. The browser callback verifies the signature,
+  then asks Razorpay's API what actually happened rather than believing the
+  browser. The webhook does the same job server-side, so a learner who closes the
+  tab mid-payment still ends up enrolled.
+- Every webhook delivery is recorded in `GatewayEvent` before anything is
+  processed, signature failures included, and processing is idempotent: a fourth
+  delivery of the same capture changes nothing and still answers 200, because
+  answering anything else makes Razorpay retry forever.
+- The gateway's amount is checked against the order total. A mismatch grants
+  nothing.
+- A full refund marks the payment refunded and expires the enrolment. It does not
+  delete it: progress and attendance are history.
+
+Untested against a live gateway. The next thing to do with it is walk a test
+card through and confirm the enrolment appears exactly once.
+
 ## Next runnable step
 
-**Cart and checkout.**
+**Two commands, then walk the purchase journey.**
 
-The course page now sends a buyer somewhere, and that somewhere is a button that
-refuses anything priced. This is the journey the definition of done checks first
-and the largest remaining hole in the product.
+The schema gained `GatewayEvent`, `Order.gatewayOrderId` and a uniqueness
+constraint on `(organizationId, gateway, gatewayRef)`. The Prisma client has to
+be regenerated and the database pushed before any of the commerce code runs:
 
-In order:
+```
+cd ~/Documents/lms && npx prisma generate && npm run db:push
+```
 
-1. Cart and checkout, with every price, discount and tax computed on the server.
-   The client sends product and plan ids, never amounts.
-2. Razorpay order creation, signature verification, and a webhook that records
-   every event durably and processes it idempotently, so a replayed or
-   out-of-order event cannot grant access twice. A client-side success screen
-   grants nothing by itself.
-3. Entitlement written separately from payment state, so a refund revokes access
-   without deleting learning history.
-4. GST invoices with sequential numbering, using the tax config already seeded.
+Prisma's engine downloads are blocked from this session's network, so this is the
+one step that has to run on the Mac.
 
-This is built and testable in Razorpay test mode without live keys; only the
-switch to live is blocked.
+Then walk it: put a price on the demo course, sign in as a learner, enrol, pay
+with Razorpay's test card 4111 1111 1111 1111, and confirm one enrolment, one
+payment row and one invoice number. Then close the tab mid-payment and confirm
+the webhook produces the same result.
 
 After that, the two-pane player described under **Design benchmark** in
 `BUILD_PLAN.md`, which is the next visible jump in how the product feels.

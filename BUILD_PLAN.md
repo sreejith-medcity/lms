@@ -80,10 +80,10 @@ the reasoning; `docs/edmingle-inventory.md` carries what is being replaced.
 
 | # | Requirement | Routes | Data and backend | Permissions | Acceptance | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2.1 | Cart and checkout | `/cart`, `/checkout` | `Cart`, `CartItem`, `Order` | learner | Server prices everything; the client sends ids, never amounts | `missing` |
-| 2.2 | Razorpay order, verification, webhook | `/api/payments/razorpay/*` | `Payment`, `WebhookEvent` | none (signed) | Signature checked; replayed and out-of-order events are idempotent; a client success screen alone grants nothing | `blocked` — needs `RAZORPAY_*` |
-| 2.3 | Entitlement separate from payment state | — | `Enrollment`, `Order`, `Payment` | — | Refund revokes access without deleting progress | `missing` |
-| 2.4 | GST invoices | `/learn/purchases`, admin | `Invoice`, `TaxConfig` | `sales.payments` | CGST/SGST 9+9, IGST 18, exclusive; sequential invoice numbers | `partial` — tax maths and config exist in `src/lib/money.ts` and the seed; nothing issues an invoice |
+| 2.1 | Checkout | `/checkout/[orderId]` | `Order`, `OrderItem` | learner | Server prices everything; the client sends ids, never amounts | `partial` — single-course checkout works end to end. No multi-item cart yet, and no billing address, so supply is treated as intra-state |
+| 2.2 | Razorpay order, verification, webhook | `/api/payments/razorpay/verify`, `/webhook` | `Payment`, `GatewayEvent` | none (signed) | Signature checked, payment re-fetched from the API, every delivery recorded, processing idempotent, a client success screen alone grants nothing | `done` in test mode — live keys and `RAZORPAY_WEBHOOK_SECRET` still to be set |
+| 2.3 | Entitlement separate from payment state | — | `Enrollment`, `Order`, `Payment`, `Refund` | — | Refund revokes access without deleting progress | `done` — a full refund expires the enrolment and leaves progress and attendance untouched |
+| 2.4 | GST invoices | `/learn/purchases` | `Invoice`, `TaxConfig` | learner | CGST/SGST 9+9, IGST 18, exclusive; sequential invoice numbers | `partial` — issued and numbered on payment, listed on the purchases page. No PDF, and no admin view |
 | 2.5 | Coupons | checkout | `PromoCode` | `promocode.*` | Eligibility and redemption limits enforced atomically | `missing` |
 | 2.6 | Instalments and fee tracking | `/admin/fees` | `Order`, `Payment` | `sales.fee_tracking` | Due dates, part payments, reminders | `stub` |
 | 2.7 | Manual enrolment with audit trail | `/admin/enrol` | `Enrollment`, `AuditLog` | `new_enrollment.*` | Who enrolled whom, when, and why | `stub` |

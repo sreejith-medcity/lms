@@ -32,6 +32,9 @@ export default async function LearnLayout({ children }: { children: React.ReactN
             <Link href="/learn" className="t-small muted hover:text-[var(--ink)]">
               My learning
             </Link>
+            <Link href="/learn/purchases" className="t-small muted hover:text-[var(--ink)]">
+              Purchases
+            </Link>
             <Link href="/" className="t-small muted hover:text-[var(--ink)]">
               Explore
             </Link>
