@@ -5,6 +5,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { MATERIAL_LABELS, formatDuration, percent } from '@/lib/progress';
 import { curriculumGate } from '@/lib/curriculum-access';
+import { TestimonialForm } from './testimonial-form';
 import { Card, EmptyState } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -98,6 +99,15 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
   });
   const doneSet = new Set(done.map((d) => d.materialId));
 
+  // Asked once they are done, and only then.
+  const finished = enrollment.progressPercent >= 100;
+  const myTestimonial = finished
+    ? await db.testimonial.findFirst({
+        where: { organizationId: tenant.organizationId, userId: user.id, productId },
+        select: { rating: true, comment: true, isPublished: true },
+      })
+    : null;
+
   const gate = await curriculumGate({
     courseId: enrollment.product.course.id,
     enrolledAt: enrollment.createdAt,
@@ -141,6 +151,22 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
 
       {materials.length === 0 && recordings.length === 0 && assessments.length === 0 && (
         <EmptyState title="No content yet" hint="Your academy is still preparing this course." />
+      )}
+
+      {finished && (
+        <TestimonialForm
+          productId={productId}
+          courseTitle={enrollment.product.title}
+          existing={
+            myTestimonial
+              ? {
+                  rating: myTestimonial.rating,
+                  comment: myTestimonial.comment ?? '',
+                  isPublished: myTestimonial.isPublished,
+                }
+              : null
+          }
+        />
       )}
 
       {assessments.length > 0 && (

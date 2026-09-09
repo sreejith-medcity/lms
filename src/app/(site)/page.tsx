@@ -6,6 +6,7 @@ import { getSiteContext, courseCardSelect, type CourseCard as Card } from '@/lib
 import { CourseCard } from '@/components/course-card';
 import { SetupNotice, NoTenantNotice } from '@/components/tenant-notices';
 import { HomeSearch } from './home-search';
+import { Banners } from '@/components/banners';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,6 +75,10 @@ export default async function Home() {
         upcomingSessions={published}
         sampleId={samples?.id ?? null}
       />
+
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <Banners organizationId={site.organizationId} placement="SITE_HOME" className="mb-2" />
+      </div>
 
       {site.categories.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">

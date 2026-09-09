@@ -201,20 +201,74 @@ Housekeeping done along the way: `STAGES` was being exported from a
 `'use server'` file, which publishes a list of strings as a callable endpoint.
 Moved to `src/lib/leads.ts`, and every `'use server'` file re-audited.
 
+## Phase 3 — marketing and sales (built, awaiting a push)
+
+Typechecks clean. Not yet exercised against the database.
+
+**Promo codes** (`/admin/promo-codes`), end to end. Percent with a ceiling or a
+flat amount, scoped to courses or everything, a date window, single-use or
+capped, and a per-person limit. The interesting part is the limit rather than
+the arithmetic: a code stamped "first fifty" that lets in sixty-three is worse
+than no code, so the claim takes a row lock on the code before it counts
+anything, and the redemption is reserved alongside the order and released if the
+payment fails. The discount comes off before GST, because tax is owed on what
+was charged. The learner sees the code field on the course page and the applied
+discount on checkout.
+
+**Testimonials** (`/admin/testimonials`). Unread first, because a queue sorted
+by date is how fifteen of them sat unread in the incumbent. Learners are asked
+for one when they finish a course, and it arrives unpublished: a quote on a
+public page is the academy speaking, whoever typed it.
+
+**Banners** (`/admin/banners`), per placement, one shown at a time. Rendered
+with a read URL minted per request rather than through the entitlement route,
+since a banner is aimed at people not yet entitled to anything.
+
+**Abandoned carts** (`/admin/carts`). A cart is written when a learner opens the
+payment screen, aged after six hours of quiet, and sorted by how many times they
+came back rather than by date: someone who reached checkout three times and
+stopped is a different conversation. Nudges go through the outbox. Converted
+automatically when they pay.
+
+**Cheques** (`/admin/cheques`). A cheque is money handed over and not yet
+arrived, so it is a PENDING payment with the paper's details beside it; only
+clearing makes it collected. Bouncing is recorded rather than edited over, so a
+second bounce is not a surprise. Overdue is judged against the date on the
+cheque.
+
+**Settlements** (`/admin/settlements`). Collections and settlements are
+different numbers, and an institute that treats them as one cannot say why the
+bank is short. A payout is entered gross, fee and GST; captured payments attach
+oldest first until the gross is used up, and whatever is unmatched stays
+visibly unsettled rather than being absorbed.
+
+**Campaigns and templates** (`/admin/campaigns`, `/admin/templates`). Templates
+name the variables they use and refuse one nothing can fill, which is what stops
+"Hi {{first_name}}," going out literally to four hundred people. Working out a
+campaign's audience is its own press, so the number of people — and the number
+with no address on that channel — is visible before anything is scheduled. The
+last "soon" marker is gone from the sidebar.
+
+**Parked, deliberately.** Pricing templates and miscellaneous fees have no
+models in the schema. Adding them needs `npx prisma generate && npm run db:push`
+on the Mac before the code can be typechecked or deployed, and a push that lands
+code the database cannot serve is a broken site. They belong with the Phase 7
+schema work. Workflows are parked for the same reason in reverse: the models
+exist, but an automation engine with no provider to act through is a table
+nobody reads.
+
 ## Next runnable step
 
-**Push Phase 2, then walk it.**
-
-Nothing in Phase 1 or Phase 2 has met the database yet. On the Mac:
+**Push Phase 3.**
 
 ```
-cd ~/Documents/lms && npx tsc --noEmit && git push
+cd ~/Documents/lms && git push origin main
 ```
 
-Then, once deployed: open the calendar, switch through the four views, mark a
-holiday and put it back; write a feedback form and answer it as a learner whose
-class has finished; and press notify absentees on a class that has ended, then
-check the queued rows.
+Then walk it: write a promo code with a cap of two claims and try to use it
+three times; open a paid course's checkout and abandon it, then look at
+`/admin/carts`; record a cheque and bounce it; enter a settlement and check what
+it attaches to.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another

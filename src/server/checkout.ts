@@ -5,6 +5,8 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { computeTax } from '@/lib/money';
 import { createRazorpayOrder, paymentsConfigured } from '@/lib/razorpay';
+import { claimPromo, PromoRefused } from '@/lib/promo-claim';
+import { rememberIntent } from '@/lib/cart';
 
 /**
  * Checkout starts here, and every number on it is computed here.
@@ -22,6 +24,7 @@ export type CheckoutStart =
 export async function startCheckout(
   productId: string,
   pricingPlanId?: string,
+  promoCode?: string,
 ): Promise<CheckoutStart> {
   try {
     const tenant = await requireTenant();
@@ -74,8 +77,32 @@ export async function startCheckout(
       where: { organizationId: tenant.organizationId },
     });
 
+    // The discount comes off before tax, because GST is owed on what was
+    // actually charged, not on the list price.
+    const claim = promoCode?.trim()
+      ? await db
+          .$transaction((tx) =>
+            claimPromo(tx, {
+              organizationId: tenant.organizationId,
+              rawCode: promoCode,
+              userId: user.id,
+              productId: product.id,
+              subtotalPaise: plan.pricePaise,
+            }),
+          )
+          .catch((err: unknown) => {
+            if (err instanceof PromoRefused) return err;
+            throw err;
+          })
+      : null;
+
+    if (claim instanceof PromoRefused) return { ok: false, error: claim.message };
+
+    const discountPaise = claim?.discountPaise ?? 0;
+    const taxablePaise = Math.max(0, plan.pricePaise - discountPaise);
+
     const tax = computeTax({
-      amountPaise: plan.pricePaise,
+      amountPaise: taxablePaise,
       cgstPercent: taxConfig?.cgstPercent ?? 9,
       sgstPercent: taxConfig?.sgstPercent ?? 9,
       igstPercent: taxConfig?.igstPercent ?? 18,
@@ -87,36 +114,58 @@ export async function startCheckout(
 
     const taxPaise = tax.totalPaise - tax.taxablePaise;
     const enabled = taxConfig?.enabled ?? true;
-    const totalPaise = enabled ? tax.totalPaise : plan.pricePaise;
+    const totalPaise = enabled ? tax.totalPaise : taxablePaise;
 
     const count = await db.order.count({ where: { organizationId: tenant.organizationId } });
     const orderNo = `ORD-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
 
-    const order = await db.order.create({
-      data: {
-        organizationId: tenant.organizationId,
-        branchId: branch.id,
-        userId: user.id,
-        orderNo,
-        status: 'PENDING',
-        currency: plan.currency,
-        subtotalPaise: plan.pricePaise,
-        discountPaise: 0,
-        taxPaise: enabled ? taxPaise : 0,
-        totalPaise,
-        items: {
-          create: {
-            productId: product.id,
-            pricingPlanId: plan.id,
-            titleSnapshot: product.title,
-            pricePaise: plan.pricePaise,
-            taxPaise: enabled ? taxPaise : 0,
-            totalPaise,
+    // The order and its reservation of the code are written together: an order
+    // that quotes a discount nobody recorded is how a code gets spent twice.
+    const order = await db.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          organizationId: tenant.organizationId,
+          branchId: branch.id,
+          userId: user.id,
+          orderNo,
+          status: 'PENDING',
+          currency: plan.currency,
+          subtotalPaise: plan.pricePaise,
+          discountPaise,
+          taxPaise: enabled ? taxPaise : 0,
+          totalPaise,
+          promoCodeId: claim?.promoCodeId ?? null,
+          items: {
+            create: {
+              productId: product.id,
+              pricingPlanId: plan.id,
+              titleSnapshot: product.title,
+              pricePaise: plan.pricePaise,
+              taxPaise: enabled ? taxPaise : 0,
+              totalPaise,
+            },
           },
         },
-      },
-      select: { id: true, orderNo: true, currency: true, totalPaise: true },
+        select: { id: true, orderNo: true, currency: true, totalPaise: true },
+      });
+
+      if (claim) {
+        await tx.promoRedemption.create({
+          data: {
+            promoCodeId: claim.promoCodeId,
+            userId: user.id,
+            orderId: created.id,
+            amountPaise: claim.discountPaise,
+          },
+        });
+      }
+
+      return created;
     });
+
+    // Recorded before the gateway is called, so somebody who bounces off the
+    // payment screen still shows up on the recovery list.
+    await rememberIntent(product.id, plan.id);
 
     const gatewayOrder = await createRazorpayOrder({
       amountPaise: order.totalPaise,

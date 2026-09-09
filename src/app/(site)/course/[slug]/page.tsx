@@ -403,6 +403,8 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                   signedIn={Boolean(user)}
                   isPaid={!isFree}
                   pricingPlanId={plan?.id}
+                  pricePaise={plan?.pricePaise ?? 0}
+                  currency={plan?.currency ?? 'INR'}
                   fullWidth
                 />
               )}
@@ -443,6 +445,8 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
               signedIn={Boolean(user)}
               isPaid={!isFree}
               pricingPlanId={plan?.id}
+              pricePaise={plan?.pricePaise ?? 0}
+              currency={plan?.currency ?? 'INR'}
             />
           )}
         </div>

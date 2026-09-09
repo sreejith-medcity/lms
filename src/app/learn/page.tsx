@@ -5,6 +5,7 @@ import { requireTenant } from '@/lib/tenant';
 import { Badge, Card, EmptyState, LinkButton, ProgressRing, Section } from '@/components/ui';
 import { JoinButton } from './join-button';
 import { RateClass } from './rate-class';
+import { Banners } from '@/components/banners';
 import { questionsOf } from '@/lib/feedback';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 
@@ -119,6 +120,8 @@ export default async function MyLearning() {
             : `${enrollments.length} course${enrollments.length === 1 ? '' : 's'} on your shelf.`}
         </p>
       </div>
+
+      <Banners organizationId={tenant.organizationId} placement="LEARNER_HOME" />
 
       {todayClasses.length > 0 && (
         <Section title="Today">

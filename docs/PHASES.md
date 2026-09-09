@@ -65,7 +65,7 @@ date arithmetic in the academy's timezone rather than the server's, because a
 outbox writes a row per intended message before any provider exists, so "did she
 get the reminder" stays answerable rather than becoming a provider's problem.
 
-## Phase 3 — Marketing and sales completeness
+## Phase 3 — Marketing and sales completeness · BUILT (two items parked), AWAITING PUSH
 
 Promo codes: single and multiple use, percent and cap, date window, per course,
 with redemptions. Marketing banners. Testimonials moved into the admin so the 15

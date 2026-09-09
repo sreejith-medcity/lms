@@ -23,6 +23,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
     include: {
       items: { select: { id: true, titleSnapshot: true, pricePaise: true, productId: true } },
       invoice: { select: { invoiceNo: true } },
+      promo: { select: { code: true } },
     },
   });
   if (!order) notFound();
@@ -88,6 +89,15 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
         </ul>
 
         <dl className="mt-5 space-y-1.5 border-t pt-4">
+          {order.discountPaise > 0 && (
+            <>
+              <Line label="Subtotal" value={formatMoney(order.subtotalPaise, order.currency)} />
+              <Line
+                label={order.promo?.code ? `Discount (${order.promo.code})` : 'Discount'}
+                value={`− ${formatMoney(order.discountPaise, order.currency)}`}
+              />
+            </>
+          )}
           <Line label="Taxable value" value={formatMoney(taxable, order.currency)} />
           {order.taxPaise > 0 && (
             <Line label="GST" value={formatMoney(order.taxPaise, order.currency)} />

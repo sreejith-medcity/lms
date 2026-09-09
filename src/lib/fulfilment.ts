@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { recordAudit } from '@/lib/audit';
 import type { Prisma } from '@prisma/client';
+import { markCartConverted } from '@/lib/cart';
 
 /**
  * The one place a payment becomes access.
@@ -323,6 +324,9 @@ export async function fulfilPaidOrder(input: {
     };
   }
 
+  // They bought, so they are no longer somebody to chase.
+  await markCartConverted(input.organizationId, order.userId);
+
   await recordAudit({
     organizationId: input.organizationId,
     actorId: order.userId,
@@ -379,9 +383,16 @@ export async function recordFailedPayment(input: {
   });
 
   if (input.orderId) {
-    await db.order.updateMany({
+    const marked = await db.order.updateMany({
       where: { id: input.orderId, status: 'PENDING' },
       data: { status: 'FAILED' },
     });
+
+    // The promo code was reserved when the order was written. A payment that
+    // never landed should not hold a place in a limited run, so the reservation
+    // goes back when the order does.
+    if (marked.count > 0) {
+      await db.promoRedemption.deleteMany({ where: { orderId: input.orderId } });
+    }
   }
 }

@@ -4,23 +4,34 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { enrol } from '@/server/enrollment';
 import { startCheckout } from '@/server/checkout';
-import { Button } from '@/components/ui';
+import { quotePromoCode } from '@/server/promo';
+import { formatMoney } from '@/lib/money';
+import { Button, Input } from '@/components/ui';
 
 export function EnrolButton({
   productId,
   signedIn,
   isPaid = false,
   pricingPlanId,
+  pricePaise = 0,
+  currency = 'INR',
   fullWidth = false,
 }: {
   productId: string;
   signedIn: boolean;
   isPaid?: boolean;
   pricingPlanId?: string;
+  pricePaise?: number;
+  currency?: string;
   fullWidth?: boolean;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string>();
+  const [code, setCode] = useState('');
+  const [applied, setApplied] = useState<{ code: string; discountPaise: number } | null>(null);
+  const [codeError, setCodeError] = useState<string>();
+  const [checking, startCheck] = useTransition();
+  const [showCode, setShowCode] = useState(false);
   const router = useRouter();
 
   return (
@@ -39,7 +50,7 @@ export function EnrolButton({
             }
 
             if (isPaid) {
-              const started = await startCheckout(productId, pricingPlanId);
+              const started = await startCheckout(productId, pricingPlanId, applied?.code);
               if (started.ok) router.push(`/checkout/${started.orderId}`);
               else if (started.signIn) router.push('/login');
               else setError(started.error);
@@ -63,6 +74,64 @@ export function EnrolButton({
             : 'Sign up to enrol'}
       </Button>
       {error && <p className="t-small mt-2 max-w-xs text-[var(--bad)]">{error}</p>}
+
+      {isPaid && signedIn && (
+        <div className={`mt-3 ${fullWidth ? '' : 'flex flex-col items-end'}`}>
+          {applied ? (
+            <p className="t-small">
+              <span className="font-medium">{applied.code}</span> applied —{' '}
+              {formatMoney(applied.discountPaise, currency)} off.{' '}
+              <button
+                type="button"
+                className="faint underline"
+                onClick={() => {
+                  setApplied(null);
+                  setCode('');
+                }}
+              >
+                remove
+              </button>
+            </p>
+          ) : showCode ? (
+            <form
+              className="flex w-full max-w-xs gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                startCheck(async () => {
+                  const quote = await quotePromoCode(code, productId, pricePaise);
+                  if (quote.ok && quote.code && quote.discountPaise != null) {
+                    setApplied({ code: quote.code, discountPaise: quote.discountPaise });
+                    setCodeError(undefined);
+                  } else {
+                    setCodeError(quote.error);
+                  }
+                });
+              }}
+            >
+              <Input
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="Promo code"
+                aria-label="Promo code"
+                maxLength={32}
+                className="font-mono uppercase"
+              />
+              <Button type="submit" variant="secondary" disabled={checking || !code.trim()}>
+                {checking ? '…' : 'Apply'}
+              </Button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              className="t-small faint underline"
+              onClick={() => setShowCode(true)}
+            >
+              Have a promo code?
+            </button>
+          )}
+          {codeError && <p className="t-small mt-1 max-w-xs text-[var(--bad)]">{codeError}</p>}
+        </div>
+      )}
     </div>
   );
 }
