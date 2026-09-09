@@ -80,10 +80,9 @@ export const ADMIN_NAV: NavGroup[] = [
     label: 'Analytics',
     icon: 'chart',
     children: [
-      { label: 'Sales', href: '#', soon: true },
-      { label: 'Learning', href: '#', soon: true },
-      { label: 'Attendance', href: '#', soon: true },
-      { label: 'Engagement', href: '#', soon: true },
+      { label: 'Sales', href: '/admin/analytics' },
+      { label: 'Learning', href: '/admin/analytics/learning' },
+      { label: 'Attendance', href: '/admin/analytics/attendance' },
     ],
   },
   { label: 'Settings', href: '/admin/settings', icon: 'gear' },
