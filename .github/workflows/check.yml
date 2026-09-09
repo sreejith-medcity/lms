@@ -32,16 +32,3 @@ jobs:
       - run: npm run typecheck
 
       - run: npm run test
-
-# ---------------------------------------------------------------------------
-# Not installed yet, on purpose.
-#
-# Pushing a file under .github/workflows/ needs a token with the `workflow`
-# scope, and the token on this machine does not have it. Rather than leave a
-# push blocked, the workflow lives here until the scope is added:
-#
-#   github.com/settings/tokens -> the token in use -> tick `workflow` -> update
-#   then: mkdir -p .github/workflows && cp docs/ci-workflow.yml .github/workflows/check.yml
-#
-# Nothing depends on it. `npm run check` does the same two things locally.
-# ---------------------------------------------------------------------------

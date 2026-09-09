@@ -15,9 +15,10 @@ buries the actual results. The alternative, declaring the whole package as an ES
 module, would change how Next and its config files are loaded, which is not a
 trade worth making for tidier output.
 
-CI is written and not installed: see `docs/ci-workflow.yml`. Pushing anything
-under `.github/workflows/` needs a token with the `workflow` scope, and adding
-that scope is the only step between here and it running on every push.
+CI runs the same two commands on every push and pull request, in
+`.github/workflows/check.yml`. It is not a deploy gate, because Hostinger builds
+from the branch directly; it is the thing that tells you a push was wrong
+without waiting to hear it from a learner.
 
 ## What is tested, and why these
 

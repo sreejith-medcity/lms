@@ -737,12 +737,9 @@ instant of a day; it returns the next midnight, and all three callers query
 the real contract, including that midnight belongs to the following day, which
 is the thing a future change could break silently.
 
-**CI is written but not installed.** The workflow sits in `docs/ci-workflow.yml`
-rather than in `.github/workflows/`, because pushing anything into that folder
-needs a token with the `workflow` scope and the token on this machine does not
-have it. Rather than leave a push blocked on a permissions detail, the file
-waits there with the two commands to install it. Nothing depends on it:
-`npm run check` does the same two things locally.
+**CI runs both.** A GitHub Actions workflow typechecks and tests every push and
+pull request. Not a deploy gate, since Hostinger builds from the branch, but the
+thing that tells you a push was wrong without waiting for a learner to.
 
 **What is not tested, and is said so in `tests/README.md`:** anything needing
 the database. Fulfilment, the drain, entitlement, the curriculum gate. Those are
