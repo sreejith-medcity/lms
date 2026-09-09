@@ -51,7 +51,7 @@ export const ADMIN_NAV: NavGroup[] = [
     children: [
       { label: 'Learners', href: '/admin/learners' },
       { label: 'Team', href: '/admin/team' },
-      { label: 'Enrolments', href: '#', soon: true },
+      { label: 'Enrol a learner', href: '/admin/enrol' },
       { label: 'Attendance', href: '#', soon: true },
     ],
   },
