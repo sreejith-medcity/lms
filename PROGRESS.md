@@ -384,9 +384,29 @@ name-shortening the academy chose, and the signup form asks for email or mobile
 according to the primary-field setting, with the academy's own custom fields
 underneath.
 
-**Still to do in this phase:** the grading system, international selling, and
-the website and app setup page (brand, social links, policies editor). Next
-sitting rather than parked: none of them need schema or a provider.
+**Grading** (`/admin/settings/grading`). Bands with points and a plain-English
+meaning, validated as they are typed: a gap, an overlap or a backwards band
+cannot be saved. That check is the feature. A hole between 79 and 80 is
+invisible until the day somebody scores in it, and then it appears as a blank
+grade on a report card in front of a parent rather than in front of whoever set
+the bands. A live preview says what any score you type would be called.
+
+**Website** (`/admin/settings/website`). Social links, which the footer already
+reads, with blank ones simply not appearing rather than linking nowhere. And the
+five policies a storefront needs, each saying why it exists, showing its word
+count and last edit, and publishing to the public page that was already there.
+
+**The brand.** The token layer is rebuilt on the 2026 brand board: #322046 as
+the interface colour, #FDB85B as an accent reserved for the one action a page
+exists for, a warm off-white canvas instead of the old blue-white, #6F6378 as
+secondary ink, and a dark mode built from the same purple rather than the old
+navy.
+
+**International selling** is the one thing in this phase that needed something
+it does not have. Without a billing address at checkout there is nothing to
+decide a country from, so the switch is marked as waiting on the cart in Phase 8
+rather than shipped as a switch that quietly does nothing — which is the rule
+the rest of the screen is built on.
 
 ## Next runnable step
 
@@ -395,6 +415,11 @@ sitting rather than parked: none of them need schema or a provider.
 ```
 cd ~/Documents/lms && rm -f .git/index.lock* && git push origin main
 ```
+
+Two things to do by hand after deploying, because they are data rather than
+code: in Settings, Organisation, pick the Medcity LMS purple preset and upload
+the logo and favicon I sent, and in Settings, Grading, press "start from the
+standard bands" and adjust them to your exam boards.
 
 Then open `/admin/settings/preferences`, search for "watermark", switch it on,
 and open a video lesson as a learner. Drop the video threshold to 30 and watch a

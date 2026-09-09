@@ -57,10 +57,13 @@ export function Section({ title, action, children }: { title: string; action?: R
 
 /* Actions ----------------------------------------------------------------- */
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'accent' | 'secondary' | 'ghost' | 'danger';
 
 const variants: Record<Variant, string> = {
   primary: 'bg-[var(--brand)] text-[var(--brand-ink)] hover:brightness-110',
+  /* The amber. Reserved for the one action a page exists for, because a screen
+     where three things are the accent has none. */
+  accent: 'bg-[var(--accent)] text-[var(--accent-ink)] hover:brightness-105',
   secondary: 'border bg-[var(--surface)] text-[var(--ink)] hover:bg-[var(--surface-2)]',
   ghost: 'text-[var(--ink-2)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]',
   danger: 'border border-[var(--bad)]/30 bg-[var(--surface)] text-[var(--bad)] hover:bg-[var(--bad-soft)]',

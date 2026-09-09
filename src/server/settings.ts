@@ -106,7 +106,7 @@ export async function updateBranding(_prev: ActionState, formData: FormData): Pr
     const faviconUrl = String(formData.get('faviconUrl') ?? '').trim();
 
     if (!HEX.test(brandColor)) {
-      return { error: 'The brand colour needs to be a six digit hex value, such as #087447.' };
+      return { error: 'The brand colour needs to be a six digit hex value, such as #322046.' };
     }
 
     const before = await db.organization.findUnique({
@@ -596,6 +596,105 @@ export async function setNotificationChannel(
 
     revalidatePath('/admin/settings/notifications');
     return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* Website and policies ------------------------------------------------------ */
+
+const socialShape = z.object({
+  facebook: z.string().trim().url().optional().or(z.literal('')),
+  instagram: z.string().trim().url().optional().or(z.literal('')),
+  youtube: z.string().trim().url().optional().or(z.literal('')),
+  linkedin: z.string().trim().url().optional().or(z.literal('')),
+  x: z.string().trim().url().optional().or(z.literal('')),
+  whatsapp: z.string().trim().url().optional().or(z.literal('')),
+});
+
+export async function saveSocialLinks(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('settings.organization');
+
+    const parsed = socialShape.safeParse({
+      facebook: formData.get('facebook') || '',
+      instagram: formData.get('instagram') || '',
+      youtube: formData.get('youtube') || '',
+      linkedin: formData.get('linkedin') || '',
+      x: formData.get('x') || '',
+      whatsapp: formData.get('whatsapp') || '',
+    });
+    if (!parsed.success) {
+      return { error: 'Each link needs to be a full URL, starting with https://' };
+    }
+
+    // Empty ones are dropped rather than stored blank, so the footer can render
+    // exactly what is there without checking each one for emptiness.
+    const social = Object.fromEntries(
+      Object.entries(parsed.data).filter(([, v]) => v && v.length > 0),
+    );
+
+    await db.organization.update({
+      where: { id: tenant.organizationId },
+      data: { social: social as Prisma.InputJsonValue },
+    });
+
+    revalidatePath('/', 'layout');
+    revalidatePath('/admin/settings/website');
+    return {
+      ok: true,
+      message: `${Object.keys(social).length} links saved. They appear in the site footer.`,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * The policies a storefront legally needs.
+ *
+ * Written here rather than as storefront pages because a refund policy is a
+ * commitment rather than marketing copy: it belongs beside the settings that
+ * decide what gets refunded, and it should be hard to delete by accident.
+ */
+export async function savePolicy(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('settings.organization');
+
+    const kind = String(formData.get('kind') ?? '');
+    const title = String(formData.get('title') ?? '').trim();
+    const bodyHtml = String(formData.get('bodyHtml') ?? '').trim();
+
+    const kinds = ['PRIVACY', 'TERMS', 'REFUND', 'COOKIE', 'DISCLAIMER'];
+    if (!kinds.includes(kind)) return { error: 'No such policy.' };
+    if (title.length < 2) return { error: 'Give it a title.' };
+    if (bodyHtml.length < 20) return { error: 'A policy needs more than a sentence.' };
+
+    const existing = await db.policy.findFirst({
+      where: { organizationId: tenant.organizationId, kind: kind as never },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await db.policy.update({ where: { id: existing.id }, data: { title, bodyHtml } });
+    } else {
+      await db.policy.create({
+        data: { organizationId: tenant.organizationId, kind: kind as never, title, bodyHtml },
+      });
+    }
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'policy.updated',
+      entity: 'Policy',
+      entityId: kind,
+      after: { title, length: bodyHtml.length },
+    });
+
+    revalidatePath('/', 'layout');
+    revalidatePath('/admin/settings/website');
+    return { ok: true, message: `${title} saved.` };
   } catch (err) {
     return fail(err);
   }

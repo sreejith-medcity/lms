@@ -12,35 +12,43 @@
  */
 :root {
   /* Tenant accent. Overridden at runtime on <body>. */
-  --brand: #0b5294;
+  --brand: #322046;
   --brand-ink: #ffffff;
-  --brand-soft: color-mix(in srgb, var(--brand) 12%, white);
-  --brand-line: color-mix(in srgb, var(--brand) 24%, white);
+  --brand-soft: color-mix(in srgb, var(--brand) 10%, white);
+  --brand-line: color-mix(in srgb, var(--brand) 22%, white);
+
+  /* The second brand colour: warm, and used where the eye should land first.
+     Deliberately not --brand, because a page where everything is the accent
+     has no accent. */
+  --accent: #fdb85b;
+  --accent-ink: #322046;
+  --accent-soft: #fff4e2;
 
   /* App chrome: the dark frame the product lives in. */
-  --shell: #0d1526;
-  --shell-2: #131d33;
-  --shell-ink: #e8edf7;
-  --shell-muted: #94a3bd;
-  --shell-line: #22304d;
+  --shell: #322046;
+  --shell-2: #3d2856;
+  --shell-ink: #f8f5f0;
+  --shell-muted: #b6a9c2;
+  --shell-line: #4a3563;
 
-  /* Content canvas. */
-  --canvas: #f6f8fb;
+  /* Content canvas. Warm off-white rather than blue-white: it sits under a
+     purple ink without the whole page reading cold. */
+  --canvas: #f8f5f0;
   --surface: #ffffff;
-  --surface-2: #f2f5f9;
-  --line: #e3e8ef;
-  --line-strong: #cbd5e1;
+  --surface-2: #f3eff7;
+  --line: #e7e1ee;
+  --line-strong: #cfc6da;
 
-  --ink: #0f172a;
-  --ink-2: #475569;
-  --ink-3: #7c8899;
+  --ink: #322046;
+  --ink-2: #6f6378;
+  --ink-3: #998fa3;
 
-  --ok: #0f8a5f;
-  --ok-soft: #e6f6ee;
-  --warn: #b45309;
-  --warn-soft: #fef4e6;
-  --bad: #c2334d;
-  --bad-soft: #fdeef1;
+  --ok: #0f7a55;
+  --ok-soft: #e6f5ef;
+  --warn: #a35c07;
+  --warn-soft: #fdf1de;
+  --bad: #b82f47;
+  --bad-soft: #fceef1;
 
   --radius: 0.75rem;
   --radius-sm: 0.5rem;
@@ -52,18 +60,19 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --canvas: #0b1220;
-    --surface: #111a2c;
-    --surface-2: #16213a;
-    --line: #22304d;
-    --line-strong: #2e3f63;
+    --canvas: #191024;
+    --surface: #221630;
+    --surface-2: #2c1e3c;
+    --line: #3a2a4d;
+    --line-strong: #4c3862;
 
-    --ink: #e8edf7;
-    --ink-2: #a8b6cc;
-    --ink-3: #7f8ea8;
+    --ink: #f3eef8;
+    --ink-2: #c2b5ce;
+    --ink-3: #93869f;
 
-    --brand-soft: color-mix(in srgb, var(--brand) 22%, #0b1220);
-    --brand-line: color-mix(in srgb, var(--brand) 38%, #0b1220);
+    --brand-soft: color-mix(in srgb, #a98bd0 22%, #191024);
+    --brand-line: color-mix(in srgb, #a98bd0 38%, #191024);
+    --accent-soft: #3a2a12;
 
     --ok-soft: #08301f;
     --warn-soft: #2e1e05;
@@ -75,16 +84,17 @@
 }
 
 :root[data-theme='dark'] {
-  --canvas: #0b1220;
-  --surface: #111a2c;
-  --surface-2: #16213a;
-  --line: #22304d;
-  --line-strong: #2e3f63;
-  --ink: #e8edf7;
-  --ink-2: #a8b6cc;
-  --ink-3: #7f8ea8;
-  --brand-soft: color-mix(in srgb, var(--brand) 22%, #0b1220);
-  --brand-line: color-mix(in srgb, var(--brand) 38%, #0b1220);
+  --canvas: #191024;
+  --surface: #221630;
+  --surface-2: #2c1e3c;
+  --line: #3a2a4d;
+  --line-strong: #4c3862;
+  --ink: #f3eef8;
+  --ink-2: #c2b5ce;
+  --ink-3: #93869f;
+  --brand-soft: color-mix(in srgb, #a98bd0 22%, #191024);
+  --brand-line: color-mix(in srgb, #a98bd0 38%, #191024);
+  --accent-soft: #3a2a12;
   --ok-soft: #08301f;
   --warn-soft: #2e1e05;
   --bad-soft: #34101a;

@@ -274,7 +274,8 @@ export const SETTINGS: SettingDef[] = [
     help: 'Shows prices to visitors abroad and lets them buy. Off, the catalogue still reads; only checkout refuses.',
     kind: 'boolean',
     default: false,
-    live: true,
+    live: false,
+    waitingOn: 'a billing address at checkout, which arrives with the cart in Phase 8',
   },
   {
     key: 'commerce.allowedCountries',

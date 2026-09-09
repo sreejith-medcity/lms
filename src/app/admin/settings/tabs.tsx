@@ -12,6 +12,8 @@ const TABS = [
   { href: '/admin/settings/custom-fields', label: 'Custom fields' },
   { href: '/admin/settings/notifications', label: 'Notifications' },
   { href: '/admin/settings/learner-portal', label: 'Learner portal' },
+  { href: '/admin/settings/website', label: 'Website' },
+  { href: '/admin/settings/grading', label: 'Grading' },
   { href: '/admin/settings/integrations', label: 'Integrations' },
 ];
 

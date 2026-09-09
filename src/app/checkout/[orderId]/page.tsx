@@ -125,7 +125,7 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
             amountPaise={order.totalPaise}
             currency={order.currency}
             organizationName={org?.name ?? 'Academy'}
-            brandColor={org?.brandColor ?? '#087447'}
+            brandColor={org?.brandColor ?? '#322046'}
             learnerName={user.name}
             learnerEmail={user.email}
             productId={order.items[0]?.productId ?? null}

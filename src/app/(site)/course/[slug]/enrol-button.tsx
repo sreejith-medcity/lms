@@ -41,6 +41,7 @@ export function EnrolButton({
   return (
     <div className={fullWidth ? '' : 'text-right'}>
       <Button
+        variant={isPaid ? 'accent' : 'primary'}
         disabled={pending}
         size="lg"
         className={fullWidth ? 'w-full justify-center' : ''}

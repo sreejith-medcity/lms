@@ -185,7 +185,7 @@ async function main() {
       slug: 'medcity',
       name: 'Medcity International Academy',
       supportEmail: 'lms.support@miak.in',
-      brandColor: '#087447',
+      brandColor: '#322046',
       city: 'Kannur',
       state: 'Kerala',
     },

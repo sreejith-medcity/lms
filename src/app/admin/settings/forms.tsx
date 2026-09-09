@@ -102,8 +102,17 @@ export function OrganisationForm({
   );
 }
 
-/** The two brand colours already in use across Medcity's properties. */
+/**
+ * The brand board, first.
+ *
+ * The deep purple is the product's own colour and what the interface is built
+ * around; the amber is the accent, and setting it here would make every button
+ * on every screen amber, which is the opposite of an accent. The older two are
+ * kept because Medcity's other properties still use them.
+ */
 const PRESETS = [
+  { value: '#322046', label: 'Medcity LMS purple' },
+  { value: '#FDB85B', label: 'Medcity LMS amber (accent, not for buttons)' },
   { value: '#087447', label: 'medcitylms.in green' },
   { value: '#0B5294', label: 'medcityacademy.com blue' },
 ];
