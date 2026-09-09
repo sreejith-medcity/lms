@@ -1,24 +1,17 @@
 import Link from 'next/link';
-import { getTenantContext } from '@/lib/tenant';
 import { db } from '@/lib/db';
 import { formatMoney } from '@/lib/money';
+import { getTenantState } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const tenant = await getTenantContext();
+  const state = await getTenantState();
 
-  if (!tenant) {
-    return (
-      <main className="mx-auto max-w-2xl p-10">
-        <h1 className="text-2xl font-semibold">No tenant for this hostname</h1>
-        <p className="mt-2 text-slate-600">
-          Point a subdomain at this app, or add the hostname under Tenant Domains in
-          the platform console.
-        </p>
-      </main>
-    );
-  }
+  if (state.status === 'setup-required') return <SetupNotice detail={state.detail} />;
+  if (state.status === 'no-tenant') return <NoTenantNotice />;
+
+  const tenant = state.tenant;
 
   const courses = await db.product.findMany({
     where: { organizationId: tenant.organizationId, type: 'COURSE', status: 'PUBLISHED' },
@@ -30,8 +23,8 @@ export default async function Home() {
     <main className="mx-auto max-w-6xl p-8">
       <header className="mb-8 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">{tenant.name}</h1>
-        <Link href="/admin" className="text-sm text-slate-600 hover:underline">
-          Admin
+        <Link href="/login" className="text-sm text-slate-600 hover:underline">
+          Sign in
         </Link>
       </header>
 
@@ -63,5 +56,50 @@ export default async function Home() {
         )}
       </div>
     </main>
+  );
+}
+
+function Shell({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <main className="mx-auto max-w-2xl p-10">
+      <h1 className="text-xl font-semibold">{title}</h1>
+      <div className="mt-4 space-y-3 text-sm leading-relaxed text-slate-600">{children}</div>
+    </main>
+  );
+}
+
+/** Shown when the database cannot be reached, instead of a Next.js error digest. */
+function SetupNotice({ detail }: { detail: string }) {
+  return (
+    <Shell title="Database not ready">
+      <p>The app is running, but it cannot use its database yet. Usually one of:</p>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>
+          <code>DATABASE_URL</code> is still a placeholder, or the password needs
+          percent-encoding because it contains characters like <code>@</code>, <code>:</code>,
+          <code>/</code> or <code>?</code>
+        </li>
+        <li>
+          <code>?sslmode=require</code> is missing from the connection string
+        </li>
+        <li>
+          The schema has not been created: run <code>npm run db:push</code> then{' '}
+          <code>npm run db:seed</code>
+        </li>
+      </ul>
+      <p className="rounded-lg bg-slate-100 p-3 font-mono text-xs text-slate-700">{detail}</p>
+    </Shell>
+  );
+}
+
+function NoTenantNotice() {
+  return (
+    <Shell title="No academy on this hostname">
+      <p>
+        The database is reachable, but no tenant matches this address. Add the hostname
+        as a TenantDomain row, or set <code>APP_HOSTNAME</code> to it and run the seed
+        again.
+      </p>
+    </Shell>
   );
 }

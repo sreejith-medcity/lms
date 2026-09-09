@@ -23,7 +23,26 @@ export interface TenantContext {
  * Resolved once per request from the hostname that middleware stamped on the
  * headers. Every query below this point is scoped by organizationId.
  */
+/** Null means no tenant. `setupRequired` means the database itself is not ready. */
+export const getTenantState = cache(async (): Promise<
+  { status: 'ok'; tenant: TenantContext } | { status: 'no-tenant' } | { status: 'setup-required'; detail: string }
+> => {
+  try {
+    const tenant = await loadTenant();
+    return tenant ? { status: 'ok', tenant } : { status: 'no-tenant' };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error('[tenant] database unavailable:', detail);
+    return { status: 'setup-required', detail };
+  }
+});
+
 export const getTenantContext = cache(async (): Promise<TenantContext | null> => {
+  const state = await getTenantState();
+  return state.status === 'ok' ? state.tenant : null;
+});
+
+const loadTenant = cache(async (): Promise<TenantContext | null> => {
   const h = await headers();
   const tenantId = h.get(TENANT_HEADER) ?? (await resolveTenantByHost(h.get('host') ?? ''));
   if (!tenantId) return null;
