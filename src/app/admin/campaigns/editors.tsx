@@ -18,17 +18,26 @@ export function NewCampaign({
   templates,
   batches,
   courses,
+  segments,
 }: {
   templates: { id: string; name: string; channel: string }[];
   batches: { id: string; name: string }[];
   courses: { id: string; name: string }[];
+  segments: { id: string; name: string }[];
 }) {
   const [state, action, pending] = useActionState(saveCampaign, initial);
   const [channel, setChannel] = useState('EMAIL');
   const [audience, setAudience] = useState('ALL_LEARNERS');
 
   const usable = templates.filter((t) => t.channel === channel);
-  const options = audience === 'BATCH' ? batches : audience === 'COURSE' ? courses : [];
+  const options =
+    audience === 'BATCH'
+      ? batches
+      : audience === 'COURSE'
+        ? courses
+        : audience === 'SEGMENT'
+          ? segments
+          : [];
 
   return (
     <form action={action} className="space-y-4">
@@ -71,7 +80,15 @@ export function NewCampaign({
         </Field>
 
         {options.length > 0 && (
-          <Field label={audience === 'BATCH' ? 'Which batch' : 'Which course'}>
+          <Field
+            label={
+              audience === 'BATCH'
+                ? 'Which batch'
+                : audience === 'COURSE'
+                  ? 'Which course'
+                  : 'Which segment'
+            }
+          >
             <Select name="audienceId" required>
               {options.map((o) => (
                 <option key={o.id} value={o.id}>

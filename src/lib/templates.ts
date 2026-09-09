@@ -67,6 +67,7 @@ export const AUDIENCES = [
   { value: 'COURSE', label: 'Everyone on one course' },
   { value: 'ABANDONED_CART', label: 'People who left a cart' },
   { value: 'INACTIVE_30D', label: 'Nobody has seen them for 30 days' },
+  { value: 'SEGMENT', label: 'A saved segment' },
 ] as const;
 
 export type AudienceKind = (typeof AUDIENCES)[number]['value'];

@@ -7,6 +7,7 @@ import { computeTax } from '@/lib/money';
 import { createRazorpayOrder, paymentsConfigured } from '@/lib/razorpay';
 import { claimPromo, PromoRefused } from '@/lib/promo-claim';
 import { rememberIntent } from '@/lib/cart';
+import { credit, loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
 
 /**
  * Checkout starts here, and every number on it is computed here.
@@ -25,6 +26,7 @@ export async function startCheckout(
   productId: string,
   pricingPlanId?: string,
   promoCode?: string,
+  usePoints = false,
 ): Promise<CheckoutStart> {
   try {
     const tenant = await requireTenant();
@@ -114,7 +116,30 @@ export async function startCheckout(
 
     const taxPaise = tax.totalPaise - tax.taxablePaise;
     const enabled = taxConfig?.enabled ?? true;
-    const totalPaise = enabled ? tax.totalPaise : taxablePaise;
+    const beforePoints = enabled ? tax.totalPaise : taxablePaise;
+
+    // Points come off the payable total rather than the price, because the
+    // academy still owes GST on what the course was sold for.
+    const loyalty = await loyaltyConfig(tenant.organizationId);
+    const wallet = usePoints
+      ? await db.walletAccount.findUnique({
+          where: { userId: user.id },
+          select: { balancePoints: true },
+        })
+      : null;
+
+    const spendPoints = wallet
+      ? redeemablePoints(wallet.balancePoints, beforePoints, loyalty)
+      : 0;
+    const walletPaise = pointsToPaise(spendPoints, loyalty);
+    const totalPaise = Math.max(0, beforePoints - walletPaise);
+
+    if (totalPaise <= 0) {
+      return {
+        ok: false,
+        error: 'Points cannot cover the whole order. Please contact the academy.',
+      };
+    }
 
     const count = await db.order.count({ where: { organizationId: tenant.organizationId } });
     const orderNo = `ORD-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
@@ -133,6 +158,7 @@ export async function startCheckout(
           subtotalPaise: plan.pricePaise,
           discountPaise,
           taxPaise: enabled ? taxPaise : 0,
+          walletPaise,
           totalPaise,
           promoCodeId: claim?.promoCodeId ?? null,
           items: {
@@ -157,6 +183,19 @@ export async function startCheckout(
             orderId: created.id,
             amountPaise: claim.discountPaise,
           },
+        });
+      }
+
+      // Points are taken now, in the same transaction as the order that spends
+      // them, and given back by `recordFailedPayment` if it never completes.
+      if (spendPoints > 0) {
+        await credit({
+          tx,
+          userId: user.id,
+          points: -spendPoints,
+          reason: 'REDEMPTION',
+          note: `Spent on ${created.orderNo}`,
+          orderId: created.id,
         });
       }
 

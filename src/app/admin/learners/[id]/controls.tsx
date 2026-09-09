@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { resetPasswordForUser } from '@/server/password-reset';
+import { impersonate } from '@/server/learners';
 import { Button, Card } from '@/components/ui';
 
 /**
@@ -74,5 +75,48 @@ export function ResetPassword({ userId, name }: { userId: string; name: string }
         </Button>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Sign in as this learner.
+ *
+ * Confirmed rather than one-click, because it is the most invasive thing in the
+ * admin and the button sits beside ordinary ones. The session lasts an hour and
+ * both ends of it go on the record.
+ */
+export function SignInAs({ userId, name }: { userId: string; name: string }) {
+  const [pending, start] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string>();
+
+  if (!confirming) {
+    return (
+      <Button variant="secondary" size="sm" onClick={() => setConfirming(true)}>
+        Sign in as {name.split(' ')[0]}
+      </Button>
+    );
+  }
+
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <span className="t-small muted">See what they see for an hour?</span>
+      <Button
+        size="sm"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const res = await impersonate(userId);
+            setError(res?.error);
+          })
+        }
+      >
+        {pending ? 'Switching…' : 'Yes, sign in'}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+        Cancel
+      </Button>
+      {error && <span className="t-small text-[var(--bad)]">{error}</span>}
+    </span>
   );
 }

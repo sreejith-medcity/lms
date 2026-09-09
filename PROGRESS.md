@@ -257,18 +257,66 @@ schema work. Workflows are parked for the same reason in reverse: the models
 exist, but an automation engine with no provider to act through is a table
 nobody reads.
 
+## Phase 4 — engagement (built, awaiting a push)
+
+Typechecks clean. Not yet exercised against the database.
+
+**Segments** (`/admin/segments`). Eight conditions, joined with and or or, and
+compiled to a query rather than kept as a list: "disengaged learners" maintained
+by hand is wrong the day after it is written. The count carries the date it was
+worked out beside it, because a number with no date is one nobody should act on,
+and a campaign resolves its members afresh at the moment it is prepared rather
+than trusting the cache.
+
+**Community** (`/admin/community`, `/learn/community`). Rooms with posts,
+replies, pinning and a reported-first moderation queue. A flag is not a verdict
+and hides nothing on its own; letting one annoyed learner silence another is
+worse than the post they objected to. Nothing a learner types is treated as
+markup: it is escaped into paragraphs, which removes a class of problem rather
+than filtering for it. Each course gets a room made on first use, so there is no
+wall of empty ones.
+
+**Points and referrals** (`/admin/loyalty`, `/learn/wallet`). A ledger rather
+than a balance: every change is a row with a reason, because "why do I have 400
+points" always arrives eventually. Referral codes are made on first ask, both
+sides are credited, and the referrer's cut on a first purchase is paid once.
+Points come off the payable total inside the same transaction as the order that
+spends them, and are returned if the payment never lands. Redemption is capped
+as a share of the order, so a course can never be had for nothing.
+
+**Learner export** (`/admin/learners/export`). One row per learner, not per
+enrolment, since the thing people do with this is mail-merge and a duplicated
+name breaks it. Collections and credit balance are included so it answers "who
+still owes us" without a second file. Exporting personal data is itself recorded.
+
+**Impersonation.** An hour, learners only, inside your own academy. The staff
+session is parked in a second cookie while a short-lived learner session takes
+its place, which means every permission check already in the product applies
+with no special case. A banner sits across every learner page, both ends go to
+the audit log, and the borrowed session is destroyed on return rather than left
+to expire. "It does not show up for me" is unanswerable from the admin side,
+because the admin side is a different application.
+
+**Instructor profiles** (`/admin/instructors`). Headline, bio and subjects on
+the public course page, because a name on its own makes a course look unstaffed.
+A trainer can ask not to be named publicly and still teach the batch.
+
+**Learner portal menu** (`/admin/settings/learner-portal`). Ordered keys in an
+org setting, resolved against a catalogue, so an unknown key is dropped rather
+than rendered as a dead link. My learning cannot be removed.
+
 ## Next runnable step
 
-**Push Phase 3.**
+**Push Phase 4.**
 
 ```
 cd ~/Documents/lms && git push origin main
 ```
 
-Then walk it: write a promo code with a cap of two claims and try to use it
-three times; open a paid course's checkout and abandon it, then look at
-`/admin/carts`; record a cheque and bounce it; enter a settlement and check what
-it attaches to.
+Then walk it: build a segment and point a campaign at it; post in a course
+discussion as a learner and report it as another; switch points on, give
+yourself credit, and buy something with it; and sign in as a learner from their
+page, check the banner, and come back.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another

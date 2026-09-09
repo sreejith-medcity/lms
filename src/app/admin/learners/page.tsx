@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
+import { requireStaff } from '@/lib/auth';
 import {
   Badge, Button, Cell, EmptyState, Input, LinkButton, PageHeader, ProgressRing, Row, Table,
 } from '@/components/ui';
@@ -22,6 +23,8 @@ export default async function LearnersPage({
   searchParams: Promise<{ q?: string; status?: string }>;
 }) {
   const tenant = await requireTenant();
+  const me = await requireStaff('learner.learner_management', 'view');
+  const canExport = me.permissions['learner.learner_export']?.view ?? false;
   const { q, status } = await searchParams;
 
   const learners = await db.user.findMany({
@@ -52,9 +55,16 @@ export default async function LearnersPage({
     <div>
       <PageHeader
         action={
-          <LinkButton href="/admin/learners/import" variant="secondary" size="sm">
-            Import
-          </LinkButton>
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <LinkButton href="/admin/learners/export" variant="secondary" size="sm">
+                Export CSV
+              </LinkButton>
+            )}
+            <LinkButton href="/admin/learners/import" variant="secondary" size="sm">
+              Import
+            </LinkButton>
+          </div>
         }
         title="Learners"
         description="Everyone enrolled or registered with the academy."

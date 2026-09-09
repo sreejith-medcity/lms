@@ -7,6 +7,7 @@ import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import type { ActionState } from '@/server/courses';
+import { LEARNER_NAV_ITEMS, LEARNER_NAV_SETTING } from '@/lib/learner-nav';
 
 async function guard(permission: string, action: 'view' | 'edit' | 'delete' = 'edit') {
   const [tenant, user] = await Promise.all([requireTenant(), requireStaff(permission, action)]);
@@ -293,6 +294,56 @@ export async function updateTax(_prev: ActionState, formData: FormData): Promise
       ok: true,
       message: 'Saved. This applies to checkouts started from now on, not to past orders.',
     };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * What the learner portal shows across the top, and in what order.
+ *
+ * Stored as ordered keys rather than a shape, so an item added to the catalogue
+ * later does not need a migration, and an item removed from it simply stops
+ * rendering instead of becoming a dead link.
+ */
+export async function saveLearnerNav(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('settings.preferences');
+
+    const keys = formData
+      .getAll('navKeys')
+      .map(String)
+      .filter((key) => LEARNER_NAV_ITEMS.some((item) => item.key === key));
+
+    if (keys.length === 0) return { error: 'Leave at least one item, or learners have nowhere to go.' };
+
+    await db.orgSetting.upsert({
+      where: {
+        organizationId_key: {
+          organizationId: tenant.organizationId,
+          key: LEARNER_NAV_SETTING,
+        },
+      },
+      create: {
+        organizationId: tenant.organizationId,
+        key: LEARNER_NAV_SETTING,
+        value: keys,
+      },
+      update: { value: keys },
+    });
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'settings.learner_nav.updated',
+      entity: 'OrgSetting',
+      entityId: LEARNER_NAV_SETTING,
+      after: { keys },
+    });
+
+    revalidatePath('/learn', 'layout');
+    revalidatePath('/admin/settings/learner-portal');
+    return { ok: true, message: 'Saved. Learners see it on their next page load.' };
   } catch (err) {
     return fail(err);
   }

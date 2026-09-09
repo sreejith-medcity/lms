@@ -15,6 +15,7 @@ export function EnrolButton({
   pricingPlanId,
   pricePaise = 0,
   currency = 'INR',
+  pointsWorthPaise = 0,
   fullWidth = false,
 }: {
   productId: string;
@@ -23,6 +24,8 @@ export function EnrolButton({
   pricingPlanId?: string;
   pricePaise?: number;
   currency?: string;
+  /** What this learner's points could take off this order, if they choose to. */
+  pointsWorthPaise?: number;
   fullWidth?: boolean;
 }) {
   const [pending, start] = useTransition();
@@ -32,6 +35,7 @@ export function EnrolButton({
   const [codeError, setCodeError] = useState<string>();
   const [checking, startCheck] = useTransition();
   const [showCode, setShowCode] = useState(false);
+  const [usePoints, setUsePoints] = useState(false);
   const router = useRouter();
 
   return (
@@ -50,7 +54,12 @@ export function EnrolButton({
             }
 
             if (isPaid) {
-              const started = await startCheckout(productId, pricingPlanId, applied?.code);
+              const started = await startCheckout(
+                productId,
+                pricingPlanId,
+                applied?.code,
+                usePoints,
+              );
               if (started.ok) router.push(`/checkout/${started.orderId}`);
               else if (started.signIn) router.push('/login');
               else setError(started.error);
@@ -74,6 +83,18 @@ export function EnrolButton({
             : 'Sign up to enrol'}
       </Button>
       {error && <p className="t-small mt-2 max-w-xs text-[var(--bad)]">{error}</p>}
+
+      {isPaid && signedIn && pointsWorthPaise > 0 && (
+        <label className="t-small mt-3 flex items-center justify-end gap-2">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-[var(--line-strong)] accent-[var(--brand)]"
+            checked={usePoints}
+            onChange={(e) => setUsePoints(e.target.checked)}
+          />
+          Use my credit ({formatMoney(pointsWorthPaise, currency)} off)
+        </label>
+      )}
 
       {isPaid && signedIn && (
         <div className={`mt-3 ${fullWidth ? '' : 'flex flex-col items-end'}`}>

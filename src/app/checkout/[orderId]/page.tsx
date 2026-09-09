@@ -102,6 +102,12 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
           {order.taxPaise > 0 && (
             <Line label="GST" value={formatMoney(order.taxPaise, order.currency)} />
           )}
+          {order.walletPaise > 0 && (
+            <Line
+              label="Paid with your credit"
+              value={`− ${formatMoney(order.walletPaise, order.currency)}`}
+            />
+          )}
           <div className="flex items-baseline justify-between gap-4 border-t pt-3">
             <dt className="font-medium">Total</dt>
             <dd className="text-lg font-semibold tabular-nums">

@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth';
 import { getTenantContext } from '@/lib/tenant';
+import { ImpersonationBanner } from '@/components/impersonation-banner';
+import { learnerNav } from '@/lib/learner-nav';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +16,11 @@ export default async function LearnLayout({ children }: { children: React.ReactN
   if (!tenant) redirect('/');
   if (!user) redirect('/login');
 
+  const nav = await learnerNav(tenant.organizationId);
+
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
+      <ImpersonationBanner learnerName={user.name} />
       <header className="sticky top-0 z-10 border-b bg-[var(--surface)]/85 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-5">
           <Link href="/learn" className="flex items-center gap-2">
@@ -29,15 +34,15 @@ export default async function LearnLayout({ children }: { children: React.ReactN
           </Link>
 
           <nav className="flex items-center gap-4">
-            <Link href="/learn" className="t-small muted hover:text-[var(--ink)]">
-              My learning
-            </Link>
-            <Link href="/learn/purchases" className="t-small muted hover:text-[var(--ink)]">
-              Purchases
-            </Link>
-            <Link href="/" className="t-small muted hover:text-[var(--ink)]">
-              Explore
-            </Link>
+            {nav.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className="t-small muted hover:text-[var(--ink)]"
+              >
+                {item.label}
+              </Link>
+            ))}
             {user.kind === 'STAFF' && (
               <Link href="/admin" className="t-small muted hover:text-[var(--ink)]">
                 Admin

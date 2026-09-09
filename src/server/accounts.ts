@@ -10,6 +10,7 @@ import { hashPassword } from '@/lib/password';
 import { resolveTenantByHost } from '@/lib/tenant';
 import { authAttemptKeys, checkAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
 import type { ActionState } from '@/server/courses';
+import { creditOnSignup } from '@/lib/wallet';
 
 const SESSION_DAYS = 30;
 
@@ -72,6 +73,13 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
         learnerProfile: { create: {} },
       },
       select: { id: true },
+    });
+
+    await creditOnSignup({
+      organizationId: org.id,
+      userId: user.id,
+      userName: name,
+      referralCode: String(formData.get('referralCode') ?? '') || null,
     });
 
     await startSession(user.id, h.get('user-agent'), h.get('x-forwarded-for'));

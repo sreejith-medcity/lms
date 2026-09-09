@@ -6,7 +6,7 @@ import { requireStaff } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, Cell, EmptyState, Row, Table, ProgressRing } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
-import { ResetPassword } from './controls';
+import { ResetPassword, SignInAs } from './controls';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -16,6 +16,7 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
   const tenant = await requireTenant();
   const me = await requireStaff('learner.learner_management', 'view');
   const canEdit = me.permissions['learner.learner_management']?.edit ?? false;
+  const canImpersonate = me.permissions['learner.learner_impersonate']?.edit ?? false;
 
   const learner = await db.user.findFirst({
     where: { id, organizationId: tenant.organizationId, kind: 'LEARNER', deletedAt: null },
@@ -103,7 +104,10 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
           </p>
         </div>
 
-        {canEdit && <ResetPassword userId={learner.id} name={learner.name} />}
+        <div className="flex flex-wrap items-center gap-2">
+          {canImpersonate && <SignInAs userId={learner.id} name={learner.name} />}
+          {canEdit && <ResetPassword userId={learner.id} name={learner.name} />}
+        </div>
       </div>
 
       <div className="space-y-6">

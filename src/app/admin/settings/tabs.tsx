@@ -8,6 +8,7 @@ const TABS = [
   { href: '/admin/settings/branches', label: 'Branches' },
   { href: '/admin/settings/taxes', label: 'Tax' },
   { href: '/admin/settings/roles', label: 'Roles' },
+  { href: '/admin/settings/learner-portal', label: 'Learner portal' },
   { href: '/admin/settings/integrations', label: 'Integrations' },
 ];
 

@@ -138,6 +138,13 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
           </p>
         </div>
 
+        <div className="flex items-center gap-3">
+        <Link
+          href={`/learn/${productId}/discussion`}
+          className="rounded-[var(--radius-sm)] border px-4 py-2 text-sm hover:bg-[var(--surface-2)]"
+        >
+          Discussion
+        </Link>
         {next && (
           <Link
             href={`/learn/${productId}/${next.id}`}
@@ -147,6 +154,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
             {completed === 0 ? 'Start' : 'Continue'}
           </Link>
         )}
+        </div>
       </div>
 
       {materials.length === 0 && recordings.length === 0 && assessments.length === 0 && (

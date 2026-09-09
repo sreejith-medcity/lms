@@ -8,6 +8,7 @@ import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { unknownVariables, variablesUsed, type AudienceKind } from '@/lib/templates';
+import { parseRules, whereFor } from '@/lib/segments';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -130,7 +131,7 @@ const campaignShape = z.object({
   name: z.string().trim().min(2, 'Give the campaign a name').max(120),
   channel: z.enum(['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'IN_APP']),
   templateId: z.string().trim().min(1, 'Pick a template'),
-  audience: z.enum(['ALL_LEARNERS', 'BATCH', 'COURSE', 'ABANDONED_CART', 'INACTIVE_30D']),
+  audience: z.enum(['ALL_LEARNERS', 'BATCH', 'COURSE', 'ABANDONED_CART', 'INACTIVE_30D', 'SEGMENT']),
   audienceId: z.string().trim().optional(),
   scheduledAt: z.string().optional(),
 });
@@ -160,7 +161,10 @@ export async function saveCampaign(_prev: ActionState, formData: FormData): Prom
       return { error: 'The template is written for a different channel.' };
     }
 
-    if ((d.audience === 'BATCH' || d.audience === 'COURSE') && !d.audienceId) {
+    if (
+      (d.audience === 'BATCH' || d.audience === 'COURSE' || d.audience === 'SEGMENT') &&
+      !d.audienceId
+    ) {
       return { error: 'Choose which one.' };
     }
 
@@ -216,7 +220,10 @@ export async function prepareCampaign(campaignId: string): Promise<ActionState> 
       return { error: 'This campaign is past the point where the audience can change.' };
     }
 
-    const [kind, id] = (campaign.segmentId ?? 'ALL_LEARNERS').split(':') as [AudienceKind, string?];
+    const [kind, id] = (campaign.segmentId ?? 'ALL_LEARNERS').split(':') as [
+      AudienceKind | 'SEGMENT',
+      string?,
+    ];
 
     const base = {
       organizationId: tenant.organizationId,
@@ -224,8 +231,32 @@ export async function prepareCampaign(campaignId: string): Promise<ActionState> 
       deletedAt: null,
     };
 
-    const where =
-      kind === 'BATCH'
+    // A segment is worked out now rather than trusting its cached count: a
+    // number from last Tuesday is how somebody messages people who have since
+    // stopped matching.
+    let segmentWhere: Awaited<ReturnType<typeof whereFor>> | null = null;
+    let staticMembers: string[] | null = null;
+
+    if (kind === 'SEGMENT' && id) {
+      const segment = await db.segment.findFirst({
+        where: { id, organizationId: tenant.organizationId },
+        select: { type: true, rules: true },
+      });
+      if (!segment) return { error: 'That segment no longer exists.' };
+
+      if (segment.type === 'STATIC') {
+        const stored = segment.rules as { members?: unknown };
+        staticMembers = Array.isArray(stored?.members) ? stored.members.map(String) : [];
+      } else {
+        segmentWhere = whereFor(tenant.organizationId, parseRules(segment.rules));
+      }
+    }
+
+    const where = segmentWhere
+      ? segmentWhere
+      : staticMembers
+        ? { ...base, id: { in: staticMembers } }
+        : kind === 'BATCH'
         ? { ...base, enrollments: { some: { batchId: id } } }
         : kind === 'COURSE'
           ? { ...base, enrollments: { some: { productId: id } } }

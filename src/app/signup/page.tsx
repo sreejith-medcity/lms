@@ -7,7 +7,12 @@ import { SignupForm } from './form';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ref?: string }>;
+}) {
+  const { ref } = await searchParams;
   const [tenant, user] = await Promise.all([getTenantContext(), getSessionUser()]);
   if (user) redirect(user.kind === 'STAFF' ? '/admin' : '/learn');
 
@@ -25,7 +30,7 @@ export default async function SignupPage() {
         </>
       }
     >
-      <SignupForm />
+      <SignupForm referralCode={(ref ?? '').trim().toUpperCase().slice(0, 16)} />
     </AuthShell>
   );
 }

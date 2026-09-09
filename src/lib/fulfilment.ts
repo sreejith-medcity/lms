@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { recordAudit } from '@/lib/audit';
 import type { Prisma } from '@prisma/client';
 import { markCartConverted } from '@/lib/cart';
+import { credit, creditOnPurchase } from '@/lib/wallet';
 
 /**
  * The one place a payment becomes access.
@@ -327,6 +328,13 @@ export async function fulfilPaidOrder(input: {
   // They bought, so they are no longer somebody to chase.
   await markCartConverted(input.organizationId, order.userId);
 
+  // And whoever brought them here gets their cut, once.
+  await creditOnPurchase({
+    organizationId: input.organizationId,
+    userId: order.userId,
+    orderId: order.id,
+  });
+
   await recordAudit({
     organizationId: input.organizationId,
     actorId: order.userId,
@@ -388,11 +396,26 @@ export async function recordFailedPayment(input: {
       data: { status: 'FAILED' },
     });
 
-    // The promo code was reserved when the order was written. A payment that
-    // never landed should not hold a place in a limited run, so the reservation
-    // goes back when the order does.
+    // The promo code was reserved when the order was written, and any loyalty
+    // points were taken. A payment that never landed should hold neither, so
+    // both go back when the order does.
     if (marked.count > 0) {
       await db.promoRedemption.deleteMany({ where: { orderId: input.orderId } });
+
+      const spent = await db.walletTransaction.findFirst({
+        where: { orderId: input.orderId, reason: 'REDEMPTION' },
+        select: { id: true, points: true, wallet: { select: { userId: true } } },
+      });
+
+      if (spent && spent.points < 0) {
+        await credit({
+          userId: spent.wallet.userId,
+          points: -spent.points,
+          reason: 'ADMIN',
+          note: 'Returned: the payment did not complete',
+          orderId: input.orderId,
+        });
+      }
     }
   }
 }

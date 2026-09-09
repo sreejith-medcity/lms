@@ -10,6 +10,7 @@ import { Badge, LinkButton } from '@/components/ui';
 import { NoTenantNotice } from '@/components/tenant-notices';
 import { EnrolButton } from './enrol-button';
 import { Curriculum } from './curriculum';
+import { loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,6 +142,22 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   const plan = product.pricingPlans[0];
   const isFree = !plan || plan.pricePaise === 0;
 
+  // What this learner's points could take off, worked out here so the button can
+  // offer a figure rather than an abstraction.
+  const loyalty = await loyaltyConfig(site.organizationId);
+  const walletBalance =
+    user && loyalty.enabled && plan
+      ? (
+          await db.walletAccount.findUnique({
+            where: { userId: user.id },
+            select: { balancePoints: true },
+          })
+        )?.balancePoints ?? 0
+      : 0;
+  const pointsWorthPaise = plan
+    ? pointsToPaise(redeemablePoints(walletBalance, plan.pricePaise, loyalty), loyalty)
+    : 0;
+
   const [enrollment, instructors] = await Promise.all([
     user
       ? db.enrollment.findFirst({
@@ -153,9 +170,18 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
       where: {
         id: { in: course.batches.flatMap((b) => b.staff.map((s) => s.userId)) },
       },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        instructorProfile: {
+          select: { headline: true, bio: true, expertise: true, hideNameOnCards: true },
+        },
+      },
     }),
   ]);
+
+  // A trainer may ask not to be named publicly, and that is theirs to decide.
+  const shownInstructors = instructors.filter((i) => !i.instructorProfile?.hideNameOnCards);
 
   const lessons = course.modules.flatMap((m) => m.module.sections.flatMap((s) => s.materials));
   const totalSeconds = lessons.reduce((n, l) => n + (l.durationSeconds ?? 0), 0);
@@ -327,25 +353,47 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             </section>
           )}
 
-          {instructors.length > 0 && (
+          {shownInstructors.length > 0 && (
             <section>
               <h2 className="text-lg font-semibold">
-                {instructors.length === 1 ? 'Your trainer' : 'Your trainers'}
+                {shownInstructors.length === 1 ? 'Your trainer' : 'Your trainers'}
               </h2>
               <ul className="mt-4 flex flex-wrap gap-3">
-                {instructors.map((i) => (
+                {shownInstructors.map((i) => (
                   <li
                     key={i.id}
-                    className="flex items-center gap-3 rounded-[var(--radius)] border bg-[var(--surface)] px-4 py-3"
+                    className="flex max-w-md items-start gap-3 rounded-[var(--radius)] border bg-[var(--surface)] px-4 py-3"
                   >
                     <span
                       aria-hidden
-                      className="grid h-9 w-9 place-items-center rounded-full text-sm font-semibold text-[var(--brand-ink)]"
+                      className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold text-[var(--brand-ink)]"
                       style={{ background: 'var(--brand)' }}
                     >
                       {i.name.slice(0, 1).toUpperCase()}
                     </span>
-                    <span className="text-sm font-medium">{i.name}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{i.name}</span>
+                      {i.instructorProfile?.headline && (
+                        <span className="t-small muted block">{i.instructorProfile.headline}</span>
+                      )}
+                      {i.instructorProfile?.bio && (
+                        <span className="t-small faint mt-1 block leading-relaxed">
+                          {i.instructorProfile.bio}
+                        </span>
+                      )}
+                      {(i.instructorProfile?.expertise?.length ?? 0) > 0 && (
+                        <span className="mt-2 flex flex-wrap gap-1.5">
+                          {i.instructorProfile!.expertise.map((e) => (
+                            <span
+                              key={e}
+                              className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[0.6875rem] text-[var(--ink-2)]"
+                            >
+                              {e}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -405,6 +453,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                   pricingPlanId={plan?.id}
                   pricePaise={plan?.pricePaise ?? 0}
                   currency={plan?.currency ?? 'INR'}
+                  pointsWorthPaise={pointsWorthPaise}
                   fullWidth
                 />
               )}
@@ -447,6 +496,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
               pricingPlanId={plan?.id}
               pricePaise={plan?.pricePaise ?? 0}
               currency={plan?.currency ?? 'INR'}
+              pointsWorthPaise={pointsWorthPaise}
             />
           )}
         </div>

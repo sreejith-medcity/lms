@@ -53,6 +53,7 @@ export const ADMIN_NAV: NavGroup[] = [
     children: [
       { label: 'Learners', href: '/admin/learners' },
       { label: 'Team', href: '/admin/team' },
+      { label: 'Instructors', href: '/admin/instructors' },
       { label: 'Enrol a learner', href: '/admin/enrol' },
       { label: 'Attendance', href: '/admin/attendance' },
       { label: 'Feedback', href: '/admin/feedback' },
@@ -68,6 +69,9 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Testimonials', href: '/admin/testimonials' },
       { label: 'Campaigns', href: '/admin/campaigns' },
       { label: 'Message templates', href: '/admin/templates' },
+      { label: 'Segments', href: '/admin/segments' },
+      { label: 'Community', href: '/admin/community' },
+      { label: 'Points and referrals', href: '/admin/loyalty' },
       { label: 'Announcements', href: '/admin/announcements' },
       { label: 'Storefront', href: '/admin/storefront' },
       { label: 'Blog', href: '/admin/storefront' },

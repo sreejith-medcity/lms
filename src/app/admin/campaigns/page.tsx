@@ -29,7 +29,7 @@ export default async function CampaignsPage() {
   const canEdit = me.permissions['marketing.campaigns']?.edit ?? false;
   const tz = tenant.timezone;
 
-  const [campaigns, templates, batches, courses] = await Promise.all([
+  const [campaigns, templates, batches, courses, segments] = await Promise.all([
     db.campaign.findMany({
       where: { organizationId: tenant.organizationId },
       orderBy: { createdAt: 'desc' },
@@ -62,11 +62,17 @@ export default async function CampaignsPage() {
       orderBy: { title: 'asc' },
       select: { id: true, title: true },
     }),
+    db.segment.findMany({
+      where: { organizationId: tenant.organizationId },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, memberCount: true },
+    }),
   ]);
 
   const names = new Map<string, string>([
     ...batches.map((b) => [b.id, b.name] as const),
     ...courses.map((c) => [c.id, c.title] as const),
+    ...segments.map((sg) => [sg.id, sg.name] as const),
   ]);
 
   const queued = campaigns.reduce((n, c) => n + c._count.recipients, 0);
@@ -163,6 +169,10 @@ export default async function CampaignsPage() {
               templates={templates}
               batches={batches}
               courses={courses.map((c) => ({ id: c.id, name: c.title }))}
+              segments={segments.map((sg) => ({
+                id: sg.id,
+                name: `${sg.name} (${sg.memberCount} last counted)`,
+              }))}
             />
           </div>
         </Card>

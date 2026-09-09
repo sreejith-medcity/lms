@@ -74,7 +74,7 @@ which needs the cart to persist first, with a recovery list. Cheque management.
 Payment settlements. Pricing templates and miscellaneous fees. Campaigns,
 workflows and message templates, composed and logged here, sending in Phase 7.
 
-## Phase 4 — Engagement
+## Phase 4 — Engagement · BUILT, AWAITING PUSH
 
 Segments, dynamic and static, so "Disengaged" becomes a rule rather than a list
 someone maintains. Community with posts, comments and moderation. Per-course
