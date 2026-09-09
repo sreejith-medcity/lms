@@ -14,7 +14,10 @@ generator client {
 
 datasource db {
   provider   = "postgresql"
+  // Pooled endpoint for the app, unpooled for migrations. `neon link` writes
+  // both of these into .env, so nothing here is copied by hand.
   url        = env("DATABASE_URL")
+  directUrl  = env("DATABASE_URL_UNPOOLED")
   extensions = [pgcrypto, pg_trgm, vector]
 }
 

@@ -14,3 +14,4 @@ tsconfig.tsbuildinfo
 next-env.d.ts
 medcity-lms.tar.gz
 medcity-lms.env
+.neon
