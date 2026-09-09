@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { HOST_HEADER, TENANT_HEADER } from '@/lib/tenant';
+import { HOST_HEADER } from '@/lib/http-headers';
 
 /**
  * Tenant resolution happens here, on every request, from the hostname.

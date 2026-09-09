@@ -2,8 +2,9 @@ import { headers } from 'next/headers';
 import { cache } from 'react';
 import { db } from '@/lib/db';
 
-export const TENANT_HEADER = 'x-tenant-id';
-export const HOST_HEADER = 'x-tenant-host';
+import { TENANT_HEADER } from '@/lib/http-headers';
+
+export { TENANT_HEADER, HOST_HEADER } from '@/lib/http-headers';
 
 export interface TenantContext {
   tenantId: string;
