@@ -21,12 +21,12 @@ export function CompleteButton({
 
   return (
     <div className="flex items-center gap-3">
-      {error && <span className="text-xs text-red-600">{error}</span>}
+      {error && <span className="text-xs text-[var(--bad)]">{error}</span>}
 
       <button
         disabled={pending}
-        className={`rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60 ${
-          done ? 'border bg-white text-slate-700' : 'text-white'
+        className={`rounded-[var(--radius-sm)] px-4 py-2 text-sm font-medium disabled:opacity-60 ${
+          done ? 'border bg-[var(--surface)] muted' : 'text-white'
         }`}
         style={done ? undefined : { background: 'var(--brand)' }}
         onClick={() =>

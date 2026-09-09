@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 import { register } from '@/server/accounts';
 import type { ActionState } from '@/server/courses';
-import { Button, Field, FormError, Input, brandStyle } from '@/components/ui';
+import { Button, Field, FormError, Input } from '@/components/ui';
 
 const initial: ActionState = {};
 
@@ -11,11 +11,11 @@ export function SignupForm() {
   const [state, action, pending] = useActionState(register, initial);
 
   return (
-    <form action={action} className="mt-6 space-y-4">
+    <form action={action} className="mt-7 space-y-4">
       <FormError message={state.error} />
 
       <Field label="Full name">
-        <Input name="name" autoComplete="name" required maxLength={80} />
+        <Input name="name" autoComplete="name" required maxLength={80} autoFocus />
       </Field>
 
       <Field label="Email">
@@ -30,7 +30,7 @@ export function SignupForm() {
         <Input name="password" type="password" autoComplete="new-password" required minLength={8} />
       </Field>
 
-      <Button type="submit" disabled={pending} className="w-full" style={brandStyle}>
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
         {pending ? 'Creating...' : 'Create account'}
       </Button>
     </form>

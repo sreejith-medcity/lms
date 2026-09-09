@@ -67,7 +67,7 @@ export default async function CurriculumPage({ params }: { params: Promise<{ id:
             <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
               <div>
                 <h2 className="font-medium">{link.module.name}</h2>
-                <p className="text-xs text-slate-500">
+                <p className="t-small faint">
                   {link.module.sections.length} sections · {materialCount} materials
                   {seconds > 0 && ` · ${formatDuration(seconds)}`}
                 </p>
@@ -76,8 +76,8 @@ export default async function CurriculumPage({ params }: { params: Promise<{ id:
             </div>
 
             {link.module.sections.map((section) => (
-              <div key={section.id} className="rounded-lg border">
-                <div className="border-b bg-slate-50 px-4 py-2">
+              <div key={section.id} className="rounded-[var(--radius-sm)] border">
+                <div className="border-b bg-[var(--surface-2)] px-4 py-2">
                   <h3 className="text-sm font-medium">{section.title}</h3>
                 </div>
 
@@ -96,11 +96,11 @@ export default async function CurriculumPage({ params }: { params: Promise<{ id:
                     />
                   ))}
                   {section.materials.length === 0 && (
-                    <li className="px-4 py-3 text-sm text-slate-400">No materials in this section.</li>
+                    <li className="px-4 py-3 t-small faint">No materials in this section.</li>
                   )}
                 </ul>
 
-                <div className="border-t bg-slate-50 px-4 py-3">
+                <div className="border-t bg-[var(--surface-2)] px-4 py-3">
                   <AddMaterial productId={product.id} sectionId={section.id} />
                 </div>
               </div>

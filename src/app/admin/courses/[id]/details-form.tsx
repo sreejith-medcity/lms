@@ -34,7 +34,7 @@ export function DetailsForm({
 
       <Card className="space-y-4">
         <FormError message={state.error} />
-        {state.ok && <p className="text-sm text-emerald-700">Saved.</p>}
+        {state.ok && <p className="text-sm text-[var(--ok)]">Saved.</p>}
 
         <Field label="Course name">
           <Input name="title" defaultValue={title} required maxLength={100} />
@@ -59,7 +59,7 @@ export function DetailsForm({
       </Card>
 
       <Card className="space-y-3">
-        <h2 className="text-sm font-semibold text-slate-700">Progress and completion</h2>
+        <h2 className="text-sm font-semibold muted">Progress and completion</h2>
 
         <Toggle
           name="modulesArePrerequisite"
@@ -107,8 +107,8 @@ function Toggle({
     <label className="flex gap-3">
       <input type="checkbox" name={name} defaultChecked={defaultChecked} className="mt-1" />
       <span>
-        <span className="block text-sm text-slate-800">{label}</span>
-        {hint && <span className="block text-xs text-slate-500">{hint}</span>}
+        <span className="block text-sm text-[var(--ink)]">{label}</span>
+        {hint && <span className="block t-small faint">{hint}</span>}
       </span>
     </label>
   );

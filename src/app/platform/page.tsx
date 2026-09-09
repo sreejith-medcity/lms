@@ -48,9 +48,9 @@ export default async function PlatformHome() {
         <Stat label="MRR" value={formatMoney(Math.round(mrrPaise))} />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border bg-white">
+      <div className="overflow-x-auto rounded-[var(--radius)] border bg-[var(--surface)]">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
+          <thead className="bg-[var(--surface-2)] text-left faint">
             <tr>
               <th className="p-3">Tenant</th>
               <th className="p-3">Plan</th>
@@ -71,7 +71,7 @@ export default async function PlatformHome() {
             ))}
             {subs.length === 0 && (
               <tr>
-                <td className="p-6 text-center text-slate-500" colSpan={5}>
+                <td className="p-6 text-center faint" colSpan={5}>
                   No active subscriptions yet.
                 </td>
               </tr>

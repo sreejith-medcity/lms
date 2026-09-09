@@ -33,12 +33,12 @@ export default async function CourseLayout({
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Link href="/admin/courses" className="text-sm text-slate-500 hover:underline">
+          <Link href="/admin/courses" className="t-small faint hover:underline">
             Courses
           </Link>
           <span className="text-slate-300">/</span>
           <h1 className="text-xl font-semibold">{product.title}</h1>
-          <Badge tone={product.status === 'PUBLISHED' ? 'green' : 'amber'}>{product.status}</Badge>
+          <Badge tone={product.status === 'PUBLISHED' ? 'ok' : 'warn'}>{product.status}</Badge>
         </div>
         <PublishToggle productId={product.id} published={product.status === 'PUBLISHED'} />
       </div>
@@ -48,7 +48,7 @@ export default async function CourseLayout({
           <Link
             key={t.label}
             href={`/admin/courses/${product.id}${t.href}`}
-            className="border-b-2 border-transparent px-3 pb-2 text-slate-600 hover:border-slate-300 hover:text-slate-900"
+            className="border-b-2 border-transparent px-3 pb-2 muted hover:border-slate-300 hover:text-[var(--ink)]"
           >
             {t.label}
           </Link>

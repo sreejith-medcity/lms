@@ -2,116 +2,183 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
+import { formatDuration } from '@/lib/progress';
 import { getTenantState } from '@/lib/tenant';
+import { Badge, EmptyState, LinkButton } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   const state = await getTenantState();
-
   if (state.status === 'setup-required') return <SetupNotice detail={state.detail} />;
   if (state.status === 'no-tenant') return <NoTenantNotice />;
 
   const tenant = state.tenant;
   const user = await getSessionUser();
 
-  const courses = await db.product.findMany({
-    where: { organizationId: tenant.organizationId, type: 'COURSE', status: 'PUBLISHED' },
-    include: { course: true, pricingPlans: { where: { isActive: true }, take: 1 } },
-    orderBy: { createdAt: 'desc' },
+  const products = await db.product.findMany({
+    where: { organizationId: tenant.organizationId, type: 'COURSE', status: 'PUBLISHED', deletedAt: null },
+    orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
     take: 24,
+    include: {
+      course: {
+        select: {
+          description: true,
+          level: true,
+          modules: {
+            select: {
+              module: {
+                select: { sections: { select: { materials: { select: { durationSeconds: true } } } } },
+              },
+            },
+          },
+        },
+      },
+      pricingPlans: { where: { isActive: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
+    },
   });
 
   return (
-    <main className="mx-auto max-w-6xl p-8">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{tenant.name}</h1>
-        <nav className="flex items-center gap-4 text-sm">
-          {user ? (
-            <>
-              <Link href="/learn" className="text-slate-600 hover:underline">
-                My learning
-              </Link>
-              {user.kind === 'STAFF' && (
-                <Link href="/admin" className="text-slate-600 hover:underline">
-                  Admin
+    <div className="min-h-screen bg-[var(--canvas)]">
+      <header className="border-b bg-[var(--surface)]">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-5">
+          <Link href="/" className="flex items-center gap-2">
+            <span
+              className="grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] text-xs font-bold"
+              style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
+            >
+              {tenant.name.slice(0, 1)}
+            </span>
+            <span className="t-heading truncate">{tenant.name}</span>
+          </Link>
+
+          <nav className="flex items-center gap-3">
+            {user ? (
+              <>
+                <Link href="/learn" className="t-small muted hover:text-[var(--ink)]">
+                  My learning
                 </Link>
-              )}
-              <a href="/logout" className="text-slate-600 hover:underline">
-                Sign out
-              </a>
-            </>
-          ) : (
-            <>
-              <Link href="/login" className="text-slate-600 hover:underline">
-                Sign in
-              </Link>
-              <Link
-                href="/signup"
-                className="rounded-lg px-3 py-2 font-medium text-white"
-                style={{ background: 'var(--brand)' }}
-              >
-                Create account
-              </Link>
-            </>
-          )}
-        </nav>
+                {user.kind === 'STAFF' && (
+                  <Link href="/admin" className="t-small muted hover:text-[var(--ink)]">
+                    Admin
+                  </Link>
+                )}
+                <a href="/logout" className="t-small muted hover:text-[var(--ink)]">
+                  Sign out
+                </a>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="t-small muted hover:text-[var(--ink)]">
+                  Sign in
+                </Link>
+                <LinkButton href="/signup" size="sm">
+                  Create account
+                </LinkButton>
+              </>
+            )}
+          </nav>
+        </div>
       </header>
 
-      <h2 className="mb-4 text-lg font-medium">Explore courses</h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {courses.map((p) => {
-          const plan = p.pricingPlans[0];
-          return (
-            <Link
-              key={p.id}
-              href={`/course/${p.slug}`}
-              className="block rounded-xl border bg-white p-5 transition hover:border-slate-300 hover:shadow-sm"
-            >
-              <h3 className="font-medium">{p.title}</h3>
-              <p className="mt-1 line-clamp-2 text-sm text-slate-500">
-                {p.course?.description ?? ''}
-              </p>
-              <div className="mt-4 flex items-baseline gap-2">
-                <span className="text-lg font-semibold" style={{ color: 'var(--brand)' }}>
-                  {plan ? formatMoney(plan.pricePaise, plan.currency) : 'Free'}
-                </span>
-                {plan?.mrpPaise ? (
-                  <span className="text-sm text-slate-400 line-through">
-                    {formatMoney(plan.mrpPaise, plan.currency)}
-                  </span>
-                ) : null}
-              </div>
-            </Link>
-          );
-        })}
-        {courses.length === 0 && (
-          <p className="text-sm text-slate-500">No published courses yet.</p>
+      <section className="border-b bg-[var(--surface)]">
+        <div className="mx-auto max-w-6xl px-5 py-14">
+          <h1 className="t-display max-w-2xl text-balance">
+            Learn with {tenant.name}, live and at your own pace
+          </h1>
+          <p className="t-body muted mt-3 max-w-xl">
+            Live classes with your trainer, recordings you can revisit, practice material and tests,
+            all tracked in one place.
+          </p>
+        </div>
+      </section>
+
+      <main className="rise mx-auto max-w-6xl px-5 py-10">
+        <h2 className="t-heading mb-4">Courses</h2>
+
+        {products.length === 0 ? (
+          <EmptyState
+            title="No published courses yet"
+            hint="Courses appear here as soon as the academy publishes them."
+          />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {products.map((p) => {
+              const plan = p.pricingPlans[0];
+              const seconds =
+                p.course?.modules.reduce(
+                  (total, cm) =>
+                    total +
+                    cm.module.sections.reduce(
+                      (s, sec) => s + sec.materials.reduce((m, mat) => m + (mat.durationSeconds ?? 0), 0),
+                      0,
+                    ),
+                  0,
+                ) ?? 0;
+
+              const discount =
+                plan?.mrpPaise && plan.mrpPaise > plan.pricePaise
+                  ? Math.round(((plan.mrpPaise - plan.pricePaise) / plan.mrpPaise) * 100)
+                  : null;
+
+              return (
+                <Link
+                  key={p.id}
+                  href={`/course/${p.slug}`}
+                  className="group flex flex-col rounded-[var(--radius)] border bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--brand-line)] hover:shadow"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="t-heading">{p.title}</h3>
+                    {discount && <Badge tone="ok">{discount}% off</Badge>}
+                  </div>
+
+                  <p className="t-small muted mt-2 line-clamp-2">{p.course?.description}</p>
+
+                  <p className="t-small faint mt-3">
+                    {[p.course?.level, seconds > 0 ? formatDuration(seconds) : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+
+                  <div className="mt-4 flex items-baseline gap-2 border-t pt-4">
+                    <span className="text-lg font-semibold" style={{ color: 'var(--brand)' }}>
+                      {plan ? formatMoney(plan.pricePaise, plan.currency) : 'Free'}
+                    </span>
+                    {plan?.mrpPaise ? (
+                      <span className="t-small faint line-through">
+                        {formatMoney(plan.mrpPaise, plan.currency)}
+                      </span>
+                    ) : null}
+                    <span className="t-small ml-auto font-medium" style={{ color: 'var(--brand)' }}>
+                      View →
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
 
 function Shell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <main className="mx-auto max-w-2xl p-10">
-      <h1 className="text-xl font-semibold">{title}</h1>
-      <div className="mt-4 space-y-3 text-sm leading-relaxed text-slate-600">{children}</div>
+      <h1 className="t-title">{title}</h1>
+      <div className="t-body muted mt-4 space-y-3">{children}</div>
     </main>
   );
 }
 
-/** Shown when the database cannot be reached, instead of a Next.js error digest. */
 function SetupNotice({ detail }: { detail: string }) {
   return (
     <Shell title="Database not ready">
       <p>The app is running, but it cannot use its database yet. Usually one of:</p>
       <ul className="list-disc space-y-1 pl-5">
         <li>
-          <code>DATABASE_URL</code> is still a placeholder, or the password needs
-          percent-encoding because it contains characters like <code>@</code>, <code>:</code>,
-          <code>/</code> or <code>?</code>
+          <code>DATABASE_URL</code> is still a placeholder, or the password needs percent-encoding
         </li>
         <li>
           <code>?sslmode=require</code> is missing from the connection string
@@ -121,7 +188,7 @@ function SetupNotice({ detail }: { detail: string }) {
           <code>npm run db:seed</code>
         </li>
       </ul>
-      <p className="rounded-lg bg-slate-100 p-3 font-mono text-xs text-slate-700">{detail}</p>
+      <p className="rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-3 font-mono text-xs">{detail}</p>
     </Shell>
   );
 }
@@ -130,9 +197,8 @@ function NoTenantNotice() {
   return (
     <Shell title="No academy on this hostname">
       <p>
-        The database is reachable, but no tenant matches this address. Add the hostname
-        as a TenantDomain row, or set <code>APP_HOSTNAME</code> to it and run the seed
-        again.
+        The database is reachable, but no tenant matches this address. Add the hostname as a
+        TenantDomain row, or set <code>APP_HOSTNAME</code> and run the seed again.
       </p>
     </Shell>
   );

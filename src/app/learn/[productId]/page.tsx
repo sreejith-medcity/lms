@@ -66,11 +66,11 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <Link href="/learn" className="text-sm text-slate-500 hover:underline">
+          <Link href="/learn" className="t-small faint hover:underline">
             My learning
           </Link>
           <h1 className="mt-1 text-xl font-semibold">{enrollment.product.title}</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 t-small faint">
             {completed} of {materials.length} done · {percent(completed, materials.length)}%
           </p>
         </div>
@@ -78,7 +78,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
         {next && (
           <Link
             href={`/learn/${productId}/${next.id}`}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white"
+            className="rounded-[var(--radius-sm)] px-4 py-2 text-sm font-medium text-white"
             style={{ background: 'var(--brand)' }}
           >
             {completed === 0 ? 'Start' : 'Continue'}
@@ -96,15 +96,15 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
 
           {cm.module.sections.map((section) => (
             <div key={section.id}>
-              <p className="mb-1 text-sm font-medium text-slate-700">{section.title}</p>
-              <ul className="divide-y rounded-lg border">
+              <p className="mb-1 text-sm font-medium muted">{section.title}</p>
+              <ul className="divide-y rounded-[var(--radius-sm)] border">
                 {section.materials.map((m) => {
                   const isDone = doneSet.has(m.id);
                   return (
                     <li key={m.id}>
                       <Link
                         href={`/learn/${productId}/${m.id}`}
-                        className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50"
+                        className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--surface-2)]"
                       >
                         <span className="flex min-w-0 items-center gap-3">
                           <span
@@ -118,7 +118,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
                           </span>
                           <span className="truncate text-sm">{m.title}</span>
                         </span>
-                        <span className="shrink-0 text-xs text-slate-400">
+                        <span className="shrink-0 t-small faint">
                           {MATERIAL_LABELS[m.type] ?? m.type}
                           {m.durationSeconds ? ` · ${formatDuration(m.durationSeconds)}` : ''}
                         </span>
@@ -127,7 +127,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
                   );
                 })}
                 {section.materials.length === 0 && (
-                  <li className="px-4 py-2.5 text-sm text-slate-400">Nothing here yet.</li>
+                  <li className="px-4 py-2.5 t-small faint">Nothing here yet.</li>
                 )}
               </ul>
             </div>

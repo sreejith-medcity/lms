@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { enrol } from '@/server/enrollment';
+import { Button } from '@/components/ui';
 
 export function EnrolButton({ productId, signedIn }: { productId: string; signedIn: boolean }) {
   const [pending, start] = useTransition();
@@ -11,10 +12,9 @@ export function EnrolButton({ productId, signedIn }: { productId: string; signed
 
   return (
     <div className="text-right">
-      <button
+      <Button
         disabled={pending}
-        className="inline-flex rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-        style={{ background: 'var(--brand)' }}
+        size="lg"
         onClick={() =>
           start(async () => {
             if (!signedIn) {
@@ -28,8 +28,8 @@ export function EnrolButton({ productId, signedIn }: { productId: string; signed
         }
       >
         {pending ? 'Enrolling...' : signedIn ? 'Enrol now' : 'Sign up to enrol'}
-      </button>
-      {error && <p className="mt-2 max-w-xs text-xs text-red-600">{error}</p>}
+      </Button>
+      {error && <p className="t-small mt-2 max-w-xs text-[var(--bad)]">{error}</p>}
     </div>
   );
 }

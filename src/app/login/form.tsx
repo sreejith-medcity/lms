@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import { login, type LoginState } from '@/server/session';
+import { Button, Field, FormError, Input } from '@/components/ui';
 
 const initial: LoginState = {};
 
@@ -9,48 +10,20 @@ export function LoginForm() {
   const [state, action, pending] = useActionState(login, initial);
 
   return (
-    <form action={action} className="mt-6 space-y-4">
-      <div>
-        <label htmlFor="identifier" className="block text-sm text-slate-600">
-          Email or mobile
-        </label>
-        <input
-          id="identifier"
-          name="identifier"
-          autoComplete="username"
-          className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-          required
-        />
-      </div>
+    <form action={action} className="mt-7 space-y-4">
+      <FormError message={state.error} />
 
-      <div>
-        <label htmlFor="password" className="block text-sm text-slate-600">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-          required
-        />
-      </div>
+      <Field label="Email or mobile">
+        <Input name="identifier" autoComplete="username" required autoFocus />
+      </Field>
 
-      {state.error && (
-        <p role="alert" className="text-sm text-red-600">
-          {state.error}
-        </p>
-      )}
+      <Field label="Password">
+        <Input name="password" type="password" autoComplete="current-password" required />
+      </Field>
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-lg px-3 py-2 text-sm text-white disabled:opacity-60"
-        style={{ background: 'var(--brand)' }}
-      >
+      <Button type="submit" disabled={pending} size="lg" className="w-full">
         {pending ? 'Signing in...' : 'Sign in'}
-      </button>
+      </Button>
     </form>
   );
 }

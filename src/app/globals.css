@@ -2,13 +2,137 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * One token layer for the whole product.
+ *
+ * --brand is injected per tenant from Organization.brandColor, so an institute
+ * themes the product without a rebuild. Everything else is the product's own
+ * identity and stays constant across tenants, which is what keeps a white
+ * labelled app from looking like a different app for every customer.
+ */
 :root {
-  --brand: #087447;
-  --brand-fg: #ffffff;
-  --surface: #f5f7fa;
+  /* Tenant accent. Overridden at runtime on <body>. */
+  --brand: #0b5294;
+  --brand-ink: #ffffff;
+  --brand-soft: color-mix(in srgb, var(--brand) 12%, white);
+  --brand-line: color-mix(in srgb, var(--brand) 24%, white);
+
+  /* App chrome: the dark frame the product lives in. */
+  --shell: #0d1526;
+  --shell-2: #131d33;
+  --shell-ink: #e8edf7;
+  --shell-muted: #94a3bd;
+  --shell-line: #22304d;
+
+  /* Content canvas. */
+  --canvas: #f6f8fb;
+  --surface: #ffffff;
+  --surface-2: #f2f5f9;
+  --line: #e3e8ef;
+  --line-strong: #cbd5e1;
+
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --ink-3: #7c8899;
+
+  --ok: #0f8a5f;
+  --ok-soft: #e6f6ee;
+  --warn: #b45309;
+  --warn-soft: #fef4e6;
+  --bad: #c2334d;
+  --bad-soft: #fdeef1;
+
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --radius-lg: 1rem;
+
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow: 0 1px 3px rgb(15 23 42 / 0.08), 0 8px 24px -12px rgb(15 23 42 / 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --canvas: #0b1220;
+    --surface: #111a2c;
+    --surface-2: #16213a;
+    --line: #22304d;
+    --line-strong: #2e3f63;
+
+    --ink: #e8edf7;
+    --ink-2: #a8b6cc;
+    --ink-3: #7f8ea8;
+
+    --brand-soft: color-mix(in srgb, var(--brand) 22%, #0b1220);
+    --brand-line: color-mix(in srgb, var(--brand) 38%, #0b1220);
+
+    --ok-soft: #08301f;
+    --warn-soft: #2e1e05;
+    --bad-soft: #34101a;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow: 0 1px 3px rgb(0 0 0 / 0.5), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+  }
+}
+
+:root[data-theme='dark'] {
+  --canvas: #0b1220;
+  --surface: #111a2c;
+  --surface-2: #16213a;
+  --line: #22304d;
+  --line-strong: #2e3f63;
+  --ink: #e8edf7;
+  --ink-2: #a8b6cc;
+  --ink-3: #7f8ea8;
+  --brand-soft: color-mix(in srgb, var(--brand) 22%, #0b1220);
+  --brand-line: color-mix(in srgb, var(--brand) 38%, #0b1220);
+  --ok-soft: #08301f;
+  --warn-soft: #2e1e05;
+  --bad-soft: #34101a;
+}
+
+* {
+  border-color: var(--line);
 }
 
 body {
-  background: var(--surface);
-  color: #0f172a;
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Type scale. Deliberately few steps, so screens stay consistent. */
+.t-display { font-size: 1.75rem; line-height: 2.125rem; font-weight: 640; letter-spacing: -0.02em; }
+.t-title   { font-size: 1.25rem; line-height: 1.75rem;  font-weight: 620; letter-spacing: -0.015em; }
+.t-heading { font-size: 0.9375rem; line-height: 1.375rem; font-weight: 600; }
+.t-body    { font-size: 0.875rem; line-height: 1.5rem; }
+.t-small   { font-size: 0.8125rem; line-height: 1.25rem; }
+.t-micro   { font-size: 0.6875rem; line-height: 1rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+
+.muted { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+
+/* Focus is a product feature, not an afterthought: this app is keyboard-first. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise { animation: rise 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: none; }
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 37%, var(--surface-2) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@keyframes shimmer {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0 50%; }
 }

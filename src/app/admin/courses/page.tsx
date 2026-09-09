@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
+import { Badge, Cell, EmptyState, LinkButton, PageHeader, Row, Table } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,7 @@ export default async function CoursesPage() {
   const products = await db.product.findMany({
     where: { organizationId: tenant.organizationId, type: 'COURSE', deletedAt: null },
     include: {
-      course: true,
+      course: { select: { modules: { select: { moduleId: true } } } },
       pricingPlans: { where: { isActive: true }, orderBy: { sortOrder: 'asc' }, take: 1 },
       _count: { select: { enrollments: true } },
     },
@@ -20,59 +21,45 @@ export default async function CoursesPage() {
   });
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Courses</h1>
-        <Link
-          href="/admin/courses/new"
-          className="rounded-lg px-3 py-2 text-sm text-white"
-          style={{ background: 'var(--brand)' }}
-        >
-          New course
-        </Link>
-      </div>
+    <div>
+      <PageHeader
+        title="Courses"
+        description="Everything you sell and teach. Curriculum is built from the shared module library."
+        action={<LinkButton href="/admin/courses/new">New course</LinkButton>}
+      />
 
-      <div className="overflow-x-auto rounded-xl border bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
-            <tr>
-              <th className="p-3">Course</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Price</th>
-              <th className="p-3">Enrolments</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((p) => (
-              <tr key={p.id} className="border-t">
-                <td className="p-3">
-                  <Link href={`/admin/courses/${p.id}`} className="font-medium hover:underline">
-                    {p.title}
-                  </Link>
-                </td>
-                <td className="p-3">
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
-                    {p.status}
-                  </span>
-                </td>
-                <td className="p-3">
-                  {p.pricingPlans[0]
-                    ? formatMoney(p.pricingPlans[0].pricePaise, p.pricingPlans[0].currency)
-                    : '—'}
-                </td>
-                <td className="p-3">{p._count.enrollments}</td>
-              </tr>
-            ))}
-            {products.length === 0 && (
-              <tr>
-                <td className="p-6 text-center text-slate-500" colSpan={4}>
-                  No courses yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {products.length === 0 ? (
+        <EmptyState
+          title="No courses yet"
+          hint="Create the first one and add its curriculum."
+          action={<LinkButton href="/admin/courses/new" size="sm">New course</LinkButton>}
+        />
+      ) : (
+        <Table head={['Course', 'Status', 'Modules', 'Price', 'Enrolments']}>
+          {products.map((p) => (
+            <Row key={p.id}>
+              <Cell>
+                <Link href={`/admin/courses/${p.id}`} className="font-medium hover:underline">
+                  {p.title}
+                </Link>
+                <span className="t-small faint block">/{p.slug}</span>
+              </Cell>
+              <Cell>
+                <Badge tone={p.status === 'PUBLISHED' ? 'ok' : p.status === 'DRAFT' ? 'neutral' : 'warn'}>
+                  {p.status.toLowerCase()}
+                </Badge>
+              </Cell>
+              <Cell className="tabular-nums">{p.course?.modules.length ?? 0}</Cell>
+              <Cell className="tabular-nums">
+                {p.pricingPlans[0]
+                  ? formatMoney(p.pricingPlans[0].pricePaise, p.pricingPlans[0].currency)
+                  : <span className="faint">not priced</span>}
+              </Cell>
+              <Cell className="tabular-nums">{p._count.enrollments}</Cell>
+            </Row>
+          ))}
+        </Table>
+      )}
     </div>
   );
 }

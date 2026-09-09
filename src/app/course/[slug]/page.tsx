@@ -5,7 +5,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
 import { MATERIAL_LABELS, formatDuration } from '@/lib/progress';
-import { Badge, Card } from '@/components/ui';
+import { Badge, Card, LinkButton } from '@/components/ui';
 import { EnrolButton } from './enrol-button';
 
 export const dynamic = 'force-dynamic';
@@ -60,81 +60,75 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   const totalSeconds = allMaterials.reduce((n, m) => n + (m.durationSeconds ?? 0), 0);
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
-      <Link href="/" className="text-sm text-slate-500 hover:underline">
+    <main className="rise mx-auto max-w-4xl px-5 py-10">
+      <Link href="/" className="t-small muted hover:text-[var(--ink)]">
         All courses
       </Link>
 
       <header className="mt-4">
-        <h1 className="text-2xl font-semibold">{product.title}</h1>
-        <p className="mt-2 max-w-2xl whitespace-pre-line text-slate-600">
+        <h1 className="t-display">{product.title}</h1>
+        <p className="t-body muted mt-3 max-w-2xl whitespace-pre-line">
           {product.course.description}
         </p>
-        <p className="mt-3 text-sm text-slate-500">
+        <p className="t-small faint mt-3">
           {allMaterials.length} materials
           {totalSeconds > 0 && ` · ${formatDuration(totalSeconds)}`}
           {product.course.level && ` · ${product.course.level}`}
         </p>
       </header>
 
-      <div className="mt-6 flex flex-wrap items-center gap-4 rounded-xl border bg-white p-5">
+      <div className="mt-6 flex flex-wrap items-center gap-4 rounded-[var(--radius)] border bg-[var(--surface)] p-5 shadow-sm">
         <div>
           <span className="text-2xl font-semibold" style={{ color: 'var(--brand)' }}>
             {plan ? formatMoney(plan.pricePaise, plan.currency) : 'Free'}
           </span>
           {plan?.mrpPaise ? (
-            <span className="ml-2 text-slate-400 line-through">
+            <span className="t-small faint ml-2 line-through">
               {formatMoney(plan.mrpPaise, plan.currency)}
             </span>
           ) : null}
           {plan?.validityDays ? (
-            <p className="mt-1 text-xs text-slate-500">Access for {plan.validityDays} days</p>
+            <p className="t-small faint mt-1">Access for {plan.validityDays} days</p>
           ) : null}
         </div>
 
         <div className="ml-auto">
           {enrolled ? (
-            <Link
-              href={`/learn/${product.id}`}
-              className="inline-flex rounded-lg px-4 py-2 text-sm font-medium text-white"
-              style={{ background: 'var(--brand)' }}
-            >
-              Continue learning
-            </Link>
+            <LinkButton href={`/learn/${product.id}`}>Continue learning</LinkButton>
           ) : (
             <EnrolButton productId={product.id} signedIn={Boolean(user)} />
           )}
         </div>
       </div>
 
-      <h2 className="mt-10 text-lg font-medium">What you will cover</h2>
+      <h2 className="t-heading mt-10">What you will cover</h2>
       <div className="mt-4 space-y-4">
         {product.course.modules.map((cm) => (
           <Card key={cm.moduleId}>
-            <h3 className="font-medium">{cm.module.name}</h3>
+            <h3 className="t-heading">{cm.module.name}</h3>
             <div className="mt-3 space-y-3">
               {cm.module.sections.map((section) => (
                 <div key={section.id}>
-                  <p className="text-sm font-medium text-slate-700">{section.title}</p>
+                  <p className="t-small font-medium">{section.title}</p>
                   <ul className="mt-1 space-y-1">
                     {section.materials.map((m) => (
-                      <li key={m.id} className="flex items-center gap-2 text-sm text-slate-600">
-                        <span className="text-slate-400">{MATERIAL_LABELS[m.type] ?? m.type}</span>
+                      <li key={m.id} className="t-small muted flex items-center gap-2">
+                        <span className="faint">{MATERIAL_LABELS[m.type] ?? m.type}</span>
                         <span>{m.title}</span>
-                        {m.isFreePreview && <Badge tone="green">Free preview</Badge>}
+                        {m.isFreePreview && <Badge tone="ok">Free preview</Badge>}
                       </li>
                     ))}
                   </ul>
                 </div>
               ))}
               {cm.module.sections.length === 0 && (
-                <p className="text-sm text-slate-400">Content coming soon.</p>
+                <p className="t-small faint">Content coming soon.</p>
               )}
             </div>
           </Card>
         ))}
         {product.course.modules.length === 0 && (
-          <p className="text-sm text-slate-500">The curriculum is being prepared.</p>
+          <p className="t-small faint">The curriculum is being prepared.</p>
         )}
       </div>
     </main>

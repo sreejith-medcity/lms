@@ -45,7 +45,7 @@ export function DeletePlanButton({ planId, productId }: { planId: string; produc
 
   return (
     <span className="flex items-center justify-end gap-2">
-      {error && <span className="text-xs text-red-600">{error}</span>}
+      {error && <span className="text-xs text-[var(--bad)]">{error}</span>}
       <Button
         variant="danger"
         disabled={pending}

@@ -62,11 +62,11 @@ export default async function MaterialPage({
   return (
     <div className="space-y-5">
       <div>
-        <Link href={`/learn/${productId}`} className="text-sm text-slate-500 hover:underline">
+        <Link href={`/learn/${productId}`} className="t-small faint hover:underline">
           {enrollment.product.title}
         </Link>
         <h1 className="mt-1 text-xl font-semibold">{material.title}</h1>
-        <p className="text-sm text-slate-500">
+        <p className="t-small faint">
           {MATERIAL_LABELS[material.type] ?? material.type}
           {material.durationSeconds ? ` · ${formatDuration(material.durationSeconds)}` : ''}
           {` · ${index + 1} of ${ordered.length}`}
@@ -85,7 +85,7 @@ export default async function MaterialPage({
           {prev && (
             <Link
               href={`/learn/${productId}/${prev.id}`}
-              className="rounded-lg border bg-white px-3 py-2 text-sm"
+              className="rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3 py-2 text-sm"
             >
               Previous
             </Link>
@@ -93,7 +93,7 @@ export default async function MaterialPage({
           {next && (
             <Link
               href={`/learn/${productId}/${next.id}`}
-              className="rounded-lg border bg-white px-3 py-2 text-sm"
+              className="rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3 py-2 text-sm"
             >
               Next
             </Link>
@@ -126,7 +126,7 @@ function Viewer({
     const embed = toYouTubeEmbed(externalUrl);
     if (embed) {
       return (
-        <div className="aspect-video overflow-hidden rounded-xl border bg-black">
+        <div className="aspect-video overflow-hidden rounded-[var(--radius)] border bg-black">
           <iframe
             src={embed}
             title={title}
@@ -151,12 +151,12 @@ function Viewer({
   if (externalUrl) {
     return (
       <Card>
-        <p className="text-sm text-slate-600">This material lives outside the platform.</p>
+        <p className="t-small muted">This material lives outside the platform.</p>
         <a
           href={externalUrl}
           target="_blank"
           rel="noreferrer noopener"
-          className="mt-3 inline-flex rounded-lg px-3 py-2 text-sm font-medium text-white"
+          className="mt-3 inline-flex rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium text-white"
           style={{ background: 'var(--brand)' }}
         >
           Open {MATERIAL_LABELS[type] ?? 'material'}
@@ -167,7 +167,7 @@ function Viewer({
 
   return (
     <Card>
-      <p className="text-sm text-slate-600">
+      <p className="t-small muted">
         No file is attached yet. Uploads arrive with the asset library, and this material will play
         here once it does.
       </p>

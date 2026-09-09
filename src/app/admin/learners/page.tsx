@@ -1,8 +1,19 @@
 import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
+import {
+  Badge, Button, Cell, EmptyState, Input, PageHeader, ProgressRing, Row, Table,
+} from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
+
+const TABS: { label: string; status?: $Enums.UserStatus }[] = [
+  { label: 'All' },
+  { label: 'Registered', status: 'REGISTERED' },
+  { label: 'Active', status: 'ACTIVE' },
+  { label: 'Completed', status: 'COMPLETED' },
+  { label: 'Archived', status: 'ARCHIVED' },
+];
 
 export default async function LearnersPage({
   searchParams,
@@ -28,59 +39,87 @@ export default async function LearnersPage({
           }
         : {}),
     },
-    include: { _count: { select: { enrollments: true } } },
+    include: {
+      _count: { select: { enrollments: true } },
+      enrollments: { select: { progressPercent: true } },
+    },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Learners</h1>
+    <div>
+      <PageHeader
+        title="Learners"
+        description="Everyone enrolled or registered with the academy."
+      />
 
-      <form className="flex gap-2">
-        <input
-          name="q"
-          defaultValue={q ?? ''}
-          placeholder="Search by name, email or phone"
-          className="w-72 rounded-lg border px-3 py-2 text-sm"
-        />
-        <button className="rounded-lg border px-3 py-2 text-sm">Search</button>
-      </form>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {TABS.map((t) => {
+          const active = (status ?? '') === (t.status ?? '');
+          const href = t.status ? `/admin/learners?status=${t.status}` : '/admin/learners';
+          return (
+            <a
+              key={t.label}
+              href={href}
+              className={`rounded-full px-3 py-1.5 text-[0.8125rem] font-medium transition ${
+                active
+                  ? 'bg-[var(--brand-soft)] text-[var(--brand)]'
+                  : 'muted hover:bg-[var(--surface-2)]'
+              }`}
+            >
+              {t.label}
+            </a>
+          );
+        })}
 
-      <div className="overflow-x-auto rounded-xl border bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-500">
-            <tr>
-              <th className="p-3">Name</th>
-              <th className="p-3">Contact</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Reg. no</th>
-              <th className="p-3">Enrolments</th>
-            </tr>
-          </thead>
-          <tbody>
-            {learners.map((l) => (
-              <tr key={l.id} className="border-t">
-                <td className="p-3 font-medium">{l.name}</td>
-                <td className="p-3 text-slate-600">
-                  {l.email}
-                  {l.phone ? <span className="block text-xs">{l.phone}</span> : null}
-                </td>
-                <td className="p-3">{l.status}</td>
-                <td className="p-3">{l.registrationNo ?? '—'}</td>
-                <td className="p-3">{l._count.enrollments}</td>
-              </tr>
-            ))}
-            {learners.length === 0 && (
-              <tr>
-                <td className="p-6 text-center text-slate-500" colSpan={5}>
-                  No learners match.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <form className="ml-auto flex gap-2">
+          {status && <input type="hidden" name="status" value={status} />}
+          <Input
+            name="q"
+            defaultValue={q ?? ''}
+            placeholder="Name, email or phone"
+            className="w-64"
+          />
+          <Button variant="secondary" type="submit">
+            Search
+          </Button>
+        </form>
       </div>
+
+      {learners.length === 0 ? (
+        <EmptyState
+          title="No learners match"
+          hint={q ? 'Try a different search.' : 'Learners appear here once they sign up or are enrolled.'}
+        />
+      ) : (
+        <Table head={['Learner', 'Contact', 'Status', 'Reg. no', 'Courses', 'Progress']}>
+          {learners.map((l) => {
+            const avg =
+              l.enrollments.length > 0
+                ? l.enrollments.reduce((n, e) => n + e.progressPercent, 0) / l.enrollments.length
+                : 0;
+
+            return (
+              <Row key={l.id}>
+                <Cell className="font-medium">{l.name}</Cell>
+                <Cell>
+                  <span className="t-small block">{l.email}</span>
+                  {l.phone && <span className="t-small faint block">{l.phone}</span>}
+                </Cell>
+                <Cell>
+                  <Badge tone={l.status === 'ACTIVE' ? 'ok' : l.status === 'ARCHIVED' ? 'neutral' : 'brand'}>
+                    {l.status.toLowerCase().replace('_', ' ')}
+                  </Badge>
+                </Cell>
+                <Cell className="tabular-nums">{l.registrationNo ?? '—'}</Cell>
+                <Cell className="tabular-nums">{l._count.enrollments}</Cell>
+                <Cell>{l.enrollments.length > 0 ? <ProgressRing value={avg} size={34} /> : <span className="faint">—</span>}</Cell>
+              </Row>
+            );
+          })}
+        </Table>
+      )}
     </div>
   );
 }

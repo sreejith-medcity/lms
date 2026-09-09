@@ -11,33 +11,39 @@ export default async function LearnLayout({ children }: { children: React.ReactN
   if (!user) redirect('/login');
 
   return (
-    <div className="min-h-screen">
-      <header
-        className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 text-white"
-        style={{ background: 'var(--brand)' }}
-      >
-        <Link href="/learn" className="font-medium">
-          {tenant.name}
-        </Link>
-        <nav className="flex items-center gap-4 text-sm">
-          <Link href="/learn" className="opacity-90 hover:opacity-100">
-            My learning
+    <div className="min-h-screen bg-[var(--canvas)]">
+      <header className="sticky top-0 z-10 border-b bg-[var(--surface)]/85 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-5">
+          <Link href="/learn" className="flex items-center gap-2">
+            <span
+              className="grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] text-xs font-bold"
+              style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
+            >
+              {tenant.name.slice(0, 1)}
+            </span>
+            <span className="t-heading truncate">{tenant.name}</span>
           </Link>
-          <Link href="/" className="opacity-90 hover:opacity-100">
-            Explore
-          </Link>
-          {user.kind === 'STAFF' && (
-            <Link href="/admin" className="opacity-90 hover:opacity-100">
-              Admin
+
+          <nav className="flex items-center gap-4">
+            <Link href="/learn" className="t-small muted hover:text-[var(--ink)]">
+              My learning
             </Link>
-          )}
-          <span className="opacity-75">{user.name}</span>
-          <a href="/logout" className="underline opacity-90 hover:opacity-100">
-            Sign out
-          </a>
-        </nav>
+            <Link href="/" className="t-small muted hover:text-[var(--ink)]">
+              Explore
+            </Link>
+            {user.kind === 'STAFF' && (
+              <Link href="/admin" className="t-small muted hover:text-[var(--ink)]">
+                Admin
+              </Link>
+            )}
+            <a href="/logout" className="t-small muted hover:text-[var(--ink)]">
+              Sign out
+            </a>
+          </nav>
+        </div>
       </header>
-      <main className="mx-auto max-w-5xl p-6">{children}</main>
+
+      <main className="rise mx-auto max-w-5xl px-5 py-7">{children}</main>
     </div>
   );
 }

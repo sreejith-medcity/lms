@@ -10,7 +10,7 @@ export function PublishToggle({ productId, published }: { productId: string; pub
 
   return (
     <div className="flex items-center gap-3">
-      {error && <span className="text-xs text-red-600">{error}</span>}
+      {error && <span className="text-xs text-[var(--bad)]">{error}</span>}
       <Button
         variant={published ? 'secondary' : 'primary'}
         style={published ? undefined : { background: 'var(--brand)' }}

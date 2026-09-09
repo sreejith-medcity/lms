@@ -28,8 +28,8 @@ export default async function PricingPage({ params }: { params: Promise<{ id: st
   return (
     <div className="max-w-3xl space-y-6">
       <Card>
-        <h2 className="text-sm font-semibold text-slate-700">Pricing plans</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <h2 className="text-sm font-semibold muted">Pricing plans</h2>
+        <p className="mt-1 t-small faint">
           A course can carry several: a full fee, a shorter validity, a free tier.
         </p>
 
@@ -38,7 +38,7 @@ export default async function PricingPage({ params }: { params: Promise<{ id: st
             <EmptyState title="No plans yet" hint="Until a plan exists, nobody can enrol." />
           ) : (
             <table className="w-full text-sm">
-              <thead className="text-left text-slate-500">
+              <thead className="text-left faint">
                 <tr>
                   <th className="py-2">Plan</th>
                   <th className="py-2">Price</th>
@@ -51,7 +51,7 @@ export default async function PricingPage({ params }: { params: Promise<{ id: st
                 {product.pricingPlans.map((p) => (
                   <tr key={p.id} className="border-t">
                     <td className="py-2.5">
-                      <span className={p.isActive ? '' : 'text-slate-400 line-through'}>{p.name}</span>
+                      <span className={p.isActive ? '' : 'faint line-through'}>{p.name}</span>
                       {!p.isActive && (
                         <span className="ml-2">
                           <Badge>retired</Badge>
@@ -61,7 +61,7 @@ export default async function PricingPage({ params }: { params: Promise<{ id: st
                     <td className="py-2.5">
                       {formatMoney(p.pricePaise, p.currency)}
                       {p.mrpPaise ? (
-                        <span className="ml-2 text-xs text-slate-400 line-through">
+                        <span className="ml-2 t-small faint line-through">
                           {formatMoney(p.mrpPaise, p.currency)}
                         </span>
                       ) : null}
@@ -80,13 +80,13 @@ export default async function PricingPage({ params }: { params: Promise<{ id: st
       </Card>
 
       <Card>
-        <h2 className="mb-4 text-sm font-semibold text-slate-700">Add a plan</h2>
+        <h2 className="mb-4 text-sm font-semibold muted">Add a plan</h2>
         <AddPlanForm productId={product.id} currency={tenant.currency} />
       </Card>
 
       <Card>
-        <h2 className="text-sm font-semibold text-slate-700">Where it appears</h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <h2 className="text-sm font-semibold muted">Where it appears</h2>
+        <p className="mt-1 t-small faint">
           The course is {product.status === 'PUBLISHED' ? 'live' : 'not live'} on{' '}
           {[
             product.course.publishWeb && 'web',

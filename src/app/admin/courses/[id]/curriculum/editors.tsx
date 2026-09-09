@@ -43,7 +43,7 @@ export function AddModule({
   const [mode, setMode] = useState<'new' | 'library'>('new');
 
   return (
-    <form action={action} className="rounded-xl border bg-white p-5">
+    <form action={action} className="rounded-[var(--radius)] border bg-[var(--surface)] p-5">
       <input type="hidden" name="productId" value={productId} />
       <FormError message={state.error} />
 
@@ -60,7 +60,7 @@ export function AddModule({
             disabled={library.length === 0}
           />
           From the library
-          {library.length === 0 && <span className="text-xs text-slate-400">(empty)</span>}
+          {library.length === 0 && <span className="t-small faint">(empty)</span>}
         </label>
       </div>
 
@@ -102,7 +102,7 @@ export function UnlinkModule({ productId, moduleId }: { productId: string; modul
 
   return (
     <div className="flex items-center gap-2">
-      {error && <span className="text-xs text-red-600">{error}</span>}
+      {error && <span className="text-xs text-[var(--bad)]">{error}</span>}
       <Button
         variant="secondary"
         disabled={pending}
@@ -179,7 +179,7 @@ export function AddMaterial({ productId, sectionId }: { productId: string; secti
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 pb-2 text-sm text-slate-600">
+        <label className="flex items-center gap-2 pb-2 t-small muted">
           <input type="checkbox" name="isFreePreview" />
           Free preview
         </label>
@@ -189,7 +189,7 @@ export function AddMaterial({ productId, sectionId }: { productId: string; secti
         </Button>
       </div>
 
-      <p className="text-xs text-slate-400">
+      <p className="t-small faint">
         File uploads arrive with the asset library. For now, link YouTube or an external URL.
       </p>
     </form>
@@ -210,18 +210,18 @@ export function MaterialRow({
     <li className="flex items-center justify-between gap-3 px-4 py-2.5">
       <div className="min-w-0">
         <p className="truncate text-sm">{material.title}</p>
-        <p className="text-xs text-slate-500">
+        <p className="t-small faint">
           {material.type.replace('_', ' ').toLowerCase()}
           {material.durationSeconds ? ` · ${Math.round(material.durationSeconds / 60)} min` : ''}
         </p>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        {error && <span className="text-xs text-red-600">{error}</span>}
-        {material.isFreePreview && <Badge tone="green">Free preview</Badge>}
+        {error && <span className="text-xs text-[var(--bad)]">{error}</span>}
+        {material.isFreePreview && <Badge tone="ok">Free preview</Badge>}
 
         <button
-          className="rounded border px-2 py-1 text-xs text-slate-600 disabled:opacity-50"
+          className="rounded border px-2 py-1 text-xs muted disabled:opacity-50"
           disabled={pending}
           onClick={() => start(async () => setError((await moveMaterial(material.id, productId, 'up')).error))}
           aria-label="Move up"
@@ -229,7 +229,7 @@ export function MaterialRow({
           ↑
         </button>
         <button
-          className="rounded border px-2 py-1 text-xs text-slate-600 disabled:opacity-50"
+          className="rounded border px-2 py-1 text-xs muted disabled:opacity-50"
           disabled={pending}
           onClick={() => start(async () => setError((await moveMaterial(material.id, productId, 'down')).error))}
           aria-label="Move down"
@@ -237,7 +237,7 @@ export function MaterialRow({
           ↓
         </button>
         <button
-          className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 disabled:opacity-50"
+          className="rounded border border-[var(--bad)]/30 px-2 py-1 text-xs text-[var(--bad)] disabled:opacity-50"
           disabled={pending}
           onClick={() => start(async () => setError((await deleteMaterial(material.id, productId)).error))}
         >
