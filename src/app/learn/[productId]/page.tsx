@@ -79,7 +79,8 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
   const next = materials.find((m) => !doneSet.has(m.id));
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl px-5 py-7">
+      <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Link href="/learn" className="t-small faint hover:underline">
@@ -179,6 +180,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
           ))}
         </Card>
       ))}
+      </div>
     </div>
   );
 }

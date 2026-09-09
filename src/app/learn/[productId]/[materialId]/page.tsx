@@ -1,11 +1,10 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { MATERIAL_LABELS, formatDuration } from '@/lib/progress';
-import { MaterialViewer } from '@/components/material-viewer';
-import { CompleteButton } from './complete-button';
+import { Rail, type RailModule } from './rail';
+import { Stage } from './stage';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,20 +25,40 @@ export default async function MaterialPage({
       organizationId: tenant.organizationId,
       status: { notIn: ['CANCELLED', 'ARCHIVED'] },
     },
-    select: { id: true, product: { select: { title: true, course: { select: { id: true } } } } },
+    select: {
+      id: true,
+      product: { select: { title: true, course: { select: { id: true } } } },
+    },
   });
   if (!enrollment?.product.course) notFound();
 
-  // The whole ordered material list, used for the viewer and for prev/next.
   const modules = await db.courseModule.findMany({
     where: { courseId: enrollment.product.course.id },
     orderBy: { sortOrder: 'asc' },
-    include: {
+    select: {
       module: {
-        include: {
+        select: {
+          id: true,
+          name: true,
           sections: {
             orderBy: { sortOrder: 'asc' },
-            include: { materials: { orderBy: { sortOrder: 'asc' } } },
+            select: {
+              id: true,
+              title: true,
+              materials: {
+                orderBy: { sortOrder: 'asc' },
+                select: {
+                  id: true,
+                  title: true,
+                  type: true,
+                  assetId: true,
+                  externalUrl: true,
+                  bodyHtml: true,
+                  isDownloadable: true,
+                  durationSeconds: true,
+                },
+              },
+            },
           },
         },
       },
@@ -54,61 +73,83 @@ export default async function MaterialPage({
   const prev = index > 0 ? ordered[index - 1] : null;
   const next = index < ordered.length - 1 ? ordered[index + 1] : null;
 
-  const progress = await db.materialProgress.findUnique({
-    where: { userId_materialId: { userId: user.id, materialId } },
-    select: { completedAt: true },
-  });
+  const [progressRows, notes] = await Promise.all([
+    db.materialProgress.findMany({
+      where: { userId: user.id, materialId: { in: ordered.map((m) => m.id) } },
+      select: {
+        materialId: true,
+        completedAt: true,
+        isBookmarked: true,
+        positionSeconds: true,
+      },
+    }),
+    db.learnerNote.findMany({
+      where: { userId: user.id, materialId },
+      orderBy: [{ atSeconds: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, body: true, atSeconds: true, createdAt: true },
+    }),
+  ]);
+
+  const byMaterial = new Map(progressRows.map((p) => [p.materialId, p]));
+  const here = byMaterial.get(materialId);
+
+  const railModules: RailModule[] = modules.map((cm) => ({
+    id: cm.module.id,
+    name: cm.module.name,
+    sections: cm.module.sections.map((s) => ({
+      id: s.id,
+      title: s.title,
+      materials: s.materials.map((m) => ({
+        id: m.id,
+        title: m.title,
+        typeLabel: MATERIAL_LABELS[m.type] ?? m.type,
+        duration: formatDuration(m.durationSeconds),
+        done: Boolean(byMaterial.get(m.id)?.completedAt),
+        bookmarked: Boolean(byMaterial.get(m.id)?.isBookmarked),
+      })),
+    })),
+  }));
+
+  const completed = ordered.filter((m) => byMaterial.get(m.id)?.completedAt).length;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <Link href={`/learn/${productId}`} className="t-small faint hover:underline">
-          {enrollment.product.title}
-        </Link>
-        <h1 className="mt-1 text-xl font-semibold">{material.title}</h1>
-        <p className="t-small faint">
-          {MATERIAL_LABELS[material.type] ?? material.type}
-          {material.durationSeconds ? ` · ${formatDuration(material.durationSeconds)}` : ''}
-          {` · ${index + 1} of ${ordered.length}`}
-        </p>
-      </div>
-
-      <MaterialViewer
-        type={material.type}
-        title={material.title}
-        assetId={material.assetId}
-        isDownloadable={material.isDownloadable}
-        externalUrl={material.externalUrl}
-        bodyHtml={material.bodyHtml}
+    <div className="-mx-5 -my-6 flex flex-col lg:flex-row">
+      <Rail
+        productId={productId}
+        courseTitle={enrollment.product.title}
+        currentId={materialId}
+        modules={railModules}
+        completed={completed}
+        total={ordered.length}
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
-          {prev && (
-            <Link
-              href={`/learn/${productId}/${prev.id}`}
-              className="rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3 py-2 text-sm"
-            >
-              Previous
-            </Link>
-          )}
-          {next && (
-            <Link
-              href={`/learn/${productId}/${next.id}`}
-              className="rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3 py-2 text-sm"
-            >
-              Next
-            </Link>
-          )}
-        </div>
-
-        <CompleteButton
-          productId={productId}
-          materialId={materialId}
-          done={Boolean(progress?.completedAt)}
-          nextHref={next ? `/learn/${productId}/${next.id}` : `/learn/${productId}`}
-        />
-      </div>
+      <Stage
+        productId={productId}
+        material={{
+          id: material.id,
+          title: material.title,
+          type: material.type,
+          typeLabel: MATERIAL_LABELS[material.type] ?? material.type,
+          assetId: material.assetId,
+          externalUrl: material.externalUrl,
+          bodyHtml: material.bodyHtml,
+          isDownloadable: material.isDownloadable,
+          durationSeconds: material.durationSeconds,
+        }}
+        position={index + 1}
+        total={ordered.length}
+        startAt={here?.positionSeconds ?? 0}
+        done={Boolean(here?.completedAt)}
+        bookmarked={Boolean(here?.isBookmarked)}
+        prevId={prev?.id ?? null}
+        nextId={next?.id ?? null}
+        notes={notes.map((n) => ({
+          id: n.id,
+          body: n.body,
+          atSeconds: n.atSeconds,
+          createdAt: n.createdAt.toISOString(),
+        }))}
+      />
     </div>
   );
 }

@@ -29,7 +29,8 @@ export default async function PurchasesPage() {
   });
 
   return (
-    <div>
+    <div className="mx-auto max-w-5xl px-5 py-7">
+      <div>
       <h1 className="text-xl font-semibold">Purchases</h1>
       <p className="t-small faint mt-1">
         Every order, what you paid and its invoice number. Nothing here is ever deleted.
@@ -100,6 +101,7 @@ export default async function PurchasesPage() {
             ))}
           </Table>
         )}
+        </div>
       </div>
     </div>
   );

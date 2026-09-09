@@ -68,7 +68,7 @@ the reasoning; `docs/edmingle-inventory.md` carries what is being replaced.
 | 1.4 | RBAC catalogue and enforcement | server actions | `Role`, `Permission`, `RolePermission` | n/a | `requireStaff(key, action)` refuses server-side | `partial` — enforced where used; no UI to edit roles; `restrictBatchAccess` not yet applied to list queries |
 | 1.5 | Course authoring | `/admin/courses`, `/[id]`, `/curriculum`, `/pricing` | `Product`, `Course`, `Module`, `Section`, `Material`, `PricingPlan` | `courses.*`, `module.*` | Admin creates, edits, publishes; learner sees it | `done` |
 | 1.6 | Shared module library across courses | `/admin/modules` | `CourseModule`, `BatchModule` | `module.module_library` | The same OET module serves two courses, edited once | `partial` — link and unlink work from inside a course; no library screen |
-| 1.7 | Learner shell and course player | `/learn`, `/learn/[p]`, `/learn/[p]/[m]` | `Enrollment`, `MaterialProgress` | learner | Progress survives refresh and another device | `partial` — single-column player. Next: the two-pane layout described under **Design benchmark** below, plus notes, bookmarks, captions, transcripts and resume position inside a video |
+| 1.7 | Learner shell and course player | `/learn`, `/learn/[p]`, `/learn/[p]/[m]` | `Enrollment`, `MaterialProgress`, `LearnerNote` | learner | Progress survives refresh and another device; the player resumes where it stopped | `partial` — two-pane with a persistent rail, resume position, bookmarks and timestamped notes. Captions and transcripts wait on the AI layer |
 | 1.8 | Public course page | `/course/[slug]` | `Product`, `PricingPlan`, `Batch`, `BatchStaff` | public | Format, language, level, access period, tax treatment, refund terms, curriculum tree, real batches, assigned trainers, sticky purchase on desktop and a bottom bar on mobile, Course JSON-LD | `done` |
 | 1.9 | Admin dashboard | `/admin` | payments, enrolments, attendance, sessions, orders, materials | `dashboard.view_dashboard`, `dashboard.view_revenue_widgets` | Every number traceable to a query; revenue gated by permission; an action queue rather than only figures | `partial` — no date-range control, and the metric definitions are in code comments rather than on the page |
 | 1.10 | Media library and uploads | `/admin/library`, `/api/uploads`, `/media`, `/api/assets` | `Asset` | `asset_library.*` | 2 GB file uploads, plays, seeks; unauthorised viewer refused | `done` |
@@ -185,9 +185,8 @@ stops there.
   the next start date. *Built.*
 - **Player.** Coursera's shape: a persistent curriculum rail on the left with
   progress against each item, the lesson filling the rest, and next and previous
-  always reachable. Below it, tabs for notes, transcript and discussion. *Not
-  built — the player is still a single column, and this is the next visible
-  upgrade after checkout.*
+  always reachable. Below it, tabs for notes and transcript. *Built, except the
+  transcript, which needs the AI layer.*
 
 What is deliberately not copied: their catalogue is a marketplace optimised for
 browsing thousands of courses from strangers. This is one academy with a

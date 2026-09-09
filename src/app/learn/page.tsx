@@ -54,7 +54,8 @@ export default async function MyLearning() {
   const resume = inProgress[0];
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-5xl px-5 py-7">
+      <div className="space-y-8">
       <div>
         <h1 className="t-display">Hello, {user.name.split(' ')[0]}</h1>
         <p className="t-small muted mt-1">
@@ -127,6 +128,7 @@ export default async function MyLearning() {
           <CourseGrid items={done} cta="Revisit" />
         </Section>
       )}
+      </div>
     </div>
   );
 }

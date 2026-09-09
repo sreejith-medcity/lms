@@ -50,7 +50,9 @@ export default async function LearnLayout({ children }: { children: React.ReactN
         </div>
       </header>
 
-      <main className="rise mx-auto max-w-5xl px-5 py-7">{children}</main>
+      {/* No container here: the player wants the full width for its curriculum rail.
+          Pages that want a reading measure add their own. */}
+      <main className="rise">{children}</main>
     </div>
   );
 }
