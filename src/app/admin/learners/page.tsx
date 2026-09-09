@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
@@ -102,7 +103,11 @@ export default async function LearnersPage({
 
             return (
               <Row key={l.id}>
-                <Cell className="font-medium">{l.name}</Cell>
+                <Cell>
+                  <Link href={`/admin/learners/${l.id}`} className="font-medium hover:underline">
+                    {l.name}
+                  </Link>
+                </Cell>
                 <Cell>
                   <span className="t-small block">{l.email}</span>
                   {l.phone && <span className="t-small faint block">{l.phone}</span>}

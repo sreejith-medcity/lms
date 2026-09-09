@@ -1,3 +1,4 @@
+import Link from 'next/link';
 'use client';
 
 import { useActionState } from 'react';
@@ -24,6 +25,11 @@ export function LoginForm() {
       <Button type="submit" disabled={pending} size="lg" className="w-full">
         {pending ? 'Signing in...' : 'Sign in'}
       </Button>
+      <p className="t-small faint mt-3 text-center">
+        <Link href="/forgot" className="underline">
+          Forgotten your password?
+        </Link>
+      </p>
     </form>
   );
 }
