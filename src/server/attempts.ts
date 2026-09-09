@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
+import { deadlineFor } from '@/lib/attempt-clock';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -18,22 +19,6 @@ import type { ActionState } from '@/server/courses';
  * Every answer is saved on its own as it is given. A dropped connection costs
  * the last answer, not the paper.
  */
-
-export interface AttemptDeadline {
-  startedAt: Date;
-  endsAt: Date | null;
-  secondsLeft: number | null;
-  expired: boolean;
-}
-
-export function deadlineFor(startedAt: Date, durationMinutes: number | null): AttemptDeadline {
-  if (!durationMinutes) {
-    return { startedAt, endsAt: null, secondsLeft: null, expired: false };
-  }
-  const endsAt = new Date(startedAt.getTime() + durationMinutes * 60_000);
-  const secondsLeft = Math.floor((endsAt.getTime() - Date.now()) / 1000);
-  return { startedAt, endsAt, secondsLeft, expired: secondsLeft <= 0 };
-}
 
 async function entitled(assessmentId: string) {
   const tenant = await requireTenant();

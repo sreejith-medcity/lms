@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
-import { deadlineFor } from '@/server/attempts';
+import { deadlineFor } from '@/lib/attempt-clock';
 import { Paper } from './paper';
 import { Review } from './review';
 
