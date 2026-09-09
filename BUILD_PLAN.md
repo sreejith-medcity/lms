@@ -68,13 +68,13 @@ the reasoning; `docs/edmingle-inventory.md` carries what is being replaced.
 | 1.4 | RBAC catalogue and enforcement | server actions | `Role`, `Permission`, `RolePermission` | n/a | `requireStaff(key, action)` refuses server-side | `partial` — enforced where used; no UI to edit roles; `restrictBatchAccess` not yet applied to list queries |
 | 1.5 | Course authoring | `/admin/courses`, `/[id]`, `/curriculum`, `/pricing` | `Product`, `Course`, `Module`, `Section`, `Material`, `PricingPlan` | `courses.*`, `module.*` | Admin creates, edits, publishes; learner sees it | `done` |
 | 1.6 | Shared module library across courses | `/admin/modules` | `CourseModule`, `BatchModule` | `module.module_library` | The same OET module serves two courses, edited once | `partial` — link and unlink work from inside a course; no library screen |
-| 1.7 | Learner shell and course player | `/learn`, `/learn/[p]`, `/learn/[p]/[m]` | `Enrollment`, `MaterialProgress` | learner | Progress survives refresh and another device | `partial` — no notes, bookmarks, captions, transcripts, or resume-position within a video |
-| 1.8 | Public course page | `/course/[slug]` | `Product`, `PricingPlan` | public | Price, format and curriculum shown truthfully | `partial` — no prerequisites, outcomes, validity, refund terms, instructor, batch timings |
+| 1.7 | Learner shell and course player | `/learn`, `/learn/[p]`, `/learn/[p]/[m]` | `Enrollment`, `MaterialProgress` | learner | Progress survives refresh and another device | `partial` — single-column player. Next: the two-pane layout described under **Design benchmark** below, plus notes, bookmarks, captions, transcripts and resume position inside a video |
+| 1.8 | Public course page | `/course/[slug]` | `Product`, `PricingPlan`, `Batch`, `BatchStaff` | public | Format, language, level, access period, tax treatment, refund terms, curriculum tree, real batches, assigned trainers, sticky purchase on desktop and a bottom bar on mobile, Course JSON-LD | `done` |
 | 1.9 | Admin dashboard | `/admin` | counts across models | `dashboard.view_dashboard` | Numbers match the underlying tables | `partial` — no revenue widgets, no date range |
 | 1.10 | Media library and uploads | `/admin/library`, `/api/uploads`, `/media`, `/api/assets` | `Asset` | `asset_library.*` | 2 GB file uploads, plays, seeks; unauthorised viewer refused | `done` |
-| 1.11 | **Public website** | `/`, `/courses`, `/courses/[category]`, `/instructors`, `/about`, `/contact`, `/help`, `/policies/[slug]` | `StorefrontPage`, `BlogPost`, `Product` | public | A visitor can search, filter, compare and reach checkout | `missing` — `/` is a course grid |
-| 1.12 | **Kill the dead navigation** | 15 admin routes | — | — | No nav entry leads to a blank route | `missing` |
-| 1.13 | SEO surface | public pages | `StorefrontPage`, `Redirect` | public | Unique metadata, canonical, sitemap, JSON-LD matching visible content, `/admin` and `/learn` noindex | `missing` |
+| 1.11 | **Public website** | `/`, `/courses`, `/courses/[category]`, `/sample`, `/about`, `/contact`, `/help`, `/policies/[kind]` | `Product`, `Category`, `Policy`, `StorefrontPage`, `Lead` | public | A visitor can search, filter, compare, preview a real lesson and enquire | `partial` — built and wired to live data; no instructor profile pages, no blog, and checkout does not exist yet |
+| 1.12 | **Kill the dead navigation** | 15 admin routes | — | — | No nav entry leads to a blank route | `done` — entries return as their pages are built |
+| 1.13 | SEO surface | public pages, `/sitemap.xml`, `/robots.txt` | `Product`, `Category`, `Policy` | public | Unique metadata, canonical, sitemap generated from live data, Course JSON-LD matching visible content, `/admin` `/learn` `/platform` noindex | `done` — Open Graph images still to come |
 
 ## Phase 2 — Learning and commerce
 
@@ -147,7 +147,7 @@ None is started; the schema anticipates all of them.
 | 6.1 | Postgres row-level security | `SET LOCAL app.org_id` per transaction; a missing `where` returns nothing rather than everything | `missing` — the second belt, required before the first external tenant |
 | 6.2 | Automated tests | Unit for money, permissions, signing; integration for the payment and entitlement journeys | `missing` — no test runner installed |
 | 6.3 | Accessibility review | WCAG 2.2 AA at 360 / 768 / 1280 / 1440, keyboard, focus, contrast, reduced motion | `missing` |
-| 6.4 | Rate limiting, CSRF, upload validation, sanitisation | Enumerated and verified | `partial` — server actions carry CSRF protection; no rate limiting; upload validation is extension and size only |
+| 6.4 | Rate limiting, CSRF, upload validation, sanitisation | Enumerated and verified | `partial` — server actions carry CSRF protection; sign-in and sign-up are rate limited per address and per identifier, in an in-process store that must move to Redis or Postgres before a second instance; upload validation is extension and size only; no HTML sanitisation on `bodyHtml` yet |
 | 6.5 | Observability, backup and restore, rollback | Rehearsed, not assumed | `missing` |
 | 6.6 | Migration from Edmingle | Dry run writes `MigrationRecord` without touching live tables; cutover is a DNS change with the old system read-only for a month | `missing` — deliberately after the build |
 
@@ -167,6 +167,33 @@ None of these has been walked end to end yet. They are the acceptance gate, and
 7. Branch and partner users cannot reach unauthorised records, files, exports, search or AI context. — *file delivery is checked; list queries are not branch-scoped.*
 8. AI answers link to accessible sources and handle an unavailable provider honestly. — *no AI.*
 9. Public and authenticated screens usable on mobile, by keyboard, in empty and error states. — *not audited.*
+
+## Design benchmark
+
+The reference for the learner-facing surfaces is Coursera and Udemy, not Edmingle
+and not RocketLMS. Worth being precise about what that does and does not mean:
+those two are consumer course marketplaces, and they have nothing at all for
+batches, branches, attendance, fee instalments or GST invoicing, which is most of
+what an academy actually runs on. So the benchmark applies to three surfaces and
+stops there.
+
+- **Course page.** Udemy's shape: outcomes as a scannable grid, a curriculum tree
+  that expands with lesson counts and durations, free-preview lessons playable
+  from the tree, and a purchase card that stays with you as you scroll. *Built.*
+- **Catalogue.** Coursera's shape: facets that narrow rather than a wall of
+  cards, a live result count, and every card carrying level, language, format and
+  the next start date. *Built.*
+- **Player.** Coursera's shape: a persistent curriculum rail on the left with
+  progress against each item, the lesson filling the rest, and next and previous
+  always reachable. Below it, tabs for notes, transcript and discussion. *Not
+  built — the player is still a single column, and this is the next visible
+  upgrade after checkout.*
+
+What is deliberately not copied: their catalogue is a marketplace optimised for
+browsing thousands of courses from strangers. This is one academy with a
+knowable catalogue, so the pages lead with what a specific learner needs to
+decide, and batch dates and trainers get the space a marketplace gives to ratings
+and enrolment counts.
 
 ## Working agreements
 

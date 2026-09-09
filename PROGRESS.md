@@ -77,20 +77,50 @@ screenshotted. Both are Phase 6 items that should start earlier.
 - Remove the three `SEED_*` variables from the Hostinger environment and change the
   seeded admin password.
 
+## Shipped since the tracker was written
+
+- **The dead navigation is gone.** Fifteen entries removed until their pages
+  exist. They return one at a time.
+- **The public website exists.** Homepage, catalogue with search and facets,
+  category pages, a rebuilt course page, a real sample lesson, about, contact,
+  help and policy pages, under a shared shell with a skip link and a mobile menu.
+- **The course page answers a buyer's questions.** Format, language, level,
+  access period, tax treatment, refund terms, curriculum tree, the batches
+  actually running with branch and seats left, and the trainers assigned to them.
+- **Nothing is invented.** Testimonials render only from published rows;
+  instructors only where assigned; the about page and any unwritten policy say so
+  rather than filling the space; the homepage numbers are counted from the
+  database.
+- **The enquiry form writes a Lead**, with a honeypot and a requirement that a
+  reply is possible at all.
+- **SEO.** Sitemap and robots from live data, canonical URLs, per-page metadata,
+  Course JSON-LD limited to what is visible, noindex on the app surfaces.
+- **Auth hardening** (from a parallel session, read and committed separately):
+  cross-tenant cookie rejection, immediate effect for suspended accounts, and
+  rate limiting on sign-in and sign-up.
+
 ## Next runnable step
 
-**Remove the dead navigation and build the public website.**
+**Cart and checkout.**
+
+The course page now sends a buyer somewhere, and that somewhere is a button that
+refuses anything priced. This is the journey the definition of done checks first
+and the largest remaining hole in the product.
 
 In order:
 
-1. Take the fifteen stub entries out of the admin navigation, so nothing in the demo
-   leads to a blank page. They return one at a time as they are built.
-2. Build the public site against the real catalogue: homepage, course listing with
-   search and filters, category pages, a complete course page carrying prerequisites,
-   outcomes, format, validity, instructor, batch timings and refund terms, plus about,
-   contact, help and editable policy pages.
-3. Metadata, canonical URLs, sitemap and JSON-LD that matches what is on the page.
-   `/admin` and `/learn` stay out of the index.
+1. Cart and checkout, with every price, discount and tax computed on the server.
+   The client sends product and plan ids, never amounts.
+2. Razorpay order creation, signature verification, and a webhook that records
+   every event durably and processes it idempotently, so a replayed or
+   out-of-order event cannot grant access twice. A client-side success screen
+   grants nothing by itself.
+3. Entitlement written separately from payment state, so a refund revokes access
+   without deleting learning history.
+4. GST invoices with sequential numbering, using the tax config already seeded.
 
-Then Phase 2 opens with cart and checkout, which is the journey the definition of done
-checks first and the one that currently does not exist.
+This is built and testable in Razorpay test mode without live keys; only the
+switch to live is blocked.
+
+After that, the two-pane player described under **Design benchmark** in
+`BUILD_PLAN.md`, which is the next visible jump in how the product feels.
