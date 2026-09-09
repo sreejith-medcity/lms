@@ -71,9 +71,9 @@ export const ADMIN_NAV: NavGroup[] = [
     icon: 'card',
     children: [
       { label: 'Payments', href: '/admin/payments' },
-      { label: 'Invoices', href: '#', soon: true },
-      { label: 'Fee tracking', href: '#', soon: true },
-      { label: 'Refunds', href: '#', soon: true },
+      { label: 'Invoices', href: '/admin/invoices' },
+      { label: 'Fee tracking', href: '/admin/fees' },
+      { label: 'Refunds', href: '/admin/refunds' },
     ],
   },
   {
