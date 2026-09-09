@@ -1,133 +1,96 @@
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
-import { storageDriver, localRoot } from '@/lib/storage';
-import { razorpayConfig } from '@/lib/razorpay';
-import { Badge, Card } from '@/components/ui';
+import { INTEGRATIONS, integrationsByCategory } from '@/lib/integrations';
+import { summariseAll } from '@/lib/integration-store';
+import { PageHeader } from '@/components/ui';
+import { Stat, StatGrid } from '@/components/stat';
+import { IntegrationBoard } from './board';
 
 export const dynamic = 'force-dynamic';
-
-type Health = 'healthy' | 'partial' | 'unconfigured';
+export const metadata = { robots: { index: false, follow: false } };
 
 /**
- * What is actually connected, read from the running process rather than from a
- * table someone remembered to update. An integration nobody has configured says
- * so plainly and names the variables it wants, instead of being listed as a
- * feature that quietly does nothing.
+ * What this is plugged into.
+ *
+ * Credentials are entered here rather than only in the environment, because a
+ * second academy on this build should be able to use its own payment gateway
+ * without a redeploy. Anything set in the environment still wins: that is
+ * deliberate, is the same for every request, and cannot be changed by whoever
+ * gets into the admin.
  */
-export default async function IntegrationsSettings() {
-  await requireTenant();
-  await requireStaff('settings.integrations', 'view');
+export default async function IntegrationsPage() {
+  const tenant = await requireTenant();
+  const me = await requireStaff('settings.integrations', 'view');
+  const canEdit = me.permissions['settings.integrations']?.edit ?? false;
 
-  const razorpay = razorpayConfig();
-  const driver = storageDriver();
+  const summaries = await summariseAll(tenant.organizationId);
 
-  const rows: {
-    name: string;
-    purpose: string;
-    health: Health;
-    detail: string;
-    vars?: string[];
-  }[] = [
-    {
-      name: 'File storage',
-      purpose: 'Course material, class recordings, everything learners download.',
-      health: driver === 's3' ? 'healthy' : 'partial',
-      detail:
-        driver === 's3'
-          ? 'An S3-compatible bucket. Uploads go straight from the browser to the bucket; the app server never touches the bytes.'
-          : `Files are on this server's disk at ${localRoot()}, behind the CDN. Fine for a demo, wrong for hundreds of gigabytes of recordings.`,
-      vars: driver === 's3' ? undefined : ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY'],
-    },
-    {
-      name: 'Razorpay',
-      purpose: 'Course payments, refunds and the webhook that grants access.',
-      health: razorpay ? (razorpay.webhookSecret ? 'healthy' : 'partial') : 'unconfigured',
-      detail: razorpay
-        ? razorpay.webhookSecret
-          ? `Connected in ${razorpay.isTestMode ? 'test' : 'live'} mode, with a verified webhook.`
-          : `Connected in ${razorpay.isTestMode ? 'test' : 'live'} mode, but no webhook secret. Access is granted only when the learner's browser reports back, so anyone who closes the tab mid-payment pays and gets nothing until someone notices.`
-        : 'Not connected. Paid courses cannot be bought.',
-      vars: razorpay
-        ? razorpay.webhookSecret
-          ? undefined
-          : ['RAZORPAY_WEBHOOK_SECRET']
-        : ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET'],
-    },
-    {
-      name: 'Zoom',
-      purpose: 'Creating meetings, pulling recordings, join and leave events.',
-      health: process.env.ZOOM_CLIENT_ID ? 'healthy' : 'unconfigured',
-      detail: process.env.ZOOM_CLIENT_ID
-        ? 'Connected.'
-        : 'Not connected. Join links are pasted in by hand when a class is scheduled, and recordings are uploaded manually.',
-      vars: process.env.ZOOM_CLIENT_ID
-        ? undefined
-        : ['ZOOM_ACCOUNT_ID', 'ZOOM_CLIENT_ID', 'ZOOM_CLIENT_SECRET'],
-    },
-    {
-      name: 'Email, SMS and WhatsApp',
-      purpose: 'Enrolment confirmations, class reminders, fee notices.',
-      health: process.env.SMTP_URL ? 'partial' : 'unconfigured',
-      detail: process.env.SMTP_URL
-        ? 'Email is connected. SMS and WhatsApp are not.'
-        : 'Nothing is connected, so the platform sends nobody anything. Worth knowing before anyone relies on a reminder going out.',
-      vars: ['SMTP_URL', 'MSG91_AUTH_KEY', 'AISENSY_API_KEY'],
-    },
-    {
-      name: 'AI',
-      purpose: 'Transcription, the course companion, writing and speaking feedback.',
-      health: process.env.ANTHROPIC_API_KEY ? 'healthy' : 'unconfigured',
-      detail: process.env.ANTHROPIC_API_KEY
-        ? 'Connected.'
-        : 'Not connected. These features are not built yet either, so nothing is missing today.',
-      vars: process.env.ANTHROPIC_API_KEY ? undefined : ['ANTHROPIC_API_KEY'],
-    },
-  ];
+  const wired = INTEGRATIONS.filter((i) => i.status === 'wired');
+  const connected = INTEGRATIONS.filter((i) => summaries.get(i.id)?.complete);
+  const running = wired.filter((i) => summaries.get(i.id)?.complete);
 
   return (
-    <div className="space-y-3">
-      <p className="t-small muted max-w-prose">
-        Read from the running server, not from a saved list. Values are set as environment
-        variables on the host and picked up when the app restarts, which is deliberate: a
-        credential that can be edited from a web page is a credential that can be stolen through
-        one.
-      </p>
+    <div className="space-y-6">
+      <PageHeader
+        title="Integrations"
+        description="Everything this can be plugged into. Credentials are sealed before they are stored and never shown again."
+      />
 
-      {rows.map((r) => (
-        <Card key={r.name}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="font-medium">{r.name}</p>
-                <Badge
-                  tone={r.health === 'healthy' ? 'ok' : r.health === 'partial' ? 'warn' : 'neutral'}
-                >
-                  {r.health === 'healthy'
-                    ? 'connected'
-                    : r.health === 'partial'
-                      ? 'partly set up'
-                      : 'not connected'}
-                </Badge>
-              </div>
-              <p className="t-small faint mt-1">{r.purpose}</p>
-              <p className="t-small muted mt-2 max-w-prose">{r.detail}</p>
-            </div>
-          </div>
+      <StatGrid>
+        <Stat
+          label="Running"
+          value={running.length}
+          sub={`of ${wired.length} the code reads today`}
+        />
+        <Stat
+          label="Credentials stored"
+          value={connected.length}
+          sub={`across ${INTEGRATIONS.length} providers`}
+        />
+        <Stat
+          label="Waiting on code"
+          value={INTEGRATIONS.filter((i) => i.status === 'planned').length}
+          sub="mostly Phase 7"
+        />
+        <Stat label="Categories" value={integrationsByCategory().length} />
+      </StatGrid>
 
-          {r.vars && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {r.vars.map((v) => (
-                <code
-                  key={v}
-                  className="rounded-[var(--radius-sm)] border bg-[var(--surface-2)] px-2 py-1 text-xs"
-                >
-                  {v}
-                </code>
-              ))}
-            </div>
-          )}
-        </Card>
-      ))}
+      <IntegrationBoard
+        canEdit={canEdit}
+        categories={integrationsByCategory().map((c) => ({
+          key: c.key,
+          label: c.label,
+          blurb: c.blurb,
+          items: c.items.map((def) => {
+            const summary = summaries.get(def.id);
+            return {
+              id: def.id,
+              name: def.name,
+              purpose: def.purpose,
+              status: def.status,
+              landsIn: def.landsIn ?? null,
+              docsUrl: def.docsUrl ?? null,
+              fallback: def.fallback ?? null,
+              envOnly: def.envOnly ?? false,
+              fields: def.fields.map((f) => ({
+                key: f.key,
+                label: f.label,
+                kind: f.kind,
+                hint: f.hint ?? null,
+                placeholder: f.placeholder ?? null,
+                env: f.env ?? null,
+                filled: summary?.filled.includes(f.key) ?? false,
+                fromEnv: summary?.fromEnv.includes(f.key) ?? false,
+                tail: summary?.tails[f.key] ?? null,
+                /** Plain values are safe to show again; secrets never are. */
+                value: null,
+              })),
+              complete: summary?.complete ?? false,
+              fromEnvCount: summary?.fromEnv.length ?? 0,
+            };
+          }),
+        }))}
+      />
     </div>
   );
 }

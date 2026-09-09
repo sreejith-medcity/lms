@@ -408,23 +408,52 @@ decide a country from, so the switch is marked as waiting on the cart in Phase 8
 rather than shipped as a switch that quietly does nothing — which is the rule
 the rest of the screen is built on.
 
+## Integrations (built, awaiting a push)
+
+**49 providers across 11 categories** at `/admin/settings/integrations`,
+declared the way the reports and settings are, so the fiftieth is a few lines
+rather than a page. Payments, email, SMS, WhatsApp, live classes, storage and
+video, sign-in, measurement, AI, automation and CRM, support and accounts.
+
+**Credentials are entered here, not only in hPanel.** That is what makes a
+second academy on this build able to use its own payment gateway without a
+redeploy. Anything set in the environment still wins: it is deliberate, is the
+same for every request, and cannot be changed by whoever gets into the admin.
+The form says which fields are coming from the environment and that typing over
+them does nothing.
+
+**Secrets are sealed before they touch the database.** AES-256-GCM under a key
+derived from AUTH_SECRET, with the authentication tag meaning a tampered value
+fails to open rather than decrypting to something wrong. A settings screen that
+stores a live gateway key in plain text is a liability: a database dump, a
+support export or a misdirected backup hands it over. They are never read back
+to a browser either, so the form shows the last four characters and a blank
+field means keep this one rather than clear it — the alternative is an academy
+wiping its live key by editing the sender name.
+
+**Every card says one of three things**, which is the rule the whole admin now
+runs on: it works, it will work the moment you fill it in, or the code for it is
+not written yet and here is which phase it lands in. Two cards say a fourth
+thing, because it is true: Razorpay and storage run today but read the
+environment, and threading them through per academy is Phase 7 work. Payments
+are not something to refactor casually at the end of a long day.
+
+Razorpay has a real test button that asks Razorpay whether the keys work and
+says whether they are live or test. Everything without a genuine check says so
+rather than reporting success for a filled-in form.
+
 ## Next runnable step
 
-**Push what is done of Phase 6.**
+**Push the integrations work.**
 
 ```
-cd ~/Documents/lms && rm -f .git/index.lock* && git push origin main
+cd ~/Documents/lms && rm -f .git/*.lock* && git push origin main
 ```
 
-Two things to do by hand after deploying, because they are data rather than
-code: in Settings, Organisation, pick the Medcity LMS purple preset and upload
-the logo and favicon I sent, and in Settings, Grading, press "start from the
-standard bands" and adjust them to your exam boards.
-
-Then open `/admin/settings/preferences`, search for "watermark", switch it on,
-and open a video lesson as a learner. Drop the video threshold to 30 and watch a
-lesson tick itself off. Then add a custom field on learners, asked after signup,
-and check it appears where you expect.
+Then open Settings, Integrations, and put in whatever you already have:
+Zoom, MSG91, AiSensy, GA4, the WhatsApp Cloud credentials. They will be sealed
+and waiting when Phase 7 wires the senders, which is the point of entering them
+early.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another
