@@ -587,37 +587,76 @@ people ask them: can we send at all, what is waiting, and what has it cost.
 Addresses are masked, because that screen is for checking delivery, not for
 copying a contact list out of the product.
 
+## Phase 7b — the sign-in flows
+
+Phase 7 shipped OTP and TOTP as libraries with no callers. This is the surface
+that uses them.
+
+**Four doors, one gate.** A password, a six digit code, Google, and Microsoft
+all now end at the same `completeSignIn`: same suspended-account refusal, same
+second factor, same session. Keeping it in one function is the whole point.
+The bug it prevents is the ordinary one, two factor enforced on the password
+path and forgotten on the other three.
+
+**Sign in with a code**, which is the door most learners here will actually use.
+An institute whose students share a family email address and live on WhatsApp
+gets more support calls about forgotten passwords than about anything else. The
+form never says whether an account exists: a number with no learner behind it
+gets the same "if that account exists, a code is on its way". Rate limited four
+per fifteen minutes per number and per address, because every one of these costs
+the academy money to send. Using a code marks the phone or email verified, since
+that is the same proof a separate verification message would have given.
+
+Codes are drained immediately rather than waiting for the scheduled run, for the
+obvious reason that nobody stares at a form for five minutes. And the channel is
+forced by what the person typed rather than by the academy's notification
+settings: a code asked for by mobile number goes by SMS, whatever the setting
+says. Honouring an "email only" preference there would queue the code against an
+address the caller never gave, find nothing to send to, and report success.
+
+**Two factor, committed only when it is proved.** The secret is generated, shown
+once, sealed into the row, and `twoFactorEnabledAt` stays null until the person
+types back a code their app produced. Nothing checks it at sign-in until then,
+so a mistyped key cannot lock an admin out of their own product. Recovery codes
+are generated at that moment, shown once, stored as scrypt hashes like passwords,
+and spent when used, because a recovery code that still works after use is just
+a shorter password. Turning it off asks for the password, so an unlocked laptop
+is not enough.
+
+The half-signed-in state is a separate cookie, signed with AUTH_SECRET, ten
+minutes long, and not a session: nothing else in the product accepts it and
+`getSessionUser` never looks at it.
+
+**Google and Microsoft**, as plain OAuth 2 with no library, because the protocol
+is four HTTP calls and what matters is the three things people leave out. The
+state parameter is signed and kept in a cookie and the callback refuses anything
+that does not match. The email must come back verified. And the provider is
+never allowed to create an account: it matches an existing learner by provider
+id, then by verified email, and otherwise turns the person away with the same
+message it gives for a wrong account, so this cannot be used to find out who
+studies at an academy. The buttons appear only where the academy has actually
+connected the provider, so nobody is offered a door that leads to an error page.
+
+**Still not done, and labelled so.** reCAPTCHA has nothing verifying it, and its
+card now says Phase 8. Secondary field validation at signup is not built either.
+
 ## Next runnable step
 
-**Install, push, and set up two cron jobs.**
+**Push, then turn two factor on for your own account.**
 
 ```
-cd ~/Documents/lms && npm install
+cd ~/Documents/lms && rm -f .git/*.lock* && git push origin main
 ```
 
-That adds nodemailer, which SMTP needs, and re-runs prisma generate through
-postinstall. Then:
+No database change this time, so no `prisma db push`. Once it deploys:
 
-```
-npx prisma db push
-rm -f .git/*.lock* && git push origin main
-```
+Go to `/account/security` and set up two factor on the admin account. That is
+the one worth protecting, and it is also the fastest way to check the whole
+chain works, because it makes your own next sign-in go through the new gate.
 
-In Hostinger, set `CRON_SECRET` to a long random string
-(`openssl rand -hex 32`) and add two cron jobs:
-
-```
-*/5 * * * *  curl -s "https://YOUR-HOST/api/cron/notifications?key=YOUR_SECRET"
-0   * * * *  curl -s "https://YOUR-HOST/api/cron/scheduled?key=YOUR_SECRET"
-```
-
-Without `CRON_SECRET` the routes refuse rather than run, which is the right way
-round for a URL on the public internet that spends money.
-
-Then in Zoom, add the webhook `https://YOUR-HOST/api/webhooks/zoom` subscribed
-to meeting.started, meeting.ended, meeting.participant_joined,
-meeting.participant_left and recording.completed, and paste the secret token
-onto the Zoom card in Settings, Integrations.
+Then try `/login/code` with your mobile number. It will tell you honestly that
+no SMS provider is connected, which is the correct answer until MSG91 is filled
+in on Settings, Integrations. Fill it in, then try again.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another

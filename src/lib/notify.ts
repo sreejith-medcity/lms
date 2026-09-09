@@ -19,7 +19,12 @@ import type { $Enums, Prisma } from '@prisma/client';
  */
 
 export interface Recipient {
-  userId: string;
+  /**
+   * Null for somebody who has no account yet, which is the ordinary case for a
+   * sign-up code. The log row still exists and still says where it went; it
+   * simply is not attached to a learner, because there is not one to attach to.
+   */
+  userId: string | null;
   email: string | null;
   phone: string | null;
 }
@@ -36,6 +41,15 @@ export interface QueueRequest {
   contextFor?: (person: Recipient) => Record<string, string>;
   /** Hold the message until this time. A reminder is not sent when it is written. */
   sendAt?: Date;
+  /**
+   * Force the channels, ignoring the academy's per-event settings.
+   *
+   * Only for messages where the channel is not a preference but a fact. A
+   * sign-in code sent to a mobile number has to go by SMS: honouring a setting
+   * that says "email only" would queue it against an address the caller never
+   * gave, find nothing to send to, and report that the code went out.
+   */
+  channels?: $Enums.Channel[];
 }
 
 const DEFAULT_CHANNELS: $Enums.Channel[] = ['EMAIL'];
@@ -72,7 +86,9 @@ export interface QueueResult {
 }
 
 export async function queueNotifications(request: QueueRequest): Promise<QueueResult> {
-  const channels = await channelsFor(request.organizationId, request.eventKey);
+  const channels = request.channels?.length
+    ? request.channels
+    : await channelsFor(request.organizationId, request.eventKey);
   const dedupe = request.dedupeKey ?? null;
 
   // One query, not one per person: a batch of forty absentees should not be
@@ -84,7 +100,11 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
             where: {
               organizationId: request.organizationId,
               eventKey: request.eventKey,
-              userId: { in: request.recipients.map((r) => r.userId) },
+              userId: {
+                in: request.recipients
+                  .map((r) => r.userId)
+                  .filter((id): id is string => Boolean(id)),
+              },
               status: { in: ['QUEUED', 'SENT', 'DELIVERED', 'READ'] },
               dedupeKey: dedupe,
             },
@@ -96,7 +116,7 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
 
   const rows: {
     organizationId: string;
-    userId: string;
+    userId: string | null;
     channel: $Enums.Channel;
     eventKey: string;
     target: string;
@@ -111,7 +131,10 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
 
   for (const person of request.recipients) {
     for (const channel of channels) {
-      if (already.has(`${person.userId}:${channel}`)) {
+      // Nobody without an account can be deduplicated against, because there is
+      // no id to match on. That is correct: a stranger asking for a second code
+      // should get one, and `issueOtp` is what rate limits them.
+      if (person.userId && already.has(`${person.userId}:${channel}`)) {
         skipped += 1;
         continue;
       }

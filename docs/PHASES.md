@@ -105,7 +105,7 @@ video threshold, leaderboards, DRM and dynamic watermark. Website and app setup:
 signup primary field, login modes, brand, social links, policies editor. Grading
 system. International selling.
 
-## Phase 7 — Auth and integrations · DEPLOYED, except auth
+## Phase 7 — Auth and integrations · DEPLOYED
 
 The phase that makes several earlier ones actually send. OTP signup and login,
 Google SSO, two-factor, secondary field validation. Zoom server-to-server for
@@ -126,19 +126,27 @@ timeout. And the wallet charges before the provider is called and refunds on
 failure, rather than the other way round, because a timeout that actually
 delivered is worse unbilled than double counted.
 
-**What is not done, split out as Phase 7b.** OTP and TOTP are written and
-compile, but nothing calls them: there is no OTP login flow, no two-factor
-enrolment screen, and Google and Microsoft sign-in have no callback routes. The
-integrations board says `Phase 7b` on those three cards rather than pretending
-otherwise. That is the remaining work of this phase and it is a sitting on its
-own.
+## Phase 7b — the sign-in flows · BUILT, AWAITING PUSH
 
-## Phase 7b — the sign-in flows
+The libraries Phase 7 left without callers now have them.
 
-The libraries exist. What is missing is the surface: sign in with a phone
-number and a code, a second factor on staff accounts with recovery codes, the
-Google and Microsoft OAuth callbacks, and the secondary field validation
-Edmingle does at signup.
+Four doors lead to a session: a password, a six digit code to a phone or email,
+Google, and Microsoft. All four go through one `completeSignIn`, which is what
+stops two factor being enforced on the password path and quietly skipped on the
+others.
+
+Two factor is set up in two steps and only committed once the person proves
+their app has the secret, because committing first is how an admin locks
+themselves out with a typo and there is no safe support answer to that.
+Recovery codes are scrypt hashed like passwords and spent on use.
+
+Single sign-on never creates an account. It matches an existing learner by
+provider id first, then by verified email, and otherwise turns the person away
+and tells them to enrol. An academy's roll is not something a stranger with a
+Gmail address may add themselves to.
+
+Not done: reCAPTCHA still has nothing verifying it, and its card says Phase 8
+rather than claiming otherwise.
 
 ## Phase 8 — One system, and go-live
 

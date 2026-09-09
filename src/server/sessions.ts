@@ -685,7 +685,7 @@ async function tellTheRoll(
       organization: organization?.name ?? '',
       ...extra,
     },
-    contextFor: (person) => ({ name: nameOf.get(person.userId) ?? 'there' }),
+    contextFor: (person) => ({ name: nameOf.get(person.userId ?? '') ?? 'there' }),
   });
 
   return describeQueue(result);

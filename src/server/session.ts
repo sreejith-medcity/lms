@@ -1,6 +1,5 @@
 'use server';
 
-import { randomBytes } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
@@ -8,8 +7,7 @@ import { SESSION_COOKIE } from '@/lib/auth';
 import { verifyPassword } from '@/lib/password';
 import { resolveTenantByHost } from '@/lib/tenant';
 import { authAttemptKeys, checkAll, resetAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
-
-const SESSION_DAYS = 30;
+import { completeSignIn } from '@/lib/sign-in';
 
 export interface LoginState {
   error?: string;
@@ -49,36 +47,17 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
     return { error: 'Those details do not match an account.' };
   }
 
-  if (user.status === 'SUSPENDED' || user.status === 'ARCHIVED') {
-    return { error: 'This account is not active. Contact your academy.' };
-  }
-
   // Correct credentials clear the buckets, so a legitimate user who mistyped a
   // few times is not left one attempt away from a lockout.
   resetAll(keys);
 
-  const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
+  // Everything past this point is shared with the code and single sign-on
+  // doors, including the second factor. Keeping it in one place is what stops
+  // two factor being enforced here and quietly skipped there.
+  const outcome = await completeSignIn(user.id);
 
-  await db.authSession.create({
-    data: {
-      userId: user.id,
-      sessionToken: token,
-      expiresAt,
-      ip: h.get('x-forwarded-for')?.split(',')[0]?.trim(),
-      userAgent: h.get('user-agent') ?? undefined,
-    },
-  });
+  if (outcome.status === 'blocked') return { error: outcome.message };
+  if (outcome.status === 'second-factor') redirect('/login/verify');
 
-  await db.user.update({ where: { id: user.id }, data: { lastSeenAt: new Date() } });
-
-  (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    path: '/',
-    expires: expiresAt,
-  });
-
-  redirect(user.kind === 'STAFF' ? '/admin' : '/');
+  redirect(outcome.redirectTo);
 }

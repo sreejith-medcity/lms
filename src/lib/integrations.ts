@@ -504,8 +504,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'A Google Cloud project with the OAuth consent screen published, and the callback URL of this deployment added as an authorized redirect.',
     purpose: 'One tap instead of a password, which removes the largest support burden an institute has.',
-    status: 'planned',
-    landsIn: 'Phase 7b',
+    status: 'wired',
     fields: [TEXT('clientId', 'Client ID'), KEY('clientSecret', 'Client secret')],
   },
   {
@@ -516,8 +515,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'An Entra app registration with the redirect URL added, and User.Read delegated permission. Multi tenant if institutes sign in from their own directories.',
     purpose: 'For corporate training clients whose staff have work accounts.',
-    status: 'planned',
-    landsIn: 'Phase 7b',
+    status: 'wired',
     fields: [TEXT('tenantId', 'Tenant ID'), TEXT('clientId', 'Client ID'), KEY('clientSecret', 'Client secret')],
   },
   {
@@ -546,7 +544,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A reCAPTCHA site registered for this domain. v3 gives a score rather than a puzzle, which is what you want on an enquiry form.',
     purpose: 'Keeps scripted sign-ups off the enquiry form without asking real people to solve anything.',
     status: 'planned',
-    landsIn: 'Phase 7b',
+    landsIn: 'Phase 8',
     fields: [TEXT('siteKey', 'Site key'), KEY('secretKey', 'Secret key')],
   },
 
