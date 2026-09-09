@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { getTenantContext } from '@/lib/tenant';
 import { meter } from '@/lib/usage';
-import { signedReadUrl, storageConfigured } from '@/lib/storage';
+import { readUrlFor, storageConfigured } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,7 +105,7 @@ export async function GET(
   // short, because a leaked document link is worth more to a leaker than a stream.
   const streaming = asset.type === 'VIDEO' || asset.type === 'AUDIO';
 
-  const url = signedReadUrl(asset.storageKey, {
+  const url = readUrlFor(asset.storageKey, {
     expiresIn: streaming ? 7200 : 300,
     mimeType: asset.mimeType,
     downloadName: wantsDownload && (downloadAllowed || user?.kind === 'STAFF') ? asset.fileName : null,
@@ -118,7 +118,9 @@ export async function GET(
     meter(tenant.tenantId, 'BANDWIDTH_BYTES', Number(asset.sizeBytes)).catch(() => {});
   }
 
-  return NextResponse.redirect(url, {
+  // The redirect itself is never cached, because it is the answer to "may this
+  // person see this file". Only its destination is cacheable.
+  return NextResponse.redirect(new URL(url, request.url), {
     status: 302,
     headers: { 'Cache-Control': 'private, no-store' },
   });

@@ -94,16 +94,32 @@ Permissions are resolved once per request in `src/lib/auth.ts` and flattened int
 This is the part that quietly decides the running cost. 281 GB today, growing with
 every recorded class.
 
-- Assets go to S3-compatible object storage (Cloudflare R2 is the cheap answer because
-  egress is free, which matters when learners stream recordings).
-- Uploads are direct-to-storage with presigned URLs, never through the app server. The
-  signing is hand-rolled SigV4 in `src/lib/storage.ts` rather than the AWS SDK: 20 MB of
-  dependency for sixty lines of HMAC is a bad trade on a shared host where install time
-  is most of a deploy. Any S3-compatible provider works on four environment variables.
-- The bucket is private and has no public path. `/api/assets/<id>` resolves the tenant,
-  checks the viewer's enrolment (or staff role, or a free-preview flag), and only then
-  redirects to a short-lived signed URL: two hours for video and audio so seeking does
-  not stall mid-class, five minutes for everything else.
+Two drivers sit behind one interface in `src/lib/storage.ts`, chosen by environment:
+
+- **`local`** writes to disk outside the deploy directory (`STORAGE_DIR`, default
+  `~/lms-storage`, so a Hostinger rebuild cannot take the uploads with it) and serves
+  through `/media/<signature>/<key>` with `Cache-Control: immutable`, which is what lets
+  Hostinger's CDN hold the bytes at the edge. The signature covers the key and does not
+  expire, deliberately: a URL that changes every five minutes cannot be cached, and the
+  key contains a UUID nobody can guess. Rotating `AUTH_SECRET` invalidates every issued
+  link at once. Range requests are answered properly, so seeking inside a ninety-minute
+  class works. Uploads arrive in 8 MB chunks appended to `<key>.part`, because a single
+  2 GB PUT walks straight into the shared-host proxy body limit, and a dropped connection
+  should cost one chunk rather than the whole file. This is the demo footing.
+- **`s3`** uploads direct from the browser with a presigned PUT, so the bytes never touch
+  the app server. Signing is hand-rolled SigV4 rather than the AWS SDK: 20 MB of
+  dependency for sixty lines of HMAC is a bad trade on a shared host where install time is
+  most of a deploy. Cloudflare R2 is the cheap answer because egress is free; Google Cloud
+  Storage speaks the same XML API with an HMAC key, so the eventual GCP move is five
+  environment variables and a file copy rather than a rewrite. This is the production
+  footing, and 281 GB of recordings will not survive on a shared plan's disk.
+
+Either way there is no public path to an object. `/api/assets/<id>` resolves the tenant,
+checks the viewer is staff, is enrolled in a course that uses the file, is in the batch
+whose recording it is, or is looking at a free preview, and only then redirects: to a
+signed bucket URL (two hours for video and audio so seeking does not stall mid-class,
+five minutes for everything else) or to the cacheable `/media` path. That redirect itself
+is never cached, because it is the answer to a question about one person.
 - Video is transcoded to HLS with signed, short-lived playback URLs, plus the dynamic
   watermark Edmingle offers (learner name and ID burnt into the player overlay, not the
   file, so one transcode serves everyone).

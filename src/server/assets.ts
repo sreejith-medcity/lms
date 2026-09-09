@@ -8,12 +8,13 @@ import { checkLimit, meter } from '@/lib/usage';
 import {
   buildObjectKey,
   deleteObject,
-  headObject,
+  inferMimeType,
   inferType,
   maxBytesFor,
-  presign,
   sanitiseFileName,
+  statObject,
   storageConfigured,
+  uploadTargetFor,
 } from '@/lib/storage';
 import type { ActionState } from '@/server/courses';
 
@@ -23,8 +24,6 @@ import type { ActionState } from '@/server/courses';
  * verify with a HEAD rather than trusting the number the client reported.
  * That is what keeps a 2 GB recording off a shared-hosting Node process.
  */
-
-const UPLOAD_WINDOW_SECONDS = 60 * 60; // an hour, enough for a big file on Indian broadband
 
 async function guard(action: 'view' | 'edit' | 'delete' = 'edit') {
   const permission =
@@ -46,7 +45,14 @@ function fail(err: unknown): { error: string } {
 }
 
 export type UploadTicket =
-  | { ok: true; assetId: string; uploadUrl: string }
+  | {
+      ok: true;
+      assetId: string;
+      uploadUrl: string;
+      /** 's3' takes the whole file in one PUT; 'local' takes it in chunks. */
+      driver: 'local' | 's3';
+      token?: string;
+    }
   | { ok: false; error: string };
 
 /**
@@ -90,7 +96,7 @@ export async function requestUpload(input: {
         fileName,
         type,
         storageKey,
-        mimeType: input.mimeType || null,
+        mimeType: input.mimeType || inferMimeType(fileName),
         sizeBytes: BigInt(size),
         uploadedById: user.id,
         transcodeStatus: 'UPLOADING',
@@ -98,10 +104,14 @@ export async function requestUpload(input: {
       select: { id: true },
     });
 
+    const target = uploadTargetFor(asset.id, storageKey);
+
     return {
       ok: true,
       assetId: asset.id,
-      uploadUrl: presign('PUT', storageKey, UPLOAD_WINDOW_SECONDS),
+      uploadUrl: target.url,
+      driver: target.driver,
+      token: target.token,
     };
   } catch (err) {
     return { ok: false, error: fail(err).error };
@@ -119,7 +129,7 @@ export async function completeUpload(assetId: string): Promise<ActionState & { a
     });
     if (!asset) return { error: 'That upload is no longer available.' };
 
-    const head = await headObject(asset.storageKey);
+    const head = await statObject(asset.storageKey);
     if (!head || !head.size) {
       return { error: 'The file did not finish uploading. Please try again.' };
     }

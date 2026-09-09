@@ -1,20 +1,31 @@
-import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 import type { $Enums } from '@prisma/client';
 
 /**
- * S3 request signing, by hand.
+ * Two storage drivers behind one shape.
  *
- * The AWS SDK is 20 MB of JavaScript to produce a signature that is 60 lines of
- * HMAC. On Hostinger's shared plan the install step is already the slowest part
- * of a deploy, so this stays dependency-free. It speaks plain SigV4 query
- * signing, which every S3-compatible store understands: Cloudflare R2 (what we
- * use, because egress is free and learners stream recordings all day), AWS S3,
- * Backblaze, MinIO. Swapping provider is four environment variables.
+ *   local  files on the server's own disk, served through /media with a signed,
+ *          cacheable path so Hostinger's CDN can hold the bytes at the edge.
+ *          This is the demo footing: no external account, nothing to sign up for.
+ *
+ *   s3     any S3-compatible bucket, uploaded to directly by the browser with a
+ *          presigned PUT. This is the production footing. Google Cloud Storage
+ *          speaks the same XML API with HMAC keys, so the eventual GCP move is
+ *          four environment variables and a file copy, not a rewrite.
+ *
+ * Everything above this file asks for "an upload target" and "a read URL" and
+ * never learns which driver answered.
  */
 
-const ALGORITHM = 'AWS4-HMAC-SHA256';
+export type StorageDriver = 'local' | 's3';
 
-export interface StorageConfig {
+/* Configuration ----------------------------------------------------------- */
+
+export interface S3Config {
   origin: string;
   basePath: string;
   host: string;
@@ -22,13 +33,12 @@ export interface StorageConfig {
   bucket: string;
   accessKey: string;
   secretKey: string;
-  publicBase?: string;
 }
 
-let cached: StorageConfig | null | undefined;
+let cachedS3: S3Config | null | undefined;
 
-export function storageConfig(): StorageConfig | null {
-  if (cached !== undefined) return cached;
+export function s3Config(): S3Config | null {
+  if (cachedS3 !== undefined) return cachedS3;
 
   const endpoint = process.env.S3_ENDPOINT?.trim();
   const bucket = process.env.S3_BUCKET?.trim();
@@ -36,7 +46,7 @@ export function storageConfig(): StorageConfig | null {
   const secretKey = process.env.S3_SECRET_KEY?.trim();
 
   if (!endpoint || !bucket || !accessKey || !secretKey) {
-    cached = null;
+    cachedS3 = null;
     return null;
   }
 
@@ -45,11 +55,11 @@ export function storageConfig(): StorageConfig | null {
     url = new URL(endpoint);
   } catch {
     console.error('[storage] S3_ENDPOINT is not a valid URL');
-    cached = null;
+    cachedS3 = null;
     return null;
   }
 
-  cached = {
+  cachedS3 = {
     origin: url.origin,
     basePath: url.pathname.replace(/\/+$/, ''),
     host: url.host,
@@ -57,16 +67,38 @@ export function storageConfig(): StorageConfig | null {
     bucket,
     accessKey,
     secretKey,
-    publicBase: process.env.S3_PUBLIC_BASE_URL?.trim() || undefined,
   };
-  return cached;
+  return cachedS3;
 }
 
+/**
+ * Kept outside the deploy directory on purpose. Hostinger rebuilds the repo on
+ * every push, and uploads that live inside it would be one bad deploy away from
+ * gone.
+ */
+export function localRoot(): string {
+  return resolve(process.env.STORAGE_DIR?.trim() || join(homedir(), 'lms-storage'));
+}
+
+export function storageDriver(): StorageDriver {
+  const forced = process.env.STORAGE_DRIVER?.trim().toLowerCase();
+  if (forced === 's3') return 's3';
+  if (forced === 'local') return 'local';
+  return s3Config() ? 's3' : 'local';
+}
+
+/** Local disk always works, so storage is only unconfigured if S3 was asked for and is half-set. */
 export function storageConfigured(): boolean {
-  return storageConfig() !== null;
+  return storageDriver() === 'local' || s3Config() !== null;
 }
 
-/* Signing ----------------------------------------------------------------- */
+function signingSecret(): string {
+  return process.env.AUTH_SECRET || 'insecure-development-secret';
+}
+
+/* SigV4 ------------------------------------------------------------------- */
+
+const ALGORITHM = 'AWS4-HMAC-SHA256';
 
 /** RFC 3986, which is stricter than encodeURIComponent about these five. */
 function enc(value: string): string {
@@ -101,7 +133,7 @@ export function presign(
   expiresIn = 900,
   extraQuery: Record<string, string> = {},
 ): string {
-  const c = storageConfig();
+  const c = s3Config();
   if (!c) throw new Error('STORAGE_NOT_CONFIGURED');
 
   const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
@@ -142,11 +174,82 @@ export function presign(
   return `${c.origin}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }
 
-/** Short-lived read URL. The content type and filename are forced by the store. */
-export function signedReadUrl(
+/* Local paths and signatures ---------------------------------------------- */
+
+/** Refuses anything that could climb out of the storage root. */
+export function localPathFor(key: string): string {
+  const root = localRoot();
+  const full = resolve(root, key);
+  if (full !== root && !full.startsWith(root + sep)) throw new Error('BAD_KEY');
+  return full;
+}
+
+function sign(payload: string): string {
+  return createHmac('sha256', signingSecret()).update(payload).digest('base64url').slice(0, 32);
+}
+
+function sameSignature(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
+/**
+ * The public read path for a locally stored file.
+ *
+ * It carries no expiry, and that is deliberate: a URL that changes every five
+ * minutes cannot be cached, and the whole point of putting a CDN in front is
+ * that the second learner to open a recording never reaches the server. Access
+ * is decided once, at /api/assets, before this URL is handed over. Rotating
+ * AUTH_SECRET invalidates every one of them at once.
+ */
+export function mediaPath(key: string): string {
+  return `/media/${sign(`media:${key}`)}/${key.split('/').map(encodeURIComponent).join('/')}`;
+}
+
+export function verifyMediaPath(signature: string, key: string): boolean {
+  return sameSignature(signature, sign(`media:${key}`));
+}
+
+/** One-hour ticket that lets the browser write to exactly one object key. */
+export function uploadToken(key: string, ttlSeconds = 3600): string {
+  const exp = Math.floor(Date.now() / 1000) + ttlSeconds;
+  return `${exp}.${sign(`upload:${key}:${exp}`)}`;
+}
+
+export function verifyUploadToken(token: string, key: string): boolean {
+  const [expPart, signature] = token.split('.');
+  const exp = Number(expPart);
+  if (!exp || !signature || exp < Math.floor(Date.now() / 1000)) return false;
+  return sameSignature(signature, sign(`upload:${key}:${exp}`));
+}
+
+/* The driver-agnostic surface --------------------------------------------- */
+
+export interface UploadTarget {
+  driver: StorageDriver;
+  /** s3: a presigned PUT. local: /api/uploads/<assetId>, which takes the file in chunks. */
+  url: string;
+  token?: string;
+}
+
+export function uploadTargetFor(assetId: string, key: string): UploadTarget {
+  if (storageDriver() === 's3') {
+    return { driver: 's3', url: presign('PUT', key, 3600) };
+  }
+  return { driver: 'local', url: `/api/uploads/${assetId}`, token: uploadToken(key) };
+}
+
+/** Where a player should actually fetch the bytes from. */
+export function readUrlFor(
   key: string,
   opts: { expiresIn?: number; mimeType?: string | null; downloadName?: string | null } = {},
 ): string {
+  if (storageDriver() === 'local') {
+    const base = mediaPath(key);
+    return opts.downloadName ? `${base}?download=1` : base;
+  }
+
   const extra: Record<string, string> = {};
   if (opts.mimeType) extra['response-content-type'] = opts.mimeType;
   if (opts.downloadName) {
@@ -155,32 +258,17 @@ export function signedReadUrl(
   return presign('GET', key, opts.expiresIn ?? 900, extra);
 }
 
-/* Object helpers ---------------------------------------------------------- */
+/** Confirms the upload actually landed, and returns the real size. */
+export async function statObject(key: string): Promise<{ size: number; mimeType: string | null } | null> {
+  if (storageDriver() === 'local') {
+    try {
+      const info = await stat(localPathFor(key));
+      return info.isFile() ? { size: info.size, mimeType: null } : null;
+    } catch {
+      return null;
+    }
+  }
 
-/** Object keys are tenant-scoped and date-partitioned, so a bucket listing reads. */
-export function buildObjectKey(organizationId: string, fileName: string): string {
-  const now = new Date();
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const safe = sanitiseFileName(fileName);
-  return `org/${organizationId}/${yyyy}/${mm}/${randomUUID()}-${safe}`;
-}
-
-export function sanitiseFileName(name: string): string {
-  const base = name.split(/[\\/]/).pop() ?? 'file';
-  return (
-    base
-      .normalize('NFKD')
-      .replace(/[^\w.\- ]+/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^[-.]+/, '')
-      .slice(-120) || 'file'
-  );
-}
-
-/** Confirms the browser's upload actually landed, and returns the real size. */
-export async function headObject(key: string): Promise<{ size: number; mimeType: string | null } | null> {
   try {
     const res = await fetch(presign('HEAD', key, 300), { method: 'HEAD' });
     if (!res.ok) return null;
@@ -195,6 +283,17 @@ export async function headObject(key: string): Promise<{ size: number; mimeType:
 }
 
 export async function deleteObject(key: string): Promise<boolean> {
+  if (storageDriver() === 'local') {
+    try {
+      await rm(localPathFor(key), { force: true });
+      await rm(localPathFor(`${key}.part`), { force: true });
+      return true;
+    } catch (err) {
+      console.error('[storage] local delete failed', err);
+      return false;
+    }
+  }
+
   try {
     const res = await fetch(presign('DELETE', key, 300), { method: 'DELETE' });
     return res.ok || res.status === 404;
@@ -204,15 +303,68 @@ export async function deleteObject(key: string): Promise<boolean> {
   }
 }
 
-/* Presentation ------------------------------------------------------------ */
+/* Local chunked writes ---------------------------------------------------- */
 
-export function formatBytes(bytes: number | bigint): string {
-  const n = Number(bytes);
-  if (!n) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
-  const value = n / Math.pow(1024, i);
-  return `${value >= 100 || i === 0 ? Math.round(value) : value.toFixed(1)} ${units[i]}`;
+/** Appends one chunk to <key>.part, and reports the size so far. */
+export async function appendLocalChunk(key: string, body: ReadableStream<Uint8Array>): Promise<number> {
+  const { Readable } = await import('node:stream');
+  const { pipeline } = await import('node:stream/promises');
+
+  const partPath = localPathFor(`${key}.part`);
+  await mkdir(dirname(partPath), { recursive: true });
+
+  await pipeline(
+    Readable.fromWeb(body as Parameters<typeof Readable.fromWeb>[0]),
+    createWriteStream(partPath, { flags: 'a' }),
+  );
+
+  const info = await stat(partPath);
+  return info.size;
+}
+
+/** Bytes already written for an in-flight upload, or 0 if it has not started. */
+export async function localPartSize(key: string): Promise<number> {
+  try {
+    const info = await stat(localPathFor(`${key}.part`));
+    return info.isFile() ? info.size : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function finishLocalUpload(key: string): Promise<number> {
+  const partPath = localPathFor(`${key}.part`);
+  const finalPath = localPathFor(key);
+  await rename(partPath, finalPath);
+  const info = await stat(finalPath);
+  return info.size;
+}
+
+export function localReadStream(key: string, start?: number, end?: number) {
+  return createReadStream(localPathFor(key), start != null ? { start, end } : undefined);
+}
+
+/* Keys and names ---------------------------------------------------------- */
+
+/** Object keys are tenant-scoped and date-partitioned, so a bucket listing reads. */
+export function buildObjectKey(organizationId: string, fileName: string): string {
+  const now = new Date();
+  const yyyy = now.getUTCFullYear();
+  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+  return `org/${organizationId}/${yyyy}/${mm}/${randomUUID()}-${sanitiseFileName(fileName)}`;
+}
+
+export function sanitiseFileName(name: string): string {
+  const base = name.split(/[\\/]/).pop() ?? 'file';
+  return (
+    base
+      .normalize('NFKD')
+      .replace(/[^\w.\- ]+/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^[-.]+/, '')
+      .slice(-120) || 'file'
+  );
 }
 
 /* File types -------------------------------------------------------------- */
@@ -230,9 +382,23 @@ const TYPE_BY_EXTENSION: Record<string, $Enums.MaterialType> = {
   zip: 'ZIP',
 };
 
+const MIME_BY_EXTENSION: Record<string, string> = {
+  mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/x-m4v', webm: 'video/webm', mkv: 'video/x-matroska',
+  mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', aac: 'audio/aac', ogg: 'audio/ogg',
+  pdf: 'application/pdf',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', avif: 'image/avif',
+  epub: 'application/epub+zip', zip: 'application/zip', csv: 'text/csv', txt: 'text/plain',
+};
+
 export function inferType(fileName: string): $Enums.MaterialType {
   const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
   return TYPE_BY_EXTENSION[ext] ?? 'ZIP';
+}
+
+export function inferMimeType(fileName: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  return MIME_BY_EXTENSION[ext] ?? 'application/octet-stream';
 }
 
 /** Per-type ceilings. A single PUT tops out near 5 GB on R2, so video sits under it. */
@@ -253,11 +419,13 @@ export function maxBytesFor(type: $Enums.MaterialType): number {
   return MAX_BYTES[type] ?? 256 * 1024 ** 2;
 }
 
-/** Material types whose bytes we hold ourselves, rather than linking out. */
-export const UPLOADABLE_TYPES: $Enums.MaterialType[] = [
-  'VIDEO', 'AUDIO', 'PDF', 'IMAGE', 'DOC', 'SHEET', 'SLIDE', 'ZIP', 'SCORM', 'EPUB',
-];
+/* Presentation ------------------------------------------------------------ */
 
-export function isUploadable(type: string): boolean {
-  return (UPLOADABLE_TYPES as string[]).includes(type);
+export function formatBytes(bytes: number | bigint): string {
+  const n = Number(bytes);
+  if (!n) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+  const value = n / Math.pow(1024, i);
+  return `${value >= 100 || i === 0 ? Math.round(value) : value.toFixed(1)} ${units[i]}`;
 }

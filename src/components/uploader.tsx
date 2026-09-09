@@ -70,24 +70,11 @@ export function Uploader({
       const { assetId, uploadUrl } = ticket;
 
       try {
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('PUT', uploadUrl, true);
-          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-          xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-              patch(key, { percent: Math.round((e.loaded / e.total) * 100) });
-            }
-          };
-          xhr.onload = () =>
-            xhr.status >= 200 && xhr.status < 300
-              ? resolve()
-              : reject(new Error(`The storage bucket refused the upload (${xhr.status}).`));
-          xhr.onerror = () =>
-            reject(new Error('The upload was blocked. Check the bucket CORS rules.'));
-          xhr.onabort = () => reject(new Error('Upload cancelled.'));
-          xhr.send(file);
-        });
+        if (ticket.driver === 's3') {
+          await putWhole(uploadUrl, file, (p) => patch(key, { percent: p }));
+        } else {
+          await putInChunks(uploadUrl, ticket.token ?? '', file, (p) => patch(key, { percent: p }));
+        }
       } catch (err) {
         await abandonUpload(assetId);
         patch(key, {
@@ -207,4 +194,90 @@ export function Uploader({
       )}
     </div>
   );
+}
+
+/* Transports -------------------------------------------------------------- */
+
+/** One PUT straight at the bucket. XHR, because fetch still cannot report upload progress. */
+function putWhole(url: string, file: File, onProgress: (percent: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url, true);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve()
+        : reject(new Error(`The storage bucket refused the upload (${xhr.status}).`));
+    xhr.onerror = () => reject(new Error('The upload was blocked. Check the bucket CORS rules.'));
+    xhr.onabort = () => reject(new Error('Upload cancelled.'));
+    xhr.send(file);
+  });
+}
+
+/**
+ * Eight megabytes at a time to our own server. Shared hosting sits behind a proxy
+ * with a body limit that a single 2 GB PUT would hit, and a dropped connection
+ * here costs one chunk rather than the whole file. Each chunk is retried twice
+ * before the upload is called off.
+ */
+const CHUNK_BYTES = 8 * 1024 * 1024;
+
+async function putInChunks(
+  url: string,
+  token: string,
+  file: File,
+  onProgress: (percent: number) => void,
+): Promise<void> {
+  let offset = 0;
+  let attempts = 0;
+
+  while (offset < file.size) {
+    const blob = file.slice(offset, Math.min(offset + CHUNK_BYTES, file.size));
+    const isLast = offset + blob.size >= file.size;
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'x-upload-token': token,
+          'x-chunk-offset': String(offset),
+          ...(isLast ? { 'x-upload-final': '1' } : {}),
+        },
+        body: blob,
+      });
+    } catch {
+      // A dropped connection is worth another go. A refusal below is not.
+      if (++attempts >= 4) throw new Error('The connection kept dropping during the upload.');
+      await new Promise((r) => setTimeout(r, 800 * attempts));
+      continue;
+    }
+
+    if (res.ok) {
+      offset += blob.size;
+      attempts = 0;
+      onProgress(Math.round((offset / file.size) * 100));
+      continue;
+    }
+
+    const body = (await res.json().catch(() => null)) as
+      | { error?: string; received?: number }
+      | null;
+
+    // The server has more (or less) than we thought: an earlier attempt landed
+    // and its reply was lost. Resume from where it says it is, rather than
+    // appending the same bytes twice.
+    if (res.status === 409 && typeof body?.received === 'number') {
+      if (++attempts >= 4) throw new Error('The upload could not be resumed.');
+      offset = body.received;
+      onProgress(Math.round((offset / file.size) * 100));
+      continue;
+    }
+
+    throw new Error(body?.error ?? `The server refused the upload (${res.status}).`);
+  }
 }

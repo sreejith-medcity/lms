@@ -1,10 +1,10 @@
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
-import { formatBytes, storageConfigured } from '@/lib/storage';
+import { formatBytes, localRoot, storageDriver } from '@/lib/storage';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
-import { AssetGrid, LibraryUploader, StorageSetup } from './panels';
+import { AssetGrid, LibraryUploader, StorageStatus } from './panels';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ export default async function LibraryPage() {
   const tenant = await requireTenant();
   await requireStaff('asset_library.manage_assets', 'view');
 
-  const configured = storageConfigured();
+  const driver = storageDriver();
 
   const [assets, totals] = await Promise.all([
     db.asset.findMany({
@@ -60,34 +60,32 @@ export default async function LibraryPage() {
     <div>
       <PageHeader
         title="Media library"
-        description="Every file in one place, uploaded straight to storage and reused across courses. Nothing here is publicly reachable: players get a five-minute signed link, checked against the learner's enrolment."
+        description="Every file in one place, reused across courses. Nothing here sits on a guessable public path: a player gets a link only after the viewer's enrolment has been checked."
       />
 
-      {!configured ? (
-        <StorageSetup />
-      ) : (
-        <div className="space-y-6">
-          <StatGrid>
-            <Stat label="Files" value={totals._count} />
-            <Stat label="Stored" value={formatBytes(totals._sum.sizeBytes ?? 0n)} />
-            <Stat label="Video" value={formatBytes(videoBytes._sum.sizeBytes ?? 0n)} sub="of the total" />
-            <Stat label="Unused" value={rows.filter((r) => !r.usedBy && !r.pending).length} sub="not linked anywhere" />
-          </StatGrid>
+      <div className="space-y-6">
+        <StorageStatus driver={driver} root={localRoot()} />
 
-          <Card>
-            <LibraryUploader />
-          </Card>
+        <StatGrid>
+          <Stat label="Files" value={totals._count} />
+          <Stat label="Stored" value={formatBytes(totals._sum.sizeBytes ?? 0n)} />
+          <Stat label="Video" value={formatBytes(videoBytes._sum.sizeBytes ?? 0n)} sub="of the total" />
+          <Stat label="Unused" value={rows.filter((r) => !r.usedBy && !r.pending).length} sub="not linked anywhere" />
+        </StatGrid>
 
-          {rows.length === 0 ? (
-            <EmptyState
-              title="Nothing uploaded yet"
-              hint="Drop a class recording or a workbook above. Large files upload straight to the bucket, so the page stays responsive."
-            />
-          ) : (
-            <AssetGrid assets={rows} />
-          )}
-        </div>
-      )}
+        <Card>
+          <LibraryUploader />
+        </Card>
+
+        {rows.length === 0 ? (
+          <EmptyState
+            title="Nothing uploaded yet"
+            hint="Drop a class recording or a workbook above. Uploads run in the background, so the page stays responsive."
+          />
+        ) : (
+          <AssetGrid assets={rows} />
+        )}
+      </div>
     </div>
   );
 }

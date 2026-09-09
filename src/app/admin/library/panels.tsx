@@ -33,7 +33,7 @@ export function LibraryUploader() {
       multiple
       onUploaded={() => router.refresh()}
       label="Drop files to add them to the library"
-      hint="Up to 20 at a time. Video 4 GB, audio 1 GB, PDF 512 MB. They upload directly to storage, so you can keep working."
+      hint="Up to 20 at a time. Video 4 GB, audio 1 GB, PDF 512 MB. Large files go up in chunks, so you can keep working."
     />
   );
 }
@@ -206,38 +206,73 @@ function TypeGlyph({ type }: { type: string }) {
   );
 }
 
-/* Setup ------------------------------------------------------------------- */
+/* Where the bytes live ---------------------------------------------------- */
 
-export function StorageSetup() {
+export function StorageStatus({ driver, root }: { driver: 'local' | 's3'; root: string }) {
+  const [open, setOpen] = useState(false);
+
+  if (driver === 's3') {
+    return (
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">Object storage</p>
+            <p className="t-small muted mt-0.5">
+              Files upload straight from the browser to the bucket. The app server never
+              handles them.
+            </p>
+          </div>
+          <Badge tone="ok">connected</Badge>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card>
-      <h2 className="t-heading">Connect object storage</h2>
-      <p className="t-small muted mt-1 max-w-prose">
-        Files live in an S3-compatible bucket, not on the web server. Cloudflare R2 is the right
-        choice here: egress is free, and Medcity already has 281 GB of recordings that learners
-        stream repeatedly. Five values, then restart the app.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="max-w-prose">
+          <p className="text-sm font-medium">Server disk, behind the CDN</p>
+          <p className="t-small muted mt-0.5">
+            Files are written to <code>{root}</code> on the Hostinger server and served from a
+            signed, permanently cacheable path, so the CDN answers every request after the
+            first. Uploads arrive in 8 MB chunks to stay under the proxy body limit, and a
+            dropped connection costs one chunk rather than the whole file.
+          </p>
+          <p className="t-small faint mt-2">
+            This is the right footing for the demo. It is not the right footing for 281 GB of
+            recordings: the plan disk fills, and every byte a learner streams burns server
+            bandwidth and a worker process. Moving to Google Cloud Storage later is five
+            environment variables and a file copy, because GCS speaks the same S3 API.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge tone="warn">local disk</Badge>
+          <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
+            {open ? 'Hide' : 'Switch to a bucket'}
+          </Button>
+        </div>
+      </div>
 
-      <ol className="mt-4 space-y-3 text-sm">
-        <li>
-          <span className="font-medium">1. Create the bucket.</span>{' '}
-          <span className="muted">
-            Cloudflare dashboard, R2, Create bucket. Name it <code>medcity-lms</code>, location
-            Asia-Pacific. Keep public access off.
-          </span>
-        </li>
-        <li>
-          <span className="font-medium">2. Make an API token.</span>{' '}
-          <span className="muted">
-            R2, API, Create API token, Object Read &amp; Write, scoped to that bucket. Copy the
-            access key ID, the secret, and the S3 endpoint.
-          </span>
-        </li>
-        <li>
-          <span className="font-medium">3. Allow the browser to upload.</span>{' '}
-          <span className="muted">
-            Bucket, Settings, CORS policy. Without this every upload is blocked:
-          </span>
+      {open && (
+        <div className="mt-4 border-t pt-4">
+          <p className="t-small muted max-w-prose">
+            Set these five and restart. Any S3-compatible endpoint works: Cloudflare R2
+            (<code>https://&lt;account-id&gt;.r2.cloudflarestorage.com</code>, free egress),
+            Google Cloud Storage (<code>https://storage.googleapis.com</code> with an HMAC key),
+            AWS, Backblaze.
+          </p>
+          <pre className="mt-3 overflow-x-auto rounded-[var(--radius-sm)] border bg-[var(--surface-2)] p-3 text-xs">
+{`S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_BUCKET=medcity-lms
+S3_ACCESS_KEY=...
+S3_SECRET_KEY=...`}
+          </pre>
+          <p className="t-small muted mt-3 max-w-prose">
+            The browser then uploads directly to the bucket, so the bucket needs a CORS rule
+            allowing PUT from this site. Without it every upload is silently blocked:
+          </p>
           <pre className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] border bg-[var(--surface-2)] p-3 text-xs">
 {`[
   {
@@ -249,24 +284,12 @@ export function StorageSetup() {
   }
 ]`}
           </pre>
-        </li>
-        <li>
-          <span className="font-medium">4. Set the environment variables</span>{' '}
-          <span className="muted">and restart:</span>
-          <pre className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] border bg-[var(--surface-2)] p-3 text-xs">
-{`S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-S3_REGION=auto
-S3_BUCKET=medcity-lms
-S3_ACCESS_KEY=...
-S3_SECRET_KEY=...`}
-          </pre>
-        </li>
-      </ol>
-
-      <p className="t-small faint mt-4">
-        No SDK is installed for this. Requests are signed here with the same SigV4 scheme AWS uses,
-        so the provider can change later without touching the build.
-      </p>
+          <p className="t-small faint mt-3">
+            Files already on the server disk stay where they are. Copy them into the bucket
+            under the same keys before switching, or they stop resolving.
+          </p>
+        </div>
+      )}
     </Card>
   );
 }
