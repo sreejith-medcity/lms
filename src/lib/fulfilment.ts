@@ -3,6 +3,9 @@ import { recordAudit } from '@/lib/audit';
 import type { Prisma } from '@prisma/client';
 import { markCartConverted } from '@/lib/cart';
 import { credit, creditOnPurchase } from '@/lib/wallet';
+import { reportConversion } from '@/lib/analytics-server';
+import { emit } from '@/lib/webhooks';
+import { queueNotifications } from '@/lib/notify';
 
 /**
  * The one place a payment becomes access.
@@ -344,6 +347,28 @@ export async function fulfilPaidOrder(input: {
     after: { gatewayPaymentId: input.gatewayPaymentId, amountPaise: input.amountPaise },
   });
 
+  // Everything from here is told-the-world work: a receipt, the ad platforms,
+  // and anyone subscribed to a webhook. None of it may fail the fulfilment,
+  // because the money has moved and the access has been granted, and an
+  // enrolment must not be undone because Meta timed out. And none of it runs on
+  // a replay, or a learner gets a second receipt every time Razorpay retries.
+  if (!alreadyCaptured) {
+    await tellTheWorld({
+      organizationId: input.organizationId,
+      orderId: order.id,
+      orderNo: order.orderNo,
+      userId: order.userId,
+      amountPaise: order.totalPaise,
+      invoiceNo,
+      enrollmentIds,
+    }).catch((err: unknown) => {
+      console.error(
+        '[fulfilment] the enrolment stands, but reporting it failed:',
+        err instanceof Error ? err.message : err,
+      );
+    });
+  }
+
   return {
     ok: true,
     alreadyDone: alreadyCaptured,
@@ -417,5 +442,92 @@ export async function recordFailedPayment(input: {
         });
       }
     }
+  }
+}
+
+/**
+ * Telling everyone else that a payment happened.
+ *
+ * Deliberately outside the fulfilment transaction and deliberately unable to
+ * fail it. A conversion that does not reach Meta is a reporting problem; an
+ * enrolment rolled back because Meta was slow is a customer problem, and the
+ * two are not close in seriousness.
+ *
+ * Three audiences. The learner, who gets a receipt. The ad platforms, keyed on
+ * the order number so the server event deduplicates against the browser pixel
+ * rather than counting the same admission twice. And whatever the academy has
+ * pointed a webhook at.
+ */
+async function tellTheWorld(input: {
+  organizationId: string;
+  orderId: string;
+  orderNo: string;
+  userId: string;
+  amountPaise: number;
+  invoiceNo?: string | null;
+  enrollmentIds: string[];
+}): Promise<void> {
+  const [buyer, organization, items] = await Promise.all([
+    db.user.findUnique({
+      where: { id: input.userId },
+      select: { id: true, name: true, email: true, phone: true },
+    }),
+    db.organization.findUnique({
+      where: { id: input.organizationId },
+      select: { name: true, currency: true },
+    }),
+    db.orderItem.findMany({
+      where: { orderId: input.orderId },
+      select: { titleSnapshot: true },
+    }),
+  ]);
+
+  const what = items.map((row) => row.titleSnapshot).filter(Boolean).join(', ') || 'your course';
+  const amount = `INR ${(input.amountPaise / 100).toFixed(2)}`;
+
+  if (buyer) {
+    await queueNotifications({
+      organizationId: input.organizationId,
+      eventKey: 'payment.received',
+      recipients: [{ userId: buyer.id, email: buyer.email, phone: buyer.phone }],
+      // The order number, so a retried webhook cannot queue a second receipt
+      // even if it somehow reaches here twice.
+      dedupeKey: `payment.received:${input.orderId}`,
+      context: {
+        name: buyer.name,
+        amount,
+        item: what,
+        organization: organization?.name ?? '',
+        receiptUrl: input.invoiceNo ? `/learn/invoices/${input.invoiceNo}` : '/learn',
+      },
+    });
+  }
+
+  await reportConversion({
+    organizationId: input.organizationId,
+    event: 'purchase',
+    // The order number is what the browser pixel also sends, and matching ids
+    // is the whole mechanism by which one admission counts once.
+    eventId: input.orderNo,
+    valuePaise: input.amountPaise,
+    currency: organization?.currency ?? 'INR',
+    email: buyer?.email ?? null,
+    phone: buyer?.phone ?? null,
+  });
+
+  await emit(input.organizationId, 'payment.captured', {
+    orderId: input.orderId,
+    orderNo: input.orderNo,
+    amountPaise: input.amountPaise,
+    invoiceNo: input.invoiceNo ?? null,
+    userId: input.userId,
+  });
+
+  if (input.enrollmentIds.length) {
+    await emit(input.organizationId, 'enrolment.created', {
+      orderNo: input.orderNo,
+      userId: input.userId,
+      enrollmentIds: input.enrollmentIds,
+    });
   }
 }

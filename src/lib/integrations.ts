@@ -173,7 +173,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A Stripe account that can accept INR, which for an Indian entity means an Indian Stripe account. Restricted key limited to charges, customers and webhooks.',
     purpose: 'International cards, for learners paying from outside India.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [
       TEXT('publishableKey', 'Publishable key'),
       KEY('secretKey', 'Secret key'),
@@ -189,7 +189,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A verified Cashfree merchant account. App ID and secret key from the merchant dashboard, production environment, and the webhook URL whitelisted.',
     purpose: 'An Indian gateway with lower UPI pricing than most, worth having as a second rail.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [TEXT('appId', 'App ID'), KEY('secretKey', 'Secret key')],
   },
   {
@@ -201,7 +201,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A PayU merchant account with the salt for the environment you are on. Test and production salts differ and are not interchangeable.',
     purpose: 'Another Indian gateway, common where a bank relationship already exists.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [TEXT('merchantKey', 'Merchant key'), KEY('salt', 'Salt')],
   },
   {
@@ -213,7 +213,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A PhonePe business merchant ID with the salt key and salt index. Onboarding is manual and takes a few days.',
     purpose: 'UPI-first checkout, which is what most walk-in learners reach for.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [TEXT('merchantId', 'Merchant ID'), KEY('saltKey', 'Salt key'), TEXT('saltIndex', 'Salt index')],
   },
   {
@@ -225,7 +225,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A PayPal business account. REST app credentials, live rather than sandbox. Cross border settlement rules apply to Indian accounts.',
     purpose: 'Still the default for some overseas learners, particularly in the Gulf.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [TEXT('clientId', 'Client ID'), KEY('clientSecret', 'Client secret')],
   },
 
@@ -238,8 +238,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'Any mailbox that allows SMTP. For Google Workspace that means an app password with 2FA on, since plain passwords are refused.',
     purpose: 'Any mail server. The plainest option, and the one that works with a mailbox you already have.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fallback: 'Nothing is emailed. Receipts, resets and reminders wait in the outbox.',
     fields: [
       TEXT('url', 'SMTP URL', 'SMTP_URL', 'smtps://user:password@host:465'),
@@ -255,8 +254,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'A Resend account with the sending domain verified by DNS. The free tier covers a few thousand a month, which receipts alone will outgrow.',
     purpose: 'Transactional email with delivery you can actually see, which plain SMTP does not give you.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fields: [KEY('apiKey', 'API key'), TEXT('fromEmail', 'From address')],
   },
   {
@@ -267,8 +265,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'A SendGrid account with domain authentication done and a key scoped to Mail Send only. Single sender verification is not enough at volume.',
     purpose: 'High volume email, if campaigns grow past what a mailbox will carry.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fields: [KEY('apiKey', 'API key'), TEXT('fromEmail', 'From address')],
   },
   {
@@ -279,8 +276,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'An AWS account with SES moved out of the sandbox, which needs a support request. An IAM user with ses:SendEmail and nothing more.',
     purpose: 'The cheapest email at volume, and the most work to set up.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fields: [
       TEXT('region', 'Region', undefined, 'ap-south-1 for Mumbai.'),
       TEXT('accessKeyId', 'Access key ID'),
@@ -298,8 +294,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'An MSG91 account with the sender ID and DLT template registered with TRAI. Without DLT registration Indian carriers drop the message silently.',
     purpose: 'Indian SMS with DLT templates handled, which matters more here than price.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fallback: 'No texts go out, so one-time codes and class reminders have no route.',
     fields: [
       KEY('authKey', 'Auth key', 'MSG91_AUTH_KEY'),
@@ -315,8 +310,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'A Twilio account with an Indian sender registered on DLT, or an international number if you accept the cost. Account SID and auth token.',
     purpose: 'International SMS and voice, for learners already abroad.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fields: [TEXT('accountSid', 'Account SID'), KEY('authToken', 'Auth token'), TEXT('fromNumber', 'From number')],
   },
   {
@@ -327,8 +321,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'An Exotel account with a virtual number, and the API key and token from the settings. Call recording needs the plan that includes it.',
     purpose: 'Calls and call tracking, for a front desk that follows up enquiries by phone.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fields: [TEXT('accountSid', 'Account SID'), KEY('apiToken', 'API token'), TEXT('callerId', 'Caller ID')],
   },
 
@@ -341,8 +334,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'An approved WhatsApp Business account connected to AiSensy, message templates approved by Meta, and a project API key. Templates take a day or two to clear.',
     purpose: 'WhatsApp on approved templates, which is how most learners here actually read a reminder.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fallback: 'Reminders and fee notices go by hand from somebody’s phone.',
     fields: [KEY('apiKey', 'API key', 'AISENSY_API_KEY'), TEXT('campaignName', 'Default campaign name')],
   },
@@ -354,8 +346,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'A WATI account with the WhatsApp Business number verified, approved templates, and the tenant specific API endpoint and token.',
     purpose: 'WhatsApp with a shared team inbox, if the front desk answers as well as sends.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fields: [TEXT('endpoint', 'API endpoint'), KEY('accessToken', 'Access token')],
   },
   {
@@ -366,8 +357,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'A Gupshup account with the WhatsApp app created and the number verified. API key from the dashboard, and templates approved before anything sends.',
     purpose: 'WhatsApp at volume, usually cheaper once you are past a few thousand messages.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fields: [KEY('apiKey', 'API key'), TEXT('appName', 'App name'), TEXT('sourceNumber', 'Source number')],
   },
   {
@@ -378,8 +368,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'A Meta app with whatsapp_business_messaging and whatsapp_business_management, a verified business, and a phone number ID. A permanent system user token, not the temporary one the console offers.',
     purpose: 'Meta directly, with no reseller in between. Cheapest per message, most setup.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fields: [
       TEXT('phoneNumberId', 'Phone number ID'),
       TEXT('wabaId', 'WhatsApp Business account ID'),
@@ -398,8 +387,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A Zoom account on a paid plan for meetings over forty minutes. A server to server OAuth app with meeting:write, meeting:read and user:read, plus the webhook secret for attendance.',
     purpose:
       'Meetings created when a class is scheduled, the recording pulled afterwards, and attendance taken from join and leave events.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    status: 'wired',
     fallback: 'Join links are pasted in by hand and recordings uploaded manually.',
     docsUrl: 'https://marketplace.zoom.us/develop/create',
     fields: [
@@ -418,7 +406,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'Google Workspace. Meet links come from Calendar, so the Calendar API and OAuth on an account that can create events are what this actually needs.',
     purpose: 'Meetings made on a Workspace calendar, if the academy already lives in Workspace.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Later',
     fields: [TEXT('clientId', 'OAuth client ID'), KEY('clientSecret', 'OAuth client secret')],
   },
   {
@@ -430,7 +418,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'Microsoft 365 with Teams. An Entra app with OnlineMeetings.ReadWrite.All and an application access policy granting it for the organiser.',
     purpose: 'The same, for an academy on Microsoft 365.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Later',
     fields: [TEXT('tenantId', 'Tenant ID'), TEXT('clientId', 'Application ID'), KEY('clientSecret', 'Client secret')],
   },
   {
@@ -442,7 +430,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'Nothing paid if you self host. For 8x8 hosted, an app ID and the JWT key pair from their console.',
     purpose: 'Self-hosted classes with no per-seat licence, at the cost of running a server.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Later',
     fields: [
       TEXT('domain', 'Domain', undefined, 'meet.yourdomain.com'),
       KEY('appSecret', 'JWT app secret', undefined, 'Only if your deployment requires tokens.'),
@@ -517,7 +505,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A Google Cloud project with the OAuth consent screen published, and the callback URL of this deployment added as an authorized redirect.',
     purpose: 'One tap instead of a password, which removes the largest support burden an institute has.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 7b',
     fields: [TEXT('clientId', 'Client ID'), KEY('clientSecret', 'Client secret')],
   },
   {
@@ -529,7 +517,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'An Entra app registration with the redirect URL added, and User.Read delegated permission. Multi tenant if institutes sign in from their own directories.',
     purpose: 'For corporate training clients whose staff have work accounts.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 7b',
     fields: [TEXT('tenantId', 'Tenant ID'), TEXT('clientId', 'Client ID'), KEY('clientSecret', 'Client secret')],
   },
   {
@@ -558,7 +546,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A reCAPTCHA site registered for this domain. v3 gives a score rather than a puzzle, which is what you want on an enquiry form.',
     purpose: 'Keeps scripted sign-ups off the enquiry form without asking real people to solve anything.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 7b',
     fields: [TEXT('siteKey', 'Site key'), KEY('secretKey', 'Secret key')],
   },
 
@@ -570,9 +558,8 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 1,
     requires:
       'A GA4 property with a web data stream. The measurement ID for the tag, and a Measurement Protocol API secret if server side events are sent.',
-    purpose: 'What people looked at before they enrolled, and which page lost them.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+    purpose: 'What people looked at before they enrolled, and which page lost them. A paid enrolment is also reported from this server, keyed to the order number so it deduplicates against the browser tag.',
+    status: 'wired',
     fields: [
       TEXT('measurementId', 'Measurement ID', 'GA4_MEASUREMENT_ID', 'G-XXXXXXXXXX'),
       KEY('apiSecret', 'API secret', undefined, 'Only for server-side events.'),
@@ -587,7 +574,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A GTM container for this domain, with publish rights for whoever manages tags. Server side tagging is a separate paid container.',
     purpose: 'One container, so marketing adds tags without waiting for a deployment.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [TEXT('containerId', 'Container ID', undefined, 'GTM-XXXXXXX')],
   },
   {
@@ -599,7 +586,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A pixel in Events Manager owned by the same Business Manager as the ad account, and the domain verified so events survive iOS restrictions.',
     purpose: 'Attributing enrolments to the Facebook and Instagram ads that produced them.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [
       TEXT('pixelId', 'Pixel ID'),
       KEY('accessToken', 'Conversions API token', undefined, 'Optional, for server-side events.'),
@@ -614,7 +601,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A Google Ads account, the conversion ID and label from the conversion action, and the tag firing on the site. Reporting and offline uploads need the API separately.',
     purpose: 'Conversion tracking, so spend is judged against enrolments rather than clicks.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [TEXT('conversionId', 'Conversion ID'), TEXT('conversionLabel', 'Conversion label')],
   },
   {
@@ -626,7 +613,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'Nothing paid. A Clarity project and its ID.',
     purpose: 'Session recordings and heatmaps, free, and the fastest way to see why a page is not converting.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [TEXT('projectId', 'Project ID')],
   },
 
@@ -678,9 +665,8 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       'Nothing from a provider. An endpoint that accepts POST, and a shared secret so the receiver can verify the signature.',
     purpose:
-      'A POST to your own endpoint on enrolment, payment and completion. The escape hatch that makes every other integration optional.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+      'A POST to your own endpoint, signed and retried. The escape hatch that makes every other integration optional. A captured payment and a new enrolment are sent today; the rest of the event list is declared but nothing raises it yet.',
+    status: 'wired',
     fields: [
       URLF('url', 'Endpoint URL', 'https://'),
       KEY('signingSecret', 'Signing secret', undefined, 'Each delivery is signed so you can verify it came from here.'),
@@ -695,7 +681,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A Zapier account. Webhooks by Zapier is a paid feature, so the free tier will not carry this.',
     purpose: 'Connecting enrolments to the several hundred tools nobody will build an integration for.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [KEY('apiKey', 'API key')],
   },
   {
@@ -752,7 +738,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A Slack workspace and an incoming webhook, or an app with chat:write scoped to the channel staff actually watch.',
     purpose: 'Alerting staff to a failed payment or a full batch where they already are.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [URLF('webhookUrl', 'Incoming webhook URL', 'https://hooks.slack.com/…')],
   },
   {
@@ -764,7 +750,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
       'A bot from BotFather and the chat ID of the group. Free, and the fastest of these to set up.',
     purpose: 'The same alerts, for a team that lives on Telegram instead.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     fields: [KEY('botToken', 'Bot token'), TEXT('chatId', 'Chat ID')],
   },
   {
@@ -841,7 +827,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     purpose:
       'Reads spend, reach and cost per lead for the Facebook and Instagram campaigns, and sends enrolments back so Meta optimises for people who actually pay.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires:
       'A Meta business account with the ad account and the page in the same Business Manager. System user token with ads_read for reporting, ads_management to write conversions, business_management to list the accounts.',
     docsUrl: 'https://developers.facebook.com/docs/marketing-apis',
@@ -858,9 +844,8 @@ export const INTEGRATIONS: IntegrationDef[] = [
     category: 'ads',
     priority: 1,
     purpose:
-      'Sends a purchase event from this server the moment a fee is paid, so the campaign is credited even when the browser pixel is blocked.',
-    status: 'planned',
-    landsIn: 'Phase 7',
+      'Sends a purchase event from this server the moment a fee is paid, so the campaign is credited even when the browser pixel is blocked. Keyed to the order number, so Meta counts one admission rather than two.',
+    status: 'wired',
     alternativeTo: 'meta_pixel',
     requires:
       'The same pixel as the site, plus a Conversions API access token generated from Events Manager. Nothing else, but the pixel and this must use one dataset or the numbers double.',
@@ -880,7 +865,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     purpose:
       'Uploads the enrolment against the click that caused it, so Smart Bidding learns from paid admissions rather than from form fills.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires:
       'A Google Ads manager account, a developer token approved for standard access, and OAuth on a user with edit rights on the ad account. The site must be passing gclid through to the enquiry form.',
     docsUrl: 'https://developers.google.com/google-ads/api/docs/conversions/upload-clicks',
@@ -928,7 +913,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     purpose: 'Which course pages people find in search, and which queries they found them with.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires: 'Ownership of the property already verified, and OAuth on a user with at least restricted access to it.',
     fields: [TEXT('siteUrl', 'Property URL', undefined, 'Exactly as it appears in Search Console.'), KEY('refreshToken', 'OAuth refresh token')],
   },
@@ -966,7 +951,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     purpose:
       'The CRM the counsellors already live in. An enquiry goes across with its source, an owner comes back, and when the fee is paid the enrolment is written against the original enquiry rather than a new record.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires:
       'A base URL, an API token with permission to create and update leads, and the field names on their side for source, owner, stage and the enrolment link. Ask them for a sandbox before anything writes.',
     fallback: 'Counsellors copy enquiries over by hand, and the enrolment never gets linked back to the ad that caused it.',
@@ -985,7 +970,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     mappings: LEAD_MAPPING,
     purpose: 'Lead capture, call tasks and the follow up sequence counsellors work through.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     alternativeTo: 'medcity_crm',
     requires: 'Access key and secret key from the LeadSquared admin, on a plan that allows API lead creation.',
     docsUrl: 'https://apidocs.leadsquared.com/',
@@ -1044,7 +1029,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     purpose: 'Turns a DM on the course reels into an enquiry with a name attached, instead of a notification somebody forgets.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires:
       'A professional Instagram account linked to a Facebook page, and an app with instagram_manage_messages and pages_messaging. The account has to have messaging from tools turned on.',
     fields: [TEXT('igAccountId', 'Instagram account ID'), KEY('pageAccessToken', 'Page access token'), KEY('verifyToken', 'Webhook verify token')],
@@ -1056,7 +1041,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     purpose: 'The same for the page inbox, which is where the click to message ads land.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires: 'A page access token with pages_messaging and pages_manage_metadata, on a page the ad account can use.',
     fields: [TEXT('pageId', 'Page ID'), KEY('pageAccessToken', 'Page access token'), KEY('verifyToken', 'Webhook verify token')],
   },
@@ -1066,8 +1051,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     category: 'whatsapp',
     priority: 3,
     purpose: 'A WhatsApp business inbox with templates, for an institute that prefers it to AiSensy.',
-    status: 'planned',
-    landsIn: 'Later',
+    status: 'wired',
     alternativeTo: 'aisensy',
     requires: 'An approved WhatsApp Business account and a secret key from the Interakt developer settings.',
     fields: [KEY('apiKey', 'API key')],
@@ -1081,7 +1065,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     purpose: 'Campaign mail to enquiries and past students, kept away from receipts so a marketing complaint never blocks an invoice.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires: 'An API key and the audience ID. A paid plan if the list is over the free ceiling, which it will be.',
     fields: [KEY('apiKey', 'API key', undefined, 'Ends with the datacentre, for example -us21.'), TEXT('audienceId', 'Audience ID')],
   },
@@ -1092,7 +1076,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     purpose: 'Campaigns plus transactional mail on one account, which suits an institute that does not want two vendors.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     alternativeTo: 'mailchimp',
     requires: 'A v3 API key with campaigns and contacts enabled, and a verified sender domain.',
     fields: [KEY('apiKey', 'API key'), TEXT('listId', 'List ID')],
@@ -1127,8 +1111,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     category: 'email',
     priority: 3,
     purpose: 'Receipts and password resets only, on a provider that refuses to carry campaigns and so keeps its reputation.',
-    status: 'planned',
-    landsIn: 'Later',
+    status: 'wired',
     alternativeTo: 'resend',
     requires: 'A server token and a verified sender signature or DKIM on the sending domain.',
     fields: [KEY('serverToken', 'Server token'), TEXT('fromEmail', 'From address')],
@@ -1218,7 +1201,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     purpose:
       'The enquiry forms already running on the WordPress site. A submission arrives here as a lead with its source and the page it came from, rather than as an email in an inbox.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires:
       'The Ninja Forms webhook add on, or the small bridge plugin, on the WordPress site. A shared secret so a stranger cannot post fake leads.',
     fallback: 'Enquiries stay in WordPress and are re keyed by hand, losing the source every time.',
@@ -1232,7 +1215,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     mappings: FORM_MAPPING,
     purpose: 'Counsellor run intake and feedback forms, pulled in without anyone downloading a sheet.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires: 'OAuth on a Google account with access to the form, and the Forms API turned on in that project.',
     fields: [TEXT('formId', 'Form ID'), KEY('refreshToken', 'OAuth refresh token')],
   },
@@ -1354,7 +1337,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     purpose: 'Puts the batch timetable on the trainer calendar, so a class collision is visible before it happens.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires:
       'A Google Cloud project with the Calendar API on. For a Workspace domain, a service account with domain wide delegation writes to staff calendars without each of them signing in.',
     fields: [TEXT('calendarId', 'Calendar ID', undefined, 'Blank uses the primary calendar of the connected account.'), KEY('serviceAccountJson', 'Service account JSON')],
@@ -1404,7 +1387,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     purpose:
       'DRM on the recorded lessons. The one integration bought for a reason other than convenience: a recorded IELTS course is the whole asset, and a screen recording of it is a competitor.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     requires: 'A paid VdoCipher account and its API secret. Widevine and FairPlay come with the plan, no separate licence to arrange.',
     fallback: 'Recordings are served as signed links, which stop casual sharing and nothing more.',
     fields: [KEY('apiSecret', 'API secret')],
@@ -1502,7 +1485,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     purpose: 'Wires this to anything not on the list, without waiting for us to build a connector.',
     status: 'planned',
-    landsIn: 'Phase 7',
+    landsIn: 'Phase 8',
     alternativeTo: 'zapier',
     requires: 'A Make account and a webhook scenario. The free tier is enough to start.',
     fields: [URLF('webhookUrl', 'Webhook URL', 'https://hook.eu2.make.com/...')],

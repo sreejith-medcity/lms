@@ -105,7 +105,7 @@ video threshold, leaderboards, DRM and dynamic watermark. Website and app setup:
 signup primary field, login modes, brand, social links, policies editor. Grading
 system. International selling.
 
-## Phase 7 — Auth and integrations · BUILT, AWAITING PUSH
+## Phase 7 — Auth and integrations · DEPLOYED, except auth
 
 The phase that makes several earlier ones actually send. OTP signup and login,
 Google SSO, two-factor, secondary field validation. Zoom server-to-server for
@@ -125,6 +125,20 @@ than at scheduling time, because fifty Zoom calls in one form submission is a
 timeout. And the wallet charges before the provider is called and refunds on
 failure, rather than the other way round, because a timeout that actually
 delivered is worse unbilled than double counted.
+
+**What is not done, split out as Phase 7b.** OTP and TOTP are written and
+compile, but nothing calls them: there is no OTP login flow, no two-factor
+enrolment screen, and Google and Microsoft sign-in have no callback routes. The
+integrations board says `Phase 7b` on those three cards rather than pretending
+otherwise. That is the remaining work of this phase and it is a sitting on its
+own.
+
+## Phase 7b — the sign-in flows
+
+The libraries exist. What is missing is the surface: sign in with a phone
+number and a code, a second factor on staff accounts with recovery codes, the
+Google and Microsoft OAuth callbacks, and the secondary field validation
+Edmingle does at signup.
 
 ## Phase 8 — One system, and go-live
 

@@ -548,23 +548,35 @@ recorded before it is processed. A rejoin after a dropped connection does not
 overwrite the first arrival, so a bad line no longer turns a punctual learner
 into a late one.
 
-**One-time codes and two factor.** Codes are hashed before storage, compared in
-constant time, burned after five wrong guesses, and a new request invalidates
-the old code rather than leaving two valid. Wrong code, expired code and no code
-give the same sentence, so this cannot be used to find out which addresses have
-an account. Two factor is RFC 6238 written against node:crypto rather than a
-dependency, with recovery codes, because an academy whose only admin lost their
-phone is a support request nobody can safely act on.
+**One-time codes and two factor, as libraries only.** Codes are hashed before
+storage, compared in constant time, burned after five wrong guesses, and a new
+request invalidates the old rather than leaving two valid. Wrong code, expired
+code and no code give the same sentence, so this cannot be used to find out
+which addresses have an account. Two factor is RFC 6238 against node:crypto,
+with recovery codes.
+
+Both of these compile and neither is reachable. There is no OTP login screen, no
+two-factor enrolment, and no Google or Microsoft callback route, so nothing in
+the running product calls them. That is Phase 7b and the board says so on those
+cards rather than claiming otherwise.
 
 **Conversions reported from the server.** GA4 through the Measurement Protocol
-and Meta through the Conversions API, both keyed with our own id so they
-deduplicate against the browser tag instead of double counting. This is the
-difference between a cost per enrolment that looks terrible and one that is
-true.
+and Meta through the Conversions API, called from `fulfilPaidOrder` and keyed on
+the order number so they deduplicate against the browser tag instead of double
+counting. This is the difference between a cost per enrolment that looks
+terrible and one that is true.
+
+All of it hangs off the one place a payment becomes access, outside the
+transaction and unable to fail it: a conversion that does not reach Meta is a
+reporting problem, an enrolment rolled back because Meta was slow is a customer
+problem, and the two are not close in seriousness. It is also skipped on a
+replay, so a retried Razorpay webhook does not send a second receipt.
 
 **Outbound webhooks**, signed and timestamped, queued rather than sent inline so
 a slow endpoint on somebody else's server cannot make enrolling slow here, with
-every delivery recorded because "we never got it" is the first thing anyone says.
+every delivery recorded because "we never got it" is the first thing anyone
+says. Two events are raised today, a captured payment and a new enrolment; the
+other six in the list are declared and the card says nothing raises them yet.
 
 **Class reminders queue themselves** an hour ahead, deduplicated per class, so
 running the job every few minutes queues each reminder exactly once. The manual
