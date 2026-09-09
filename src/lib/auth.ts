@@ -1,6 +1,7 @@
 import { cookies, headers } from 'next/headers';
 import { cache } from 'react';
 import { db } from '@/lib/db';
+import { getTenantContext } from '@/lib/tenant';
 import type { PermissionSet } from '@/lib/permissions';
 
 export const SESSION_COOKIE = 'mlms_session';
@@ -36,6 +37,19 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   });
 
   if (!session || session.expiresAt < new Date()) return null;
+
+  // A session cookie is only valid on the tenant that issued it. Without this,
+  // a cookie set on one academy's hostname is accepted on another's, because
+  // sibling subdomains share a cookie domain. Null tenant means the platform
+  // control plane, which has no organisation of its own.
+  const tenant = await getTenantContext();
+  if (tenant && session.user.organizationId !== tenant.organizationId) return null;
+
+  // A suspended, archived or soft-deleted account keeps its cookie until the
+  // session expires; the session has to stop honouring it immediately. Other
+  // statuses (registered, on leave, completed) can still sign in.
+  if (session.user.deletedAt) return null;
+  if (session.user.status === 'SUSPENDED' || session.user.status === 'ARCHIVED') return null;
 
   const permissions: PermissionSet = {};
   let restrictBatchAccess = false;

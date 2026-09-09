@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import { SESSION_COOKIE } from '@/lib/auth';
 import { hashPassword } from '@/lib/password';
 import { resolveTenantByHost } from '@/lib/tenant';
+import { authAttemptKeys, checkAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
 import type { ActionState } from '@/server/courses';
 
 const SESSION_DAYS = 30;
@@ -37,6 +38,12 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
     const { name, email, phone, password } = parsed.data;
+
+    // Sign-up is cheap to script and creates rows, so it is limited harder than
+    // sign-in: three accounts per address per hour.
+    const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+    const limit = checkAll(authAttemptKeys('signup', tenantId, email, ip), 3, 60 * 60);
+    if (!limit.ok) return { error: tooManyAttemptsMessage(limit.retryAfterSeconds) };
 
     const existing = await db.user.findFirst({
       where: { organizationId: org.id, email, deletedAt: null },

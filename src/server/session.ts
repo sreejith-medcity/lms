@@ -7,6 +7,7 @@ import { db } from '@/lib/db';
 import { SESSION_COOKIE } from '@/lib/auth';
 import { verifyPassword } from '@/lib/password';
 import { resolveTenantByHost } from '@/lib/tenant';
+import { authAttemptKeys, checkAll, resetAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
 
 const SESSION_DAYS = 30;
 
@@ -27,6 +28,14 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   const org = await db.organization.findFirst({ where: { tenantId }, select: { id: true } });
   if (!org) return { error: 'This hostname is not linked to an academy.' };
 
+  // Five attempts per fifteen minutes, counted against both the caller's
+  // address and the identifier being tried, so neither a scripted sweep nor a
+  // distributed run at one account gets far.
+  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+  const keys = authAttemptKeys('login', tenantId, identifier, ip);
+  const limit = checkAll(keys, 5, 15 * 60);
+  if (!limit.ok) return { error: tooManyAttemptsMessage(limit.retryAfterSeconds) };
+
   const user = await db.user.findFirst({
     where: {
       organizationId: org.id,
@@ -43,6 +52,10 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   if (user.status === 'SUSPENDED' || user.status === 'ARCHIVED') {
     return { error: 'This account is not active. Contact your academy.' };
   }
+
+  // Correct credentials clear the buckets, so a legitimate user who mistyped a
+  // few times is not left one attempt away from a lockout.
+  resetAll(keys);
 
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
