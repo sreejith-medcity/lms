@@ -6,6 +6,10 @@ import { formatMoney } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
+/** Application surface: useful to the person signed in, useless in a search result. */
+export const metadata = { robots: { index: false, follow: false } };
+
+
 /**
  * Platform control plane. Reached on the PLATFORM_HOST only; tenant sessions
  * never resolve here.

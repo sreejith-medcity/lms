@@ -8,10 +8,13 @@ import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { slugify, uniqueSlug } from '@/lib/slug';
 import { toPaise } from '@/lib/money';
+import { recordAudit } from '@/lib/audit';
 
 export interface ActionState {
   error?: string;
   ok?: boolean;
+  /** Optional success text, when "saved" is not specific enough to be useful. */
+  message?: string;
 }
 
 /** Every action runs this first: tenant scope plus the permission the screen claims. */
@@ -39,7 +42,7 @@ export async function createCourse(_prev: ActionState, formData: FormData): Prom
   let newId: string;
 
   try {
-    const { tenant } = await guard('courses.course_management');
+    const { tenant, user } = await guard('courses.course_management');
 
     const parsed = courseCreate.safeParse({
       title: formData.get('title'),
@@ -79,6 +82,15 @@ export async function createCourse(_prev: ActionState, formData: FormData): Prom
       select: { id: true },
     });
 
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'course.create',
+      entity: 'Product',
+      entityId: product.id,
+      after: { title, slug },
+    });
+
     newId = product.id;
   } catch (err) {
     return fail(err);
@@ -103,7 +115,7 @@ const courseUpdate = z.object({
 
 export async function updateCourse(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
-    const { tenant } = await guard('courses.course_management');
+    const { tenant, user } = await guard('courses.course_management');
 
     const parsed = courseUpdate.safeParse({
       productId: formData.get('productId'),
@@ -146,6 +158,15 @@ export async function updateCourse(_prev: ActionState, formData: FormData): Prom
       },
     });
 
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'course.update',
+      entity: 'Product',
+      entityId: d.productId,
+      after: { title: d.title, level: d.level, language: d.language },
+    });
+
     revalidatePath(`/admin/courses/${d.productId}`);
     return { ok: true };
   } catch (err) {
@@ -155,7 +176,7 @@ export async function updateCourse(_prev: ActionState, formData: FormData): Prom
 
 export async function setCourseStatus(productId: string, publish: boolean): Promise<ActionState> {
   try {
-    const { tenant } = await guard('courses.pricing_and_publish');
+    const { tenant, user } = await guard('courses.pricing_and_publish');
 
     const product = await db.product.findFirst({
       where: { id: productId, organizationId: tenant.organizationId },
@@ -166,6 +187,15 @@ export async function setCourseStatus(productId: string, publish: boolean): Prom
     await db.product.update({
       where: { id: productId },
       data: { status: publish ? 'PUBLISHED' : 'UNPUBLISHED' },
+    });
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: publish ? 'course.publish' : 'course.unpublish',
+      entity: 'Product',
+      entityId: productId,
+      after: { status: publish ? 'PUBLISHED' : 'UNPUBLISHED' },
     });
 
     revalidatePath(`/admin/courses/${productId}`);
@@ -187,7 +217,7 @@ const pricingPlan = z.object({
 
 export async function addPricingPlan(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
-    const { tenant } = await guard('courses.pricing_and_publish');
+    const { tenant, user } = await guard('courses.pricing_and_publish');
 
     const parsed = pricingPlan.safeParse({
       productId: formData.get('productId'),
@@ -225,6 +255,15 @@ export async function addPricingPlan(_prev: ActionState, formData: FormData): Pr
       },
     });
 
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'pricing.create',
+      entity: 'PricingPlan',
+      entityId: d.productId,
+      after: { name: d.name, pricePaise: toPaise(d.priceRupees), currency: tenant.currency },
+    });
+
     revalidatePath(`/admin/courses/${d.productId}/pricing`);
     return { ok: true };
   } catch (err) {
@@ -234,7 +273,7 @@ export async function addPricingPlan(_prev: ActionState, formData: FormData): Pr
 
 export async function deletePricingPlan(planId: string, productId: string): Promise<ActionState> {
   try {
-    const { tenant } = await guard('courses.pricing_and_publish', 'delete');
+    const { tenant, user } = await guard('courses.pricing_and_publish', 'delete');
 
     const plan = await db.pricingPlan.findFirst({
       where: { id: planId, product: { organizationId: tenant.organizationId } },
@@ -248,6 +287,15 @@ export async function deletePricingPlan(planId: string, productId: string): Prom
     } else {
       await db.pricingPlan.delete({ where: { id: planId } });
     }
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: plan._count.enrollments > 0 ? 'pricing.deactivate' : 'pricing.delete',
+      entity: 'PricingPlan',
+      entityId: planId,
+      before: { productId },
+    });
 
     revalidatePath(`/admin/courses/${productId}/pricing`);
     return { ok: true };

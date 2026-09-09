@@ -24,8 +24,6 @@ export const ADMIN_NAV: NavGroup[] = [
     icon: 'box',
     children: [
       { label: 'Courses', href: '/admin/courses' },
-      { label: 'Events', href: '/admin/events', feature: 'events' },
-      { label: 'Memberships', href: '/admin/memberships', feature: 'memberships' },
     ],
   },
   {
@@ -34,11 +32,7 @@ export const ADMIN_NAV: NavGroup[] = [
     children: [
       { label: 'Batches', href: '/admin/batches' },
       { label: 'Sessions', href: '/admin/sessions' },
-      { label: 'Module library', href: '/admin/modules' },
       { label: 'Media library', href: '/admin/library' },
-      { label: 'Assessments', href: '/admin/assessments' },
-      { label: 'Submissions', href: '/admin/submissions' },
-      { label: 'Certificates', href: '/admin/certificates' },
     ],
   },
   {
@@ -46,30 +40,17 @@ export const ADMIN_NAV: NavGroup[] = [
     icon: 'users',
     children: [
       { label: 'Learners', href: '/admin/learners' },
-      { label: 'Team', href: '/admin/team' },
-      { label: 'Enrolments', href: '/admin/enrol' },
     ],
   },
-  {
-    label: 'Growth',
-    icon: 'spark',
-    children: [
-      { label: 'Leads', href: '/admin/leads' },
-      { label: 'Campaigns', href: '/admin/campaigns' },
-      { label: 'Storefront', href: '/admin/storefront' },
-    ],
-  },
-  {
-    label: 'Money',
-    icon: 'card',
-    children: [
-      { label: 'Payments', href: '/admin/payments' },
-      { label: 'Fee tracking', href: '/admin/fees' },
-    ],
-  },
-  { label: 'Analytics', href: '/admin/analytics', icon: 'chart' },
-  { label: 'Settings', href: '/admin/settings', icon: 'gear' },
 ];
+
+/**
+ * Deliberately short. An entry appears here only once its route does something,
+ * because a menu full of blank pages reads as broken rather than as early.
+ * BUILD_PLAN.md tracks the rest: events, memberships, module library,
+ * assessments, submissions, certificates, team, enrolments, leads, campaigns,
+ * storefront, payments, fee tracking, analytics and settings.
+ */
 
 const ICONS: Record<string, string> = {
   home: 'M3 10.5 12 3l9 7.5M5.5 9.5V20h13V9.5',

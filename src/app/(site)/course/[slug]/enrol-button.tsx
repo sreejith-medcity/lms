@@ -5,16 +5,25 @@ import { useState, useTransition } from 'react';
 import { enrol } from '@/server/enrollment';
 import { Button } from '@/components/ui';
 
-export function EnrolButton({ productId, signedIn }: { productId: string; signedIn: boolean }) {
+export function EnrolButton({
+  productId,
+  signedIn,
+  fullWidth = false,
+}: {
+  productId: string;
+  signedIn: boolean;
+  fullWidth?: boolean;
+}) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string>();
   const router = useRouter();
 
   return (
-    <div className="text-right">
+    <div className={fullWidth ? '' : 'text-right'}>
       <Button
         disabled={pending}
         size="lg"
+        className={fullWidth ? 'w-full justify-center' : ''}
         onClick={() =>
           start(async () => {
             if (!signedIn) {

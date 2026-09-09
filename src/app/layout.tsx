@@ -9,9 +9,14 @@ const sans = Plus_Jakarta_Sans({
   variable: '--font-sans',
 });
 
+/**
+ * A template, so every page's own title reads naturally and none of them has to
+ * repeat the academy's name. Pages that set their own full title override it.
+ */
 export const metadata: Metadata = {
-  title: 'Medcity LMS',
-  description: 'Learning platform',
+  title: { default: 'Medcity LMS', template: '%s · Medcity LMS' },
+  description: 'Courses, live classes and exam preparation.',
+  formatDetection: { telephone: false },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

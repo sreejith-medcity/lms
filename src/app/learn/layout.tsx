@@ -5,6 +5,10 @@ import { getTenantContext } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
+/** Application surface: useful to the person signed in, useless in a search result. */
+export const metadata = { robots: { index: false, follow: false } };
+
+
 export default async function LearnLayout({ children }: { children: React.ReactNode }) {
   const [tenant, user] = await Promise.all([getTenantContext(), getSessionUser()]);
   if (!tenant) redirect('/');

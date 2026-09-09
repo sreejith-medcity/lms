@@ -6,6 +6,10 @@ import { getTenantContext } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
 
+/** Application surface: useful to the person signed in, useless in a search result. */
+export const metadata = { robots: { index: false, follow: false } };
+
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const tenant = await getTenantContext();
   if (!tenant) redirect('/');
