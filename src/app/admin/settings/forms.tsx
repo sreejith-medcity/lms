@@ -4,6 +4,13 @@ import { useActionState, useState } from 'react';
 import { updateBranding, updateOrganisation } from '@/server/settings';
 import type { ActionState } from '@/server/courses';
 import { Button, Card, Field, FormError, FormSuccess, Input, Select } from '@/components/ui';
+import { Uploader } from '@/components/uploader';
+import {
+  BUNDLED_BRAND_COLOR,
+  BUNDLED_ICONS,
+  BUNDLED_LOGOS,
+  type BundledAsset,
+} from '@/lib/brand-assets';
 
 const initial: ActionState = {};
 
@@ -121,13 +128,17 @@ export function BrandingForm({
   brandColor,
   logoUrl,
   faviconUrl,
+  storageReady = false,
 }: {
   brandColor: string;
   logoUrl: string | null;
   faviconUrl: string | null;
+  storageReady?: boolean;
 }) {
   const [state, action, pending] = useActionState(updateBranding, initial);
   const [colour, setColour] = useState(brandColor);
+  const [logo, setLogo] = useState(logoUrl ?? '');
+  const [favicon, setFavicon] = useState(faviconUrl ?? '');
 
   return (
     <Card>
@@ -207,18 +218,166 @@ export function BrandingForm({
           </div>
         </div>
 
-        <Field label="Logo URL" hint="Optional. Leave blank to use the academy name as a wordmark.">
-          <Input name="logoUrl" type="url" defaultValue={logoUrl ?? ''} placeholder="https://" />
-        </Field>
+        <ArtworkField
+          label="Logo"
+          hint="Shown in the site header. Blank uses the academy name as a wordmark."
+          name="logoUrl"
+          value={logo}
+          onChange={setLogo}
+          bundled={BUNDLED_LOGOS}
+          storageReady={storageReady}
+        />
 
-        <Field label="Favicon URL" hint="Optional.">
-          <Input name="faviconUrl" type="url" defaultValue={faviconUrl ?? ''} placeholder="https://" />
-        </Field>
+        <ArtworkField
+          label="Favicon"
+          hint="The browser tab icon. Square works best."
+          name="faviconUrl"
+          value={favicon}
+          onChange={setFavicon}
+          bundled={BUNDLED_ICONS}
+          storageReady={storageReady}
+        />
 
-        <Button type="submit" disabled={pending}>
-          {pending ? 'Saving...' : 'Save branding'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" disabled={pending}>
+            {pending ? 'Saving...' : 'Save branding'}
+          </Button>
+
+          {/* One press for the artwork and the colour it was drawn in, because
+              a purple logo above a blue button is worse than either alone. */}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setColour(BUNDLED_BRAND_COLOR);
+              setLogo(BUNDLED_LOGOS[0].path);
+              setFavicon(BUNDLED_ICONS[0].path);
+            }}
+          >
+            Use the brand shipped with this build
+          </Button>
+        </div>
       </form>
     </Card>
+  );
+}
+
+/**
+ * Artwork, three ways.
+ *
+ * Upload one, take the one shipped with the build, or paste a URL from wherever
+ * the academy already keeps its files. The three exist because each fails in a
+ * different situation: uploading needs storage configured, the bundled files
+ * need a deployment, and a pasted URL needs somewhere to have pasted it from.
+ */
+function ArtworkField({
+  label,
+  hint,
+  name,
+  value,
+  onChange,
+  bundled,
+  storageReady,
+}: {
+  label: string;
+  hint: string;
+  name: string;
+  value: string;
+  onChange: (next: string) => void;
+  bundled: BundledAsset[];
+  storageReady: boolean;
+}) {
+  const [mode, setMode] = useState<'bundled' | 'upload' | 'url'>(
+    value && !value.startsWith('/brand/') ? 'url' : 'bundled',
+  );
+
+  return (
+    <Field label={label} hint={hint}>
+      <input type="hidden" name={name} value={value} />
+
+      <div className="space-y-3">
+        {value && (
+          <div className="flex items-center gap-3 rounded-[var(--radius-sm)] border bg-[var(--surface-2)] p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value}
+              alt=""
+              className="h-10 w-auto max-w-40 object-contain"
+            />
+            <span className="t-micro faint min-w-0 flex-1 truncate">{value}</span>
+            <button
+              type="button"
+              className="t-small faint hover:text-[var(--bad)]"
+              onClick={() => onChange('')}
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-1">
+          {(['bundled', 'upload', 'url'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`rounded-full px-3 py-1 text-[0.8125rem] transition ${
+                mode === m
+                  ? 'bg-[var(--brand)] text-[var(--brand-ink)]'
+                  : 'border text-[var(--ink-2)] hover:border-[var(--ink-3)]'
+              }`}
+            >
+              {m === 'bundled' ? 'Shipped with this build' : m === 'upload' ? 'Upload' : 'Paste a URL'}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'bundled' && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {bundled.map((asset) => (
+              <button
+                key={asset.path}
+                type="button"
+                onClick={() => onChange(asset.path)}
+                className={`flex items-center gap-3 rounded-[var(--radius-sm)] border p-2.5 text-left transition ${
+                  value === asset.path ? 'border-[var(--brand)] bg-[var(--brand-soft)]' : 'hover:border-[var(--ink-3)]'
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={asset.path} alt="" className="h-8 w-auto max-w-24 object-contain" />
+                <span className="min-w-0">
+                  <span className="t-small block font-medium">{asset.label}</span>
+                  <span className="t-micro faint block">{asset.note}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {mode === 'upload' &&
+          (storageReady ? (
+            <Uploader
+              accept="image/*"
+              label={`Drop the ${label.toLowerCase()} here`}
+              hint="PNG or SVG. It is stored like any other file in the library."
+              onUploaded={(asset) => onChange(`/api/assets/${asset.id}`)}
+            />
+          ) : (
+            <p className="t-small text-[var(--bad)]">
+              File storage is not configured yet, so uploads cannot be stored. Use one of the files
+              shipped with this build, or paste a URL.
+            </p>
+          ))}
+
+        {mode === 'url' && (
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="https://"
+            aria-label={`${label} URL`}
+          />
+        )}
+      </div>
+    </Field>
   );
 }

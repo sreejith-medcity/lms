@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Suspense, type ReactNode } from 'react';
+import { BrandLockup } from '@/components/brand-lockup';
 import { getSessionUser } from '@/lib/auth';
 import { getSiteContext } from '@/lib/site';
 import { MobileMenu, SearchBox } from '@/components/site-nav';
@@ -22,8 +23,12 @@ export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-[var(--surface)]/85 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
-        <Link href="/" className="shrink-0 text-base font-semibold tracking-tight">
-          {site.organization.name}
+        <Link href="/" className="shrink-0">
+          <BrandLockup
+            name={site.organization.name}
+            logoUrl={site.organization.logoUrl}
+            height={30}
+          />
         </Link>
 
         <nav className="hidden flex-1 items-center gap-1 lg:flex">

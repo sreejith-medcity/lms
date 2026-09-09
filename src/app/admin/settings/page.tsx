@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { storageConfigured } from '@/lib/storage';
 import { OrganisationForm, BrandingForm } from './forms';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,7 @@ export default async function OrganisationSettings() {
         brandColor={org.brandColor}
         logoUrl={org.logoUrl}
         faviconUrl={org.faviconUrl}
+        storageReady={storageConfigured()}
       />
     </div>
   );

@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 import { getTenantContext } from '@/lib/tenant';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { learnerNav } from '@/lib/learner-nav';
+import { BrandLockup } from '@/components/brand-lockup';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,13 +25,12 @@ export default async function LearnLayout({ children }: { children: React.ReactN
       <header className="sticky top-0 z-10 border-b bg-[var(--surface)]/85 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-5">
           <Link href="/learn" className="flex items-center gap-2">
-            <span
-              className="grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] text-xs font-bold"
-              style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
-            >
-              {tenant.name.slice(0, 1)}
-            </span>
-            <span className="t-heading truncate">{tenant.name}</span>
+            <BrandLockup
+              name={tenant.name}
+              logoUrl={tenant.logoUrl}
+              height={26}
+              fallback="initial"
+            />
           </Link>
 
           <nav className="flex items-center gap-4">

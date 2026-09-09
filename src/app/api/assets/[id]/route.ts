@@ -45,11 +45,24 @@ export async function GET(
   });
   if (!asset) return new NextResponse('Not found', { status: 404 });
 
+  // Branding is public by definition: a logo that only signed-in people can see
+  // is a logo nobody sees, since the header renders before anybody signs in.
+  const branding = await db.organization.findFirst({
+    where: {
+      id: tenant.organizationId,
+      OR: [
+        { logoUrl: { contains: asset.id } },
+        { faviconUrl: { contains: asset.id } },
+      ],
+    },
+    select: { id: true },
+  });
+
   const user = await getSessionUser();
   const sameOrg = user?.organizationId === tenant.organizationId;
 
   // Staff see everything in their own organisation.
-  let allowed = Boolean(user && sameOrg && user.kind === 'STAFF');
+  let allowed = Boolean(branding) || Boolean(user && sameOrg && user.kind === 'STAFF');
 
   // Anyone, signed in or not, may see a material marked as a free preview.
   const freePreview = asset.materials.some((m) => m.isFreePreview);

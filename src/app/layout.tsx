@@ -19,6 +19,17 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 };
 
+/**
+ * The tab icon.
+ *
+ * `src/app/icon.png` is served automatically as the default, which is what a
+ * fresh deployment falls back to. An academy that sets its own favicon in
+ * settings overrides it here, per request, so a tenant's tab is theirs.
+ */
+export async function generateViewport() {
+  return { themeColor: '#322046' };
+}
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const tenant = await getTenantContext();
 
@@ -30,6 +41,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" className={sans.variable}>
+      {tenant?.faviconUrl && (
+        <head>
+          <link rel="icon" href={tenant.faviconUrl} />
+        </head>
+      )}
       <body className="font-sans antialiased" style={themeVars}>
         {children}
       </body>

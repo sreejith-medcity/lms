@@ -28,7 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen bg-[var(--canvas)]">
-      <Sidebar features={tenant.features} orgName={tenant.name} />
+      <Sidebar features={tenant.features} orgName={tenant.name} logoUrl={tenant.logoUrl} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 border-b bg-[var(--surface)]/85 px-5 backdrop-blur">

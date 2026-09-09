@@ -13,6 +13,7 @@ export interface TenantContext {
   name: string;
   brandColor: string;
   logoUrl: string | null;
+  faviconUrl: string | null;
   currency: string;
   timezone: string;
   status: string;
@@ -72,6 +73,7 @@ const loadTenant = cache(async (): Promise<TenantContext | null> => {
     name: org.name,
     brandColor: org.brandColor,
     logoUrl: org.logoUrl,
+    faviconUrl: org.faviconUrl,
     currency: org.currency,
     timezone: org.timezone,
     status: tenant.status,

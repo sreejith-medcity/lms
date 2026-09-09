@@ -132,17 +132,32 @@ export function NavIcon({ name }: { name: string }) {
   );
 }
 
-export function Sidebar({ features, orgName }: { features: Record<string, boolean>; orgName: string }) {
+export function Sidebar({
+  features,
+  orgName,
+  logoUrl = null,
+}: {
+  features: Record<string, boolean>;
+  orgName: string;
+  logoUrl?: string | null;
+}) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col bg-[var(--shell)] text-[var(--shell-ink)] lg:flex">
       <div className="flex h-14 items-center gap-2 border-b border-[var(--shell-line)] px-5">
-        <span
-          className="grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] text-xs font-bold"
-          style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
-        >
-          {orgName.slice(0, 1)}
-        </span>
-        <span className="truncate text-sm font-semibold">{orgName}</span>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={logoUrl} alt={orgName} className="h-7 w-auto max-w-40 object-contain" />
+        ) : (
+          <>
+            <span
+              className="grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] text-xs font-bold"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+            >
+              {orgName.slice(0, 1)}
+            </span>
+            <span className="truncate text-sm font-semibold">{orgName}</span>
+          </>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
