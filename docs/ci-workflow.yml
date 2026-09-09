@@ -1,0 +1,47 @@
+name: check
+
+# Typecheck and tests on every push and every pull request. Deliberately not a
+# deploy gate, because Hostinger deploys from the branch directly; this is the
+# thing that tells you a push was wrong without waiting to find out from a
+# learner.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # Prisma's generate needs no database, only the schema, and the types it
+      # writes are what makes the typecheck meaningful.
+      - run: npm ci
+        env:
+          # postinstall runs prisma generate, which reads the URL but does not
+          # connect. A placeholder keeps it happy without a secret in CI.
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          DATABASE_URL_UNPOOLED: postgresql://user:pass@localhost:5432/db
+
+      - run: npm run typecheck
+
+      - run: npm run test
+
+# ---------------------------------------------------------------------------
+# Not installed yet, on purpose.
+#
+# Pushing a file under .github/workflows/ needs a token with the `workflow`
+# scope, and the token on this machine does not have it. Rather than leave a
+# push blocked, the workflow lives here until the scope is added:
+#
+#   github.com/settings/tokens -> the token in use -> tick `workflow` -> update
+#   then: mkdir -p .github/workflows && cp docs/ci-workflow.yml .github/workflows/check.yml
+#
+# Nothing depends on it. `npm run check` does the same two things locally.
+# ---------------------------------------------------------------------------

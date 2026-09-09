@@ -45,8 +45,12 @@ the Prisma query engine cannot be downloaded in this environment, but the genera
 *types* are enough for a full typecheck, so type errors are caught here rather than
 one failed Hostinger deploy at a time.
 
-No automated test suite exists yet. No browser journey has been walked and
-screenshotted. Both are Phase 6 items that should start earlier.
+There is now a test suite as well: `npm test`, 49 tests, no framework. It
+covers the pure logic that decides something consequential and would fail
+quietly rather than loudly. Anything needing the database is not covered yet and
+is named as such in `tests/README.md`.
+
+No browser journey has been walked and screenshotted.
 
 ## Blocked, waiting on a credential or an account
 
@@ -695,26 +699,69 @@ No migrated account is given a password. They sign in with a code, which Phase
 and emailing them to four thousand people is how a migration becomes a security
 incident.
 
+## Phase 8, part two — tests, at last
+
+This should have started six phases ago. The argument for doing it now rather
+than later is not abstract: this session alone shipped three bugs of exactly the
+kind a test catches. A board that said "code lands in Phase 7" after Phase 7
+shipped. Three libraries written, described as delivered, and never called by
+anything. And a sign-in code that would have been queued against the email
+channel when somebody typed a mobile number, found no address to send to, and
+reported success.
+
+**No framework.** Node 22 runs TypeScript and has a test runner built in, so
+this adds nothing to `package.json` that was not already there. A twenty line
+resolver hook teaches it the `@/` alias and extensionless imports, which is the
+whole of the infrastructure. `tsx` could not do the job because its esbuild
+binary is built for whichever machine ran the install, and these have to run on
+a laptop and in CI.
+
+**49 tests, chosen rather than counted.** Everything covered is pure, decides
+something that costs money or access, and fails quietly rather than loudly.
+Path normalisation, because a redirect map with holes is lost rankings. SMS
+segment counting, because one Malayalam character turns a 160 character message
+into two and a wallet that misses that drains three times faster than the screen
+says. Retry classification, because backwards either way burns money or gives up
+on a provider that was down for ten seconds. Sealing, TOTP, template rendering,
+and timezone arithmetic where every test names a zone so none of them pass by
+accident on a laptop set to IST.
+
+**One design change fell out of it.** `redirects.ts` mixed pure path logic with
+database reads, so the path rules could not be tested without Prisma loading.
+They now live in `paths.ts`, which imports nothing. That the test was awkward
+was the code telling me something true.
+
+**One test was wrong, not the code.** I asserted `dayEnd` returned the last
+instant of a day; it returns the next midnight, and all three callers query
+`lt`, so the contract was right and my assumption was not. The test now states
+the real contract, including that midnight belongs to the following day, which
+is the thing a future change could break silently.
+
+**CI is written but not installed.** The workflow sits in `docs/ci-workflow.yml`
+rather than in `.github/workflows/`, because pushing anything into that folder
+needs a token with the `workflow` scope and the token on this machine does not
+have it. Rather than leave a push blocked on a permissions detail, the file
+waits there with the two commands to install it. Nothing depends on it:
+`npm run check` does the same two things locally.
+
+**What is not tested, and is said so in `tests/README.md`:** anything needing
+the database. Fulfilment, the drain, entitlement, the curriculum gate. Those are
+the highest-value tests in the product and they want a throwaway Postgres to run
+against, which is the next piece of work rather than something to fake. A mocked
+fulfilment test proves the mock works.
+
 ## Next runnable step
 
-**Push, then rehearse the migration before you need it.**
+**Push, then run the tests once yourself.**
 
 ```
 cd ~/Documents/lms && rm -f .git/*.lock* && git push origin main
+npm test
 ```
 
-No database change, so no `prisma db push`. Once it deploys:
-
-Generate WooCommerce REST keys with **read** access under WooCommerce, Settings,
-Advanced on medcitylms.in, and put them on the WordPress and WooCommerce card in
-Settings, Integrations. Then open Settings, Migration and press Check, then
-Rehearse on each of the three steps. Nothing is written by a rehearsal, and what
-comes back will tell you how much of the catalogue actually lines up by slug
-before any of it matters.
-
-The redirects screen is worth a first pass now rather than at cutover. One rule,
-`/shop/*` to `/courses/*`, probably covers most of it, and the product URL
-rehearsal will show you what it misses.
+No database change. On your Mac `npm test` should report 49 passing in under a
+second, and from now on `npm run check` does the typecheck and the tests
+together, which is the command worth running before any push.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another

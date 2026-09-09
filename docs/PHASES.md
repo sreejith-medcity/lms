@@ -168,9 +168,14 @@ and never written into the live ledger, because mixing them in would make every
 settlement and tax report wrong for the periods they touch. And no migrated
 account is given a password.
 
-**Part two, still to build:** one cart and one identity across both systems
-while they run side by side, a landing page per course, row-level security, a
-test suite, an accessibility pass, and performance measurement.
+**Part two, built: a test suite.** 49 tests, no framework, on the pure logic
+that decides something consequential and fails quietly. A CI workflow is written
+and waiting in `docs/ci-workflow.yml` for a token with the `workflow` scope.
+Database-backed tests are named as the next piece rather than faked with mocks.
+
+**Part three, still to build:** one cart and one identity across both systems
+while they run side by side, a landing page per course, row-level security,
+database-backed tests, an accessibility pass, and performance measurement.
 
 ## Phase 9 — Loyalty as a product of its own
 
