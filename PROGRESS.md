@@ -442,13 +442,79 @@ Razorpay has a real test button that asks Razorpay whether the keys work and
 says whether they are live or test. Everything without a genuine check says so
 rather than reporting success for a filled-in form.
 
+## The integration catalogue, rebuilt around what the business runs on
+
+103 providers now, up from 49, and grouped the way you set them out rather than
+the way a developer would file them: advertising, analytics and CRM first;
+communication and support second; sales, teaching and operations third.
+
+**Priority is a field, not a comment.** Eighteen providers are priority 1, which
+is the list a new institute is actually set up with, and the board opens on
+"Start here" showing only those. Meta Ads, the Conversions API, Google Ads with
+offline conversion upload, your own CRM, Ninja Forms, Razorpay, MSG91, AiSensy,
+Zoom, GA4, GTM, the Meta pixel, S3, Google sign-in, reCAPTCHA and SMTP. The
+other 85 are there so the catalogue is a map rather than a wishlist, and so the
+next institute that already runs on Zoho or Salesforce is a form fill rather
+than a sprint.
+
+**Alternatives say so.** Where two providers do the same job, the card names the
+other one and warns that connecting both means the same lead arrives twice.
+
+**Every connector states what it needs before you start.** This is the part
+usually left out. Not "enter your API key" but which plan, which scopes, which
+approval, and which thing has to be done on the provider's side first. MSG91
+needs DLT registration or Indian carriers drop the message silently. Zoom needs
+a paid plan for classes over forty minutes and a server-to-server app with
+three specific scopes. Google Ads offline conversions need a developer token
+approved for standard access and gclid already passing through to the enquiry
+form. Stripe needs an Indian entity to settle in INR. Finding these out at
+connect time rather than three days into a launch is most of the value.
+
+**Field mappings are data, per institute.** Every CRM calls a lead source
+something different. So each CRM and forms connector has a mapping panel where
+the institute types what its own account calls the lead source, the owner, the
+stage, the course and the enrolment reference. That last one is the one that
+matters: it is what ties a paid admission back to the enquiry that started it,
+which is what makes cost per enrolment a real number instead of a guess.
+Mappings are written to `config`, never to `credentials`, so a wrong mapping can
+never wipe a sealed key.
+
+**Connection status is history, not a green dot.** A new `integration_events`
+table records every attempt, in or out, with what it was, whether it worked and
+how many records moved. The board shows the last activity on the card and counts
+failures in the last 24 hours, and a "Needs attention" filter shows only the
+connectors that errored. A green dot means a key is stored; that is not the same
+as leads arriving, and the gap between those two is where a fortnight of
+enquiries goes missing.
+
+**Institute subscription billing is a separate category from payments.** Not a
+sentence in a doc saying they are different, but a different heading with
+different connectors under it. Razorpay and the rest take student fees, which is
+the institute's money. Chargebee and Stripe Billing take the institute's
+subscription, which is ours. Nothing shared, including the ledger.
+
+Disconnect and reconnect are both there, disconnect gated on the delete
+permission rather than edit, so a staff member who can update a key cannot clear
+one.
+
 ## Next runnable step
 
-**Push the integrations work.**
+**Push, then run one database command.**
 
 ```
 cd ~/Documents/lms && rm -f .git/*.lock* && git push origin main
 ```
+
+The new `integration_events` table needs creating before history records
+anything. Prisma's engines cannot be fetched from this machine, so run it where
+the database is reachable, or let the deploy do it:
+
+```
+npx prisma db push
+```
+
+Until that runs, the history panel says nothing has happened yet, which is the
+truth rather than an error.
 
 Then open Settings, Integrations, and put in whatever you already have:
 Zoom, MSG91, AiSensy, GA4, the WhatsApp Cloud credentials. They will be sealed

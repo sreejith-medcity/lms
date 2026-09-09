@@ -15,3 +15,4 @@ next-env.d.ts
 medcity-lms.tar.gz
 medcity-lms.env
 .neon
+_to_delete/

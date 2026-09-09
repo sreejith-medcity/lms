@@ -58,6 +58,7 @@ model Organization {
   policies      Policy[]
   featureFlags  FeatureFlag[]
   integrations  Integration[]
+  integrationEvents IntegrationEvent[]
 
   @@index([tenantId])
   @@map("organizations")
@@ -2301,6 +2302,33 @@ model Integration {
 
   @@unique([organizationId, provider])
   @@map("integrations")
+}
+
+/// What an integration has actually done.
+///
+/// A connection screen showing a green dot and nothing else is a screen nobody
+/// can trust. This is the answer to "is it still working": every attempt, in or
+/// out, with what it touched and what came back. It is also the only way an
+/// institute can tell a quiet failure from a quiet week.
+model IntegrationEvent {
+  id             String   @id @default(cuid())
+  organizationId String
+  provider       String
+  /// IN, OUT or CHECK. A CHECK is us asking the provider whether the keys work.
+  direction      String
+  /// What was attempted, in plain words: "lead pushed", "spend pulled".
+  action         String
+  ok             Boolean  @default(true)
+  /// How many records moved, where that means anything.
+  records        Int      @default(0)
+  /// What the provider said, trimmed. Never a credential.
+  detail         String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, provider, createdAt])
+  @@map("integration_events")
 }
 
 /// Inbound gateway events. Razorpay retries, reorders and duplicates; this is the

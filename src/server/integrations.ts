@@ -8,6 +8,7 @@ import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { seal } from '@/lib/secrets';
 import { integrationById } from '@/lib/integrations';
+import { recordIntegrationEvent } from '@/lib/integration-events';
 import { resolveIntegration } from '@/lib/integration-store';
 import type { ActionState } from '@/server/courses';
 
@@ -112,6 +113,14 @@ export async function saveIntegration(_prev: ActionState, formData: FormData): P
       after: { fields: changed },
     });
 
+    await recordIntegrationEvent({
+      organizationId: tenant.organizationId,
+      provider,
+      direction: 'OUT',
+      action: existing ? 'Credentials updated' : 'Connected',
+      records: changed.length,
+    });
+
     revalidatePath('/admin/settings/integrations');
 
     const resolved = await resolveIntegration(tenant.organizationId, provider);
@@ -152,6 +161,13 @@ export async function disconnectIntegration(provider: string): Promise<ActionSta
       action: 'integration.disconnected',
       entity: 'Integration',
       entityId: provider,
+    });
+
+    await recordIntegrationEvent({
+      organizationId: tenant.organizationId,
+      provider,
+      direction: 'OUT',
+      action: 'Disconnected',
     });
 
     revalidatePath('/admin/settings/integrations');
@@ -195,11 +211,36 @@ export async function testIntegration(provider: string): Promise<ActionState> {
       });
 
       if (response.status === 401) {
+        await recordIntegrationEvent({
+          organizationId: tenant.organizationId,
+          provider,
+          direction: 'CHECK',
+          action: 'Key check',
+          ok: false,
+          detail: 'Razorpay returned 401.',
+        });
         return { error: 'Razorpay rejected those keys. Check you copied the secret in full.' };
       }
       if (!response.ok) {
+        await recordIntegrationEvent({
+          organizationId: tenant.organizationId,
+          provider,
+          direction: 'CHECK',
+          action: 'Key check',
+          ok: false,
+          detail: `Razorpay returned ${response.status}.`,
+        });
         return { error: `Razorpay answered ${response.status}. Try again in a moment.` };
       }
+
+      await recordIntegrationEvent({
+        organizationId: tenant.organizationId,
+        provider,
+        direction: 'CHECK',
+        action: 'Key check',
+        ok: true,
+        detail: 'Razorpay accepted the keys.',
+      });
 
       const live = String(resolved.values.keyId).startsWith('rzp_live_');
       return {
@@ -214,6 +255,86 @@ export async function testIntegration(provider: string): Promise<ActionState> {
       ok: true,
       message:
         'Saved. There is no way to check these without sending something, so this says nothing about whether they are correct.',
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Naming the other side's fields.
+ *
+ * Written into `config`, not into `credentials`, so this form can never
+ * overwrite a sealed key. An institute changing what its CRM calls a lead
+ * source should not be able to break its payment gateway.
+ */
+export async function saveIntegrationMapping(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard();
+
+    const provider = String(formData.get('provider') ?? '');
+    const def = integrationById(provider);
+    if (!def) return { error: 'No such integration.' };
+    if (!def.mappings?.length) return { error: 'This one has nothing to map.' };
+
+    const mappings: Record<string, string> = {};
+    for (const field of def.mappings) {
+      const raw = String(formData.get(`map.${field.key}`) ?? '').trim();
+      if (raw) mappings[field.key] = raw;
+    }
+
+    const existing = await db.integration.findFirst({
+      where: { organizationId: tenant.organizationId, provider },
+      select: { id: true, config: true },
+    });
+
+    const config = { ...((existing?.config ?? {}) as Record<string, unknown>), mappings };
+
+    if (existing) {
+      await db.integration.update({
+        where: { id: existing.id },
+        data: { config: config as Prisma.InputJsonValue },
+      });
+    } else {
+      await db.integration.create({
+        data: {
+          organizationId: tenant.organizationId,
+          provider,
+          category: def.category,
+          config: config as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'integration.mapped',
+      entity: 'Integration',
+      entityId: provider,
+      after: { fields: Object.keys(mappings) },
+    });
+
+    await recordIntegrationEvent({
+      organizationId: tenant.organizationId,
+      provider,
+      direction: 'OUT',
+      action: 'Field mapping saved',
+      records: Object.keys(mappings).length,
+    });
+
+    revalidatePath('/admin/settings/integrations');
+
+    const unmapped = def.mappings.filter((m) => !mappings[m.key]);
+
+    return {
+      ok: true,
+      message: unmapped.length
+        ? `Saved. ${unmapped.map((m) => m.label).join(', ')} ${unmapped.length === 1 ? 'is' : 'are'} still blank, so ${unmapped.length === 1 ? 'that field' : 'those fields'} will not be sent.`
+        : 'Saved. Every field has a name on the other side.',
     };
   } catch (err) {
     return fail(err);

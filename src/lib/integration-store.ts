@@ -134,6 +134,55 @@ export async function summarise(
   };
 }
 
+/**
+ * What this institute has said the other side's fields are called.
+ *
+ * Kept in `config` rather than beside the credentials, so saving a mapping can
+ * never touch a sealed key and a wrong mapping is one field to fix rather than
+ * a reconnect.
+ */
+export async function readMappings(
+  organizationId: string,
+  provider: string,
+): Promise<Record<string, string>> {
+  const row = await db.integration.findFirst({
+    where: { organizationId, provider },
+    select: { config: true },
+  });
+  const config = (row?.config ?? {}) as Record<string, unknown>;
+  const mappings = config.mappings;
+  if (!mappings || typeof mappings !== 'object') return {};
+
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(mappings as Record<string, unknown>)) {
+    if (typeof value === 'string' && value.trim()) out[key] = value.trim();
+  }
+  return out;
+}
+
+export async function readAllMappings(
+  organizationId: string,
+): Promise<Map<string, Record<string, string>>> {
+  const rows = await db.integration.findMany({
+    where: { organizationId },
+    select: { provider: true, config: true },
+  });
+
+  const out = new Map<string, Record<string, string>>();
+  for (const row of rows) {
+    const config = (row.config ?? {}) as Record<string, unknown>;
+    const mappings = config.mappings;
+    if (!mappings || typeof mappings !== 'object') continue;
+
+    const clean: Record<string, string> = {};
+    for (const [key, value] of Object.entries(mappings as Record<string, unknown>)) {
+      if (typeof value === 'string' && value.trim()) clean[key] = value.trim();
+    }
+    if (Object.keys(clean).length) out.set(row.provider, clean);
+  }
+  return out;
+}
+
 export async function summariseAll(organizationId: string): Promise<Map<string, IntegrationSummary>> {
   const rows = await db.integration.findMany({
     where: { organizationId },
