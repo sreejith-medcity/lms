@@ -105,40 +105,26 @@ npm run db:push
 npm run db:seed
 ```
 
-### Hostinger shared hosting, Node.js app
+### Hostinger, Node.js web app
 
-hPanel > Advanced > Node.js. Create an app with Node 20 or newer, application root
-`lms`, and the startup file `server.js`.
+hPanel > Websites > your site > Deployments, connected to the GitHub repo. Hostinger
+clones the repo, runs `npm install` then `npm run build`, and starts it with
+`npm start`. Node 22 is what it currently uses.
 
-```bash
-# locally, or in CI
-npm ci
-npm run build
+Two things about that pipeline shaped this repo:
 
-# what gets uploaded to the application root:
-.next/standalone/*      -> becomes server.js and node_modules at the root
-.next/static/           -> .next/static/
-public/                 -> public/
-prisma/                 -> prisma/
-```
+- **Dev dependencies are pruned before the build.** Anything `next build` needs has
+  to sit in `dependencies`, which is why tailwindcss, postcss, autoprefixer,
+  typescript, the `@types/*` packages and the prisma CLI live there rather than in
+  devDependencies. Moving them back will break the build with
+  `Cannot find module 'tailwindcss'`.
+- **It builds in place and starts from the repository root**, so `next start` is the
+  start command and `output: 'standalone'` is deliberately not set. Turn standalone
+  back on only when shipping a container.
 
-`output: 'standalone'` keeps the upload small and means the server starts with plain
-`node server.js` on the PORT hPanel supplies. Build locally rather than on shared
-hosting: `next build` wants more memory than these plans like to give.
-
-Environment variables, set in the Node.js app panel:
-
-| Variable | Notes |
-|---|---|
-| `DATABASE_URL` | the Neon pooled connection string |
-| `DIRECT_URL` | Neon unpooled, used by `prisma migrate` |
-| `APP_BASE_DOMAIN` | the subdomain's parent, e.g. `medcitylms.in` |
-| `PLATFORM_HOST` | e.g. `platform.medcitylms.in` |
-| `AUTH_SECRET` | any 32+ character random string |
-| `NODE_ENV` | `production` |
-
-Point the subdomain at the Node.js app in hPanel, and add its hostname as a
-`TenantDomain` row so tenant resolution matches it.
+Set the environment variables under Deployments > Environment variables, then
+redeploy. Point the subdomain at the web app, and make sure that hostname is in
+`APP_HOSTNAME` before you run the seed, so it gets a `TenantDomain` row.
 
 ### Known limits of shared hosting
 
