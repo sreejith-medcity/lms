@@ -8,10 +8,10 @@ import {
   completeFollowUp,
   linkLeadToLearner,
   setLeadStage,
-  STAGES,
 } from '@/server/leads';
 import type { ActionState } from '@/server/courses';
 import { Badge, Button, Card, Field, FormError, Input, Select, Textarea } from '@/components/ui';
+import { STAGES } from '@/lib/leads';
 
 const initial: ActionState = {};
 

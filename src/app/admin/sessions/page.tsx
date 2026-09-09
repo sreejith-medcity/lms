@@ -56,6 +56,14 @@ export default async function SessionsPage() {
       <PageHeader
         title="Classes"
         description="What is running today, what is coming, and who turned up."
+        action={
+          <Link
+            href="/admin/calendar"
+            className="rounded-[var(--radius-sm)] border px-3.5 py-2 text-sm hover:bg-[var(--surface-2)]"
+          >
+            Open the calendar
+          </Link>
+        }
       />
 
       <StatGrid>

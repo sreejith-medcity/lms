@@ -5,7 +5,7 @@ import { requireTenant } from '@/lib/tenant';
 import { Badge, Card, EmptyState, Section } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { storageConfigured } from '@/lib/storage';
-import { AttendanceRow, CancelSession, Recordings } from './controls';
+import { AttendanceRow, CancelSession, ClassNotices, Recordings } from './controls';
 
 export const dynamic = 'force-dynamic';
 
@@ -106,6 +106,15 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
           Sign-ins are recorded automatically when a learner joins. Use these buttons only for the
           cases the system cannot see.
         </p>
+
+        {session.status !== 'CANCELLED' && roster.length > 0 && (
+          <ClassNotices
+            sessionId={session.id}
+            finished={session.endsAt < new Date()}
+            absentCount={absent}
+            rosterCount={roster.length}
+          />
+        )}
       </Section>
 
       <Section title="Recording">

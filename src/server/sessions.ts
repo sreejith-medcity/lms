@@ -6,6 +6,9 @@ import { db } from '@/lib/db';
 import { requireStaff, getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import type { ActionState } from '@/server/courses';
+import { recordAudit } from '@/lib/audit';
+import { dayStart, dayEnd } from '@/lib/clock';
+import { queueNotifications, describeQueue } from '@/lib/notify';
 
 /** Sign-in is "in time" if it lands within this many minutes of the start. */
 const IN_TIME_GRACE_MINUTES = 10;
@@ -303,6 +306,300 @@ export async function removeRecording(recordingId: string): Promise<ActionState>
 
     revalidatePath(`/admin/sessions/${recording.sessionId}`);
     return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* Holidays ------------------------------------------------------------------ */
+
+const holiday = z.object({
+  fromDate: z.string().min(1, 'Pick a date'),
+  toDate: z.string().optional(),
+  batchId: z.string().optional(),
+  reason: z.string().trim().max(120).optional(),
+});
+
+/**
+ * Mark a day off.
+ *
+ * A holiday is not the same as a cancelled class even though both mean nobody
+ * turns up: attendance percentages have to ignore it, and a learner reading
+ * "cancelled" on Onam wonders what went wrong. So the classes are cancelled with
+ * a flag that says why, and the flag is what the reports read.
+ */
+export async function markHoliday(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('scheduling.mark_holiday');
+
+    const parsed = holiday.safeParse({
+      fromDate: formData.get('fromDate'),
+      toDate: formData.get('toDate') || undefined,
+      batchId: formData.get('batchId') || undefined,
+      reason: formData.get('reason') || undefined,
+    });
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+    const d = parsed.data;
+    const from = dayStart(d.fromDate, tenant.timezone);
+    const to = dayEnd(d.toDate && d.toDate >= d.fromDate ? d.toDate : d.fromDate, tenant.timezone);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      return { error: 'That date did not parse.' };
+    }
+
+    const spanDays = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+    if (spanDays > 60) return { error: 'That is more than sixty days. Mark it in shorter runs.' };
+
+    const where = {
+      organizationId: tenant.organizationId,
+      startsAt: { gte: from, lt: to },
+      status: { not: 'CANCELLED' as const },
+      ...(d.batchId ? { batchId: d.batchId } : {}),
+    };
+
+    const affected = await db.liveSession.count({ where });
+    if (affected === 0) {
+      return { error: 'No classes were scheduled then, so there is nothing to mark.' };
+    }
+
+    await db.liveSession.updateMany({
+      where,
+      data: {
+        status: 'CANCELLED',
+        isHoliday: true,
+        cancelledAt: new Date(),
+        cancelReason: d.reason?.trim() || 'Holiday',
+      },
+    });
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'session.holiday.marked',
+      entity: 'LiveSession',
+      entityId: d.batchId ?? 'all',
+      after: { from: d.fromDate, to: d.toDate ?? d.fromDate, affected, reason: d.reason ?? 'Holiday' },
+    });
+
+    revalidatePath('/admin/calendar');
+    revalidatePath('/admin/sessions');
+    revalidatePath('/learn');
+    return {
+      ok: true,
+      message: `${affected} ${affected === 1 ? 'class is' : 'classes are'} now marked as a holiday.`,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Puts a wrongly marked holiday back on the timetable. */
+export async function clearHoliday(
+  fromDate: string,
+  toDate: string | null,
+  batchId: string | null,
+): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('scheduling.mark_holiday');
+
+    const from = dayStart(fromDate, tenant.timezone);
+    const to = dayEnd(toDate && toDate >= fromDate ? toDate : fromDate, tenant.timezone);
+
+    const restored = await db.liveSession.updateMany({
+      where: {
+        organizationId: tenant.organizationId,
+        startsAt: { gte: from, lt: to },
+        isHoliday: true,
+        ...(batchId ? { batchId } : {}),
+      },
+      data: { status: 'SCHEDULED', isHoliday: false, cancelledAt: null, cancelReason: null },
+    });
+
+    revalidatePath('/admin/calendar');
+    revalidatePath('/admin/sessions');
+    revalidatePath('/learn');
+    return {
+      ok: true,
+      message:
+        restored.count === 0
+          ? 'Nothing was marked as a holiday then.'
+          : `${restored.count} ${restored.count === 1 ? 'class is' : 'classes are'} back on.`,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Publish or unpublish recordings in one go.
+ *
+ * A term's worth of classes gets recorded before anyone decides which of them
+ * learners should see, and doing that one session page at a time is why the
+ * incumbent's library sits half-published.
+ */
+export async function setRecordingsPublished(
+  recordingIds: string[],
+  isPublished: boolean,
+): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('class_recording.publish_recordings');
+
+    const ids = recordingIds.filter(Boolean).slice(0, 200);
+    if (ids.length === 0) return { error: 'Nothing was selected.' };
+
+    const owned = await db.recording.findMany({
+      where: { id: { in: ids }, session: { organizationId: tenant.organizationId } },
+      select: { id: true },
+    });
+    if (owned.length === 0) return { error: 'Those recordings are no longer available.' };
+
+    await db.recording.updateMany({
+      where: { id: { in: owned.map((r) => r.id) } },
+      data: { isPublished },
+    });
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: isPublished ? 'recording.published' : 'recording.unpublished',
+      entity: 'Recording',
+      entityId: owned.length === 1 ? owned[0].id : 'bulk',
+      after: { count: owned.length },
+    });
+
+    revalidatePath('/admin/recordings');
+    revalidatePath('/learn');
+    return {
+      ok: true,
+      message: `${owned.length} ${owned.length === 1 ? 'recording' : 'recordings'} ${
+        isPublished ? 'published' : 'hidden'
+      }.`,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function renameRecording(recordingId: string, title: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('class_recording.publish_recordings');
+
+    const trimmed = title.trim();
+    if (trimmed.length < 2) return { error: 'Give the recording a title.' };
+
+    const recording = await db.recording.findFirst({
+      where: { id: recordingId, session: { organizationId: tenant.organizationId } },
+      select: { id: true },
+    });
+    if (!recording) return { error: 'Recording not found.' };
+
+    await db.recording.update({ where: { id: recording.id }, data: { title: trimmed.slice(0, 160) } });
+
+    revalidatePath('/admin/recordings');
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* Telling people ------------------------------------------------------------ */
+
+async function rosterOf(sessionId: string, organizationId: string) {
+  return db.liveSession.findFirst({
+    where: { id: sessionId, organizationId },
+    select: {
+      id: true,
+      title: true,
+      startsAt: true,
+      endsAt: true,
+      status: true,
+      batch: {
+        select: {
+          id: true,
+          name: true,
+          enrollments: {
+            where: { status: { in: ['ENROLLED', 'REGISTERED'] } },
+            select: { user: { select: { id: true, email: true, phone: true } } },
+          },
+        },
+      },
+      attendances: { select: { userId: true, status: true } },
+    },
+  });
+}
+
+/**
+ * Tell the people who did not turn up.
+ *
+ * Only after the class has finished, and only to those with no sign-in against
+ * it, because a note about missing a class you attended is worse than no note.
+ */
+export async function notifyAbsentees(sessionId: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('scheduling.sessions');
+
+    const session = await rosterOf(sessionId, tenant.organizationId);
+    if (!session) return { error: 'Class not found.' };
+    if (session.status === 'CANCELLED') return { error: 'That class was called off.' };
+    if (session.endsAt > new Date()) {
+      return { error: 'That class has not finished yet, so nobody is absent from it.' };
+    }
+
+    const came = new Set(
+      session.attendances
+        .filter((a) => a.status === 'PRESENT' || a.status === 'LATE' || a.status === 'EXCUSED')
+        .map((a) => a.userId),
+    );
+
+    const absentees = session.batch.enrollments
+      .map((e) => e.user)
+      .filter((u) => !came.has(u.id))
+      .map((u) => ({ userId: u.id, email: u.email, phone: u.phone }));
+
+    if (absentees.length === 0) return { ok: true, message: 'Everybody turned up. Nothing to send.' };
+
+    const result = await queueNotifications({
+      organizationId: tenant.organizationId,
+      eventKey: 'session.absent',
+      recipients: absentees,
+      dedupeKey: `session:${session.id}`,
+    });
+
+    revalidatePath(`/admin/sessions/${sessionId}`);
+    return { ok: true, message: describeQueue(result, 'note') };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** A nudge before a class, sent by hand rather than waiting for the scheduler. */
+export async function remindRoster(sessionId: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('scheduling.sessions');
+
+    const session = await rosterOf(sessionId, tenant.organizationId);
+    if (!session) return { error: 'Class not found.' };
+    if (session.status === 'CANCELLED') return { error: 'That class was called off.' };
+    if (session.startsAt < new Date()) {
+      return { error: 'That class has already started. A reminder now would only confuse people.' };
+    }
+
+    const roster = session.batch.enrollments.map((e) => ({
+      userId: e.user.id,
+      email: e.user.email,
+      phone: e.user.phone,
+    }));
+    if (roster.length === 0) return { error: 'Nobody is enrolled in this batch yet.' };
+
+    const result = await queueNotifications({
+      organizationId: tenant.organizationId,
+      eventKey: 'session.reminder',
+      recipients: roster,
+      dedupeKey: `session:${session.id}`,
+    });
+
+    revalidatePath(`/admin/sessions/${sessionId}`);
+    return { ok: true, message: describeQueue(result, 'reminder') };
   } catch (err) {
     return fail(err);
   }

@@ -50,7 +50,7 @@ locks are enforced on the asset route and the progress actions as well as in the
 UI, and progress percentage counts only the curriculum a given enrolment was
 actually handed.
 
-## Phase 2 — Scheduling and recordings
+## Phase 2 — Scheduling and recordings · BUILT, AWAITING PUSH
 
 Calendar with day, week, month and list views, filtered by trainer and batch,
 which is Edmingle's actual scheduling screen and the one trainers live in. Mark
@@ -58,6 +58,12 @@ holiday. A recordings library across batches with bulk publish, rather than only
 per session. Session feedback and rating. Feedback forms with a response rate and
 a submission timeline. Notify absentees and manual reminders, queued now and sent
 when Phase 7 connects a provider.
+
+Built. Two departures from the brief, both deliberate: the calendar does its own
+date arithmetic in the academy's timezone rather than the server's, because a
+7pm class in Kochi belongs to that Tuesday wherever the box lives; and the
+outbox writes a row per intended message before any provider exists, so "did she
+get the reminder" stays answerable rather than becoming a provider's problem.
 
 ## Phase 3 — Marketing and sales completeness
 

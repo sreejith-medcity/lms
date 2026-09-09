@@ -2,7 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
-import { attachRecording, cancelSession, markAttendance, removeRecording } from '@/server/sessions';
+import {
+  attachRecording,
+  cancelSession,
+  markAttendance,
+  notifyAbsentees,
+  remindRoster,
+  removeRecording,
+} from '@/server/sessions';
 import { Badge, Button } from '@/components/ui';
 import { Uploader } from '@/components/uploader';
 
@@ -174,6 +181,71 @@ export function Recordings({
           Connect object storage in the media library to publish recordings here.
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * The two messages a class actually generates.
+ *
+ * Nothing leaves the building yet: both write a queued row per person, which is
+ * what makes "did she get told" answerable later. The button says so rather than
+ * implying a send.
+ */
+export function ClassNotices({
+  sessionId,
+  finished,
+  absentCount,
+  rosterCount,
+}: {
+  sessionId: string;
+  finished: boolean;
+  absentCount: number;
+  rosterCount: number;
+}) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<{ error?: string; message?: string }>({});
+
+  function run(work: () => Promise<{ error?: string; ok?: boolean; message?: string }>) {
+    start(async () => {
+      const res = await work();
+      setState({ error: res.error, message: res.ok ? res.message : undefined });
+    });
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {finished ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending || absentCount === 0}
+            onClick={() => run(() => notifyAbsentees(sessionId))}
+          >
+            {pending
+              ? 'Queueing…'
+              : absentCount === 0
+                ? 'Nobody missed this'
+                : `Notify ${absentCount} who missed it`}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending || rosterCount === 0}
+            onClick={() => run(() => remindRoster(sessionId))}
+          >
+            {pending ? 'Queueing…' : `Remind the ${rosterCount} on the roll`}
+          </Button>
+        )}
+      </div>
+
+      {state.error && <p className="t-small text-[var(--bad)]">{state.error}</p>}
+      {state.message && <p className="t-small muted">{state.message}</p>}
+      <p className="t-small faint">
+        Messages are written to the outbox now and go out once a messaging provider is connected.
+      </p>
     </div>
   );
 }

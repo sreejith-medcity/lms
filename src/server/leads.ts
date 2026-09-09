@@ -8,6 +8,7 @@ import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import type { Prisma } from '@prisma/client';
 import type { ActionState } from '@/server/courses';
+import { STAGES } from '@/lib/leads';
 
 /**
  * The enquiry pipeline.
@@ -17,16 +18,6 @@ import type { ActionState } from '@/server/courses';
  * this enquiry became that enrolment. Everything here is built around that link.
  */
 
-export const STAGES = [
-  'NEW',
-  'CONTACTED',
-  'QUALIFIED',
-  'DEMO_BOOKED',
-  'NEGOTIATION',
-  'WON',
-  'LOST',
-  'SUPPORT',
-] as const;
 
 async function guard(action: 'view' | 'edit' | 'delete' = 'edit') {
   const [tenant, user] = await Promise.all([

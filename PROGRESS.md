@@ -162,20 +162,61 @@ actions, and `/api/assets/[id]`, so a locked video is not one URL away. Progress
 percentage now counts only the curriculum this enrolment was actually given, so a
 batch teaching four of six modules can still reach 100%.
 
+## Phase 2 — scheduling and recordings (built, awaiting a push)
+
+Typechecks clean. Not yet exercised against the database.
+
+**Calendar** at `/admin/calendar`: day, week, month and list, filtered to one
+batch or one trainer. Week and day are a real time grid rather than seven lists,
+because where a class sits vertically is how a trainer reads a gap. All of it
+does its date arithmetic in the academy's timezone (`src/lib/clock.ts`), not the
+server's, so a 7pm class in Kochi belongs to that Tuesday whether the box is in
+Mumbai or UTC.
+
+**Holidays.** Mark a day or a run of days off, for one batch or the whole
+academy. The classes are cancelled with a flag that says why, so attendance
+stops counting them and the learner sees a holiday rather than a cancellation.
+Wrongly marked days can be put back.
+
+**Recordings library** at `/admin/recordings`: every recording across every
+batch, searchable, filtered by batch and by whether anyone has released it, with
+inline rename and bulk publish. Held-back recordings are counted at the top,
+because that pile is the one nobody remembers to work through.
+
+**Feedback.** A form builder (`/admin/feedback`) with five answer types, and a
+results page with the average, the rating distribution, a per-day submission
+timeline and a response rate whose denominator is printed rather than implied.
+Questions lock once answers exist, since rewriting them would leave answers
+pointing at labels nobody was asked. On the learner's side a class they actually
+sat asks "how was it" on their own dashboard, one tap for a complete answer.
+
+**The outbox.** `src/lib/notify.ts` writes a queued row per intended message,
+respecting the academy's per-event channel settings, deduplicated per class so a
+second press sends nothing twice. Notify absentees appears once a class has
+finished; remind the roster only before it starts. Nothing is sent until Phase 7
+connects a provider, which is the point: the hard part of messaging is deciding
+who gets what, and that is decided and recorded now.
+
+Housekeeping done along the way: `STAGES` was being exported from a
+`'use server'` file, which publishes a list of strings as a callable endpoint.
+Moved to `src/lib/leads.ts`, and every `'use server'` file re-audited.
+
 ## Next runnable step
 
-**Push Phase 1, then walk it.**
+**Push Phase 2, then walk it.**
 
-Nothing here has met the database yet. On the Mac:
+Nothing in Phase 1 or Phase 2 has met the database yet. On the Mac:
 
 ```
-cd ~/Documents/lms && npx tsc --noEmit && git add -A && git commit && git push
+cd ~/Documents/lms && npx tsc --noEmit && git push
 ```
 
-Then, once deployed: open a course, set an instalment plan and a drip rule on one
-lesson, open the batch classroom, and confirm the locked lesson shows "opens on"
-in the learner rail and refuses to play.
+Then, once deployed: open the calendar, switch through the four views, mark a
+holiday and put it back; write a feedback form and answer it as a learner whose
+class has finished; and press notify absentees on a class that has ended, then
+check the queued rows.
 
-Still open from before Phase 1: the two stuck ₹8,260 orders. Razorpay's dashboard
-will say whether they were captured at 8,260, captured at another amount, or only
-authorised — and that answer picks between two very different bugs.
+Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
+dashboard will say whether they were captured at 8,260, captured at another
+amount, or only authorised, and that answer picks between two very different
+bugs.

@@ -4,6 +4,9 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { Badge, Card, EmptyState, LinkButton, ProgressRing, Section } from '@/components/ui';
 import { JoinButton } from './join-button';
+import { RateClass } from './rate-class';
+import { questionsOf } from '@/lib/feedback';
+import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,6 +50,32 @@ export default async function MyLearning() {
     : [];
 
   const now = new Date();
+
+  // Classes worth asking about: sat in the last week, finished, not yet rated.
+  // Asked here rather than by email, because this is where the learner already is.
+  const feedbackForm = await db.feedbackForm.findFirst({
+    where: { organizationId: tenant.organizationId, type: 'SESSION', isActive: true },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, questions: true },
+  });
+
+  const weekAgo = new Date(now.getTime() - 7 * 86_400_000);
+
+  const toRate =
+    feedbackForm && batchIds.length
+      ? await db.liveSession.findMany({
+          where: {
+            batchId: { in: batchIds },
+            status: { not: 'CANCELLED' },
+            endsAt: { gte: weekAgo, lte: now },
+            attendances: { some: { userId: user.id, status: { in: ['PRESENT', 'LATE'] } } },
+            feedback: { none: { userId: user.id, formId: feedbackForm.id } },
+          },
+          orderBy: { startsAt: 'desc' },
+          take: 5,
+          select: { id: true, title: true, startsAt: true },
+        })
+      : [];
 
   const inProgress = enrollments.filter((e) => e.progressPercent > 0 && e.progressPercent < 100);
   const notStarted = enrollments.filter((e) => e.progressPercent === 0);
@@ -116,6 +145,18 @@ export default async function MyLearning() {
             </ul>
           </Card>
         </Section>
+      )}
+
+      {feedbackForm && toRate.length > 0 && (
+        <RateClass
+          formId={feedbackForm.id}
+          questions={questionsOf(feedbackForm.questions)}
+          sessions={toRate.map((s) => ({
+            id: s.id,
+            title: s.title,
+            when: `${formatDayLabel(dayKey(s.startsAt, tenant.timezone), tenant.timezone)}, ${formatTime(s.startsAt, tenant.timezone)}`,
+          }))}
+        />
       )}
 
       {resume && (
