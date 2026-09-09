@@ -94,7 +94,9 @@ export function PayNow({
             return;
           }
 
-          const body = (await res.json().catch(() => null)) as { error?: string } | null;
+          const body = (await res.json().catch(() => null)) as
+            | { error?: string; reference?: string }
+            | null;
           if (!res.ok) {
             setStage('error');
             setMessage(body?.error ?? 'We could not confirm that payment.');

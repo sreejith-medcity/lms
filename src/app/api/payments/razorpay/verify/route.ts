@@ -93,9 +93,13 @@ export async function POST(request: Request) {
   });
 
   if (!result.ok) {
-    console.error('[razorpay/verify] fulfilment refused', result.error);
+    // The refusal is already written to gateway_events by fulfilPaidOrder, so the
+    // academy can see it in the admin. The learner gets the reference to quote.
     return NextResponse.json(
-      { error: 'Payment received, but we could not complete your enrolment. The academy has been notified.' },
+      {
+        error: `Your payment went through, but we could not finish your enrolment automatically. Nothing is lost: quote ${result.reference ?? 'this page'} to the academy and they can complete it.`,
+        reference: result.reference,
+      },
       { status: 500 },
     );
   }

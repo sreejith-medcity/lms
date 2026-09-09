@@ -24,6 +24,41 @@ export interface FulfilResult {
   enrollmentIds: string[];
   invoiceNo?: string;
   error?: string;
+  /** Shown to the learner and searchable in the admin, so support has a handle. */
+  reference?: string;
+}
+
+/**
+ * A refusal is written down, not just logged.
+ *
+ * Money has moved and access has not been granted, which is the worst state this
+ * system can be in. A console line does not survive the next deploy, so the
+ * reason goes into gateway_events where it outlives the process and shows up in
+ * the admin.
+ */
+async function recordRefusal(input: {
+  organizationId: string;
+  orderId: string;
+  gatewayPaymentId: string;
+  reason: string;
+  detail: Record<string, unknown>;
+}) {
+  console.error('[fulfilment] refused', input.reason, input.detail);
+  try {
+    await db.gatewayEvent.create({
+      data: {
+        organizationId: input.organizationId,
+        gateway: 'RAZORPAY',
+        eventId: `refusal:${input.gatewayPaymentId}:${Date.now()}`,
+        event: 'fulfilment.refused',
+        payload: { orderId: input.orderId, ...input.detail } as Prisma.InputJsonValue,
+        signatureOk: true,
+        error: input.reason,
+      },
+    });
+  } catch (err) {
+    console.error('[fulfilment] could not record the refusal', err);
+  }
 }
 
 export async function fulfilPaidOrder(input: {
@@ -43,17 +78,56 @@ export async function fulfilPaidOrder(input: {
   });
 
   if (!order) {
-    return { ok: false, alreadyDone: false, orderId: input.orderId, enrollmentIds: [], error: 'ORDER_NOT_FOUND' };
+    await recordRefusal({
+      organizationId: input.organizationId,
+      orderId: input.orderId,
+      gatewayPaymentId: input.gatewayPaymentId,
+      reason: 'ORDER_NOT_FOUND',
+      detail: { gatewayPaymentId: input.gatewayPaymentId, amountPaise: input.amountPaise },
+    });
+    return {
+      ok: false,
+      alreadyDone: false,
+      orderId: input.orderId,
+      enrollmentIds: [],
+      error: 'ORDER_NOT_FOUND',
+    };
   }
 
   // The gateway is the authority on the amount. If it disagrees with the order we
   // priced, something is wrong and no access is granted on a guess.
   if (input.amountPaise !== order.totalPaise) {
+    await recordRefusal({
+      organizationId: input.organizationId,
+      orderId: order.id,
+      gatewayPaymentId: input.gatewayPaymentId,
+      reason: 'AMOUNT_MISMATCH',
+      detail: {
+        orderNo: order.orderNo,
+        gatewayAmountPaise: input.amountPaise,
+        orderTotalPaise: order.totalPaise,
+        gatewayPaymentId: input.gatewayPaymentId,
+      },
+    });
+
+    // The payment is still recorded, so the money is never invisible. It simply
+    // is not attached to an order, and it surfaces in the admin as unmatched.
+    await recordFailedPayment({
+      organizationId: input.organizationId,
+      orderId: order.id,
+      userId: order.userId,
+      gatewayPaymentId: input.gatewayPaymentId,
+      amountPaise: input.amountPaise,
+      reason: `Amount did not match order ${order.orderNo}: gateway ${input.amountPaise}, order ${order.totalPaise}`,
+      raw: input.raw,
+    });
+
     return {
       ok: false,
       alreadyDone: false,
       orderId: order.id,
       enrollmentIds: [],
+      reference: order.orderNo,
       error: `AMOUNT_MISMATCH: gateway ${input.amountPaise}, order ${order.totalPaise}`,
     };
   }
@@ -72,6 +146,7 @@ export async function fulfilPaidOrder(input: {
   const enrollmentIds: string[] = [];
   let invoiceNo = order.invoice?.invoiceNo;
 
+  const runFulfilment = async () => {
   await db.$transaction(async (tx) => {
     // 1. The payment. Unique on (organisation, gateway, reference), so a repeated
     //    delivery of the same event updates one row instead of creating a second.
@@ -223,6 +298,31 @@ export async function fulfilPaidOrder(input: {
     }
   });
 
+  };
+
+  // An exception in here means money moved and access did not follow, so it is
+  // written down rather than becoming an anonymous 500 nobody can trace.
+  try {
+    await runFulfilment();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordRefusal({
+      organizationId: input.organizationId,
+      orderId: order.id,
+      gatewayPaymentId: input.gatewayPaymentId,
+      reason: 'FULFILMENT_THREW',
+      detail: { orderNo: order.orderNo, message },
+    });
+    return {
+      ok: false,
+      alreadyDone: false,
+      orderId: order.id,
+      enrollmentIds: [],
+      reference: order.orderNo,
+      error: `FULFILMENT_THREW: ${message}`,
+    };
+  }
+
   await recordAudit({
     organizationId: input.organizationId,
     actorId: order.userId,
@@ -238,6 +338,7 @@ export async function fulfilPaidOrder(input: {
     orderId: order.id,
     enrollmentIds,
     invoiceNo,
+    reference: order.orderNo,
   };
 }
 
