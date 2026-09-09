@@ -1,12 +1,19 @@
 'use client';
 
 import { useActionState, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   addMaterial,
   addModule,
   addSection,
+  cloneSection,
   deleteMaterial,
+  deleteSection,
   moveMaterial,
+  moveModule,
+  moveSection,
+  renameSection,
+  setSectionVisible,
   unlinkModule,
 } from '@/server/curriculum';
 import type { ActionState } from '@/server/courses';
@@ -301,5 +308,191 @@ export function MaterialRow({
         </button>
       </div>
     </li>
+  );
+}
+
+/* Section and module handling ---------------------------------------------- */
+
+function IconButton({
+  label,
+  onClick,
+  disabled,
+  danger,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={`grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] border text-xs transition
+        disabled:cursor-not-allowed disabled:opacity-40
+        ${danger ? 'text-[var(--bad)] hover:bg-[var(--bad-soft)]' : 'text-[var(--ink-2)] hover:bg-[var(--surface)]'}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * The row of controls on a section header.
+ *
+ * Rename in place rather than in a dialog, because renaming a section is a
+ * typo fix nine times in ten and a dialog turns that into four clicks.
+ */
+export function SectionControls({
+  productId,
+  section,
+  canMoveUp,
+  canMoveDown,
+}: {
+  productId: string;
+  section: { id: string; title: string; isVisible: boolean; materialCount: number };
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(section.title);
+  const [error, setError] = useState<string>();
+
+  function run(work: () => Promise<ActionState>) {
+    start(async () => {
+      const res = await work();
+      setError(res.error);
+      if (!res.error) router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      {editing ? (
+        <form
+          className="flex flex-1 items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setEditing(false);
+            run(() => renameSection(section.id, productId, title));
+          }}
+        >
+          <Input
+            value={title}
+            autoFocus
+            maxLength={160}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => {
+              setEditing(false);
+              if (title.trim() !== section.title) run(() => renameSection(section.id, productId, title));
+            }}
+            aria-label="Section title"
+            className="h-8 max-w-sm py-1"
+          />
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-left text-sm font-medium hover:underline"
+          title="Rename"
+        >
+          {section.title}
+          {!section.isVisible && (
+            <span className="ml-2">
+              <Badge tone="warn">hidden</Badge>
+            </span>
+          )}
+        </button>
+      )}
+
+      <div className="flex items-center gap-1">
+        {error && <span className="t-micro mr-1 text-[var(--bad)]">{error}</span>}
+        <IconButton
+          label="Move up"
+          disabled={!canMoveUp || pending}
+          onClick={() => run(() => moveSection(section.id, productId, 'up'))}
+        >
+          ↑
+        </IconButton>
+        <IconButton
+          label="Move down"
+          disabled={!canMoveDown || pending}
+          onClick={() => run(() => moveSection(section.id, productId, 'down'))}
+        >
+          ↓
+        </IconButton>
+        <IconButton
+          label={section.isVisible ? 'Hide from learners' : 'Show to learners'}
+          disabled={pending}
+          onClick={() => run(() => setSectionVisible(section.id, productId, !section.isVisible))}
+        >
+          {section.isVisible ? '👁' : '🚫'}
+        </IconButton>
+        <IconButton
+          label="Duplicate this section and its materials"
+          disabled={pending}
+          onClick={() => run(() => cloneSection(section.id, productId))}
+        >
+          ⧉
+        </IconButton>
+        <IconButton
+          label={
+            section.materialCount > 0
+              ? 'Empty the section before deleting it'
+              : 'Delete this section'
+          }
+          danger
+          disabled={pending || section.materialCount > 0}
+          onClick={() => run(() => deleteSection(section.id, productId))}
+        >
+          ×
+        </IconButton>
+      </div>
+    </div>
+  );
+}
+
+export function ModuleOrder({
+  productId,
+  moduleId,
+  canMoveUp,
+  canMoveDown,
+}: {
+  productId: string;
+  moduleId: string;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function move(direction: 'up' | 'down') {
+    start(async () => {
+      await moveModule(productId, moduleId, direction);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <IconButton label="Move module up" disabled={!canMoveUp || pending} onClick={() => move('up')}>
+        ↑
+      </IconButton>
+      <IconButton
+        label="Move module down"
+        disabled={!canMoveDown || pending}
+        onClick={() => move('down')}
+      >
+        ↓
+      </IconButton>
+    </div>
   );
 }

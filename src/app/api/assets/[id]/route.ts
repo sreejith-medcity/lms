@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 import { getTenantContext } from '@/lib/tenant';
 import { meter } from '@/lib/usage';
 import { readUrlFor, storageConfigured } from '@/lib/storage';
+import { curriculumGate } from '@/lib/curriculum-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,9 +60,26 @@ export async function GET(
   if (!allowed && user && sameOrg) {
     const materialIds = asset.materials.map((m) => m.id);
 
-    const [viaCourse, viaRecording] = await Promise.all([
+    const [places, enrolments, viaRecording] = await Promise.all([
+      // Where in the curriculum this file sits, so a drip rule or a hidden
+      // section can be applied to the URL and not only to the page that links it.
       materialIds.length
-        ? db.enrollment.count({
+        ? db.material.findMany({
+            where: { id: { in: materialIds } },
+            select: {
+              id: true,
+              sectionId: true,
+              section: {
+                select: {
+                  isVisible: true,
+                  module: { select: { id: true, courses: { select: { courseId: true } } } },
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      materialIds.length
+        ? db.enrollment.findMany({
             where: {
               userId: user.id,
               organizationId: tenant.organizationId,
@@ -78,8 +96,13 @@ export async function GET(
                 },
               },
             },
+            select: {
+              batchId: true,
+              createdAt: true,
+              product: { select: { course: { select: { id: true } } } },
+            },
           })
-        : Promise.resolve(0),
+        : Promise.resolve([]),
       db.recording.count({
         where: {
           assetId: asset.id,
@@ -88,11 +111,30 @@ export async function GET(
       }),
     ]);
 
-    allowed = viaCourse > 0 || viaRecording > 0;
+    for (const enrolment of enrolments) {
+      const courseId = enrolment.product.course?.id;
+      if (!courseId || allowed) continue;
+
+      const gate = await curriculumGate({
+        courseId,
+        enrolledAt: enrolment.createdAt,
+        batchId: enrolment.batchId,
+      });
+
+      allowed = places.some(
+        (place) =>
+          place.section.isVisible &&
+          place.section.module.courses.some((c) => c.courseId === courseId) &&
+          gate.teaches(place.section.module.id) &&
+          !gate.lockOf(place.id, place.sectionId),
+      );
+    }
+
+    if (!allowed) allowed = viaRecording > 0;
   }
 
   if (!allowed) {
-    return new NextResponse(user ? 'Not available on your enrolment' : 'Sign in to view this', {
+    return new NextResponse(user ? 'Not available on your enrolment yet' : 'Sign in to view this', {
       status: user ? 403 : 401,
     });
   }

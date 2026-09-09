@@ -3,7 +3,15 @@ import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { storageConfigured } from '@/lib/storage';
 import { Card, EmptyState } from '@/components/ui';
-import { AddModule, AddSection, AddMaterial, MaterialRow, UnlinkModule } from './editors';
+import {
+  AddModule,
+  AddSection,
+  AddMaterial,
+  MaterialRow,
+  ModuleOrder,
+  SectionControls,
+  UnlinkModule,
+} from './editors';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,7 +65,7 @@ export default async function CurriculumPage({ params }: { params: Promise<{ id:
         />
       )}
 
-      {links.map((link) => {
+      {links.map((link, moduleIndex) => {
         const materialCount = link.module.sections.reduce((n, s) => n + s.materials.length, 0);
         const seconds = link.module.sections.reduce(
           (n, s) => n + s.materials.reduce((m, mat) => m + (mat.durationSeconds ?? 0), 0),
@@ -74,13 +82,34 @@ export default async function CurriculumPage({ params }: { params: Promise<{ id:
                   {seconds > 0 && ` · ${formatDuration(seconds)}`}
                 </p>
               </div>
-              <UnlinkModule productId={product.id} moduleId={link.moduleId} />
+              <div className="flex items-center gap-2">
+                <ModuleOrder
+                  productId={product.id}
+                  moduleId={link.moduleId}
+                  canMoveUp={moduleIndex > 0}
+                  canMoveDown={moduleIndex < links.length - 1}
+                />
+                <UnlinkModule productId={product.id} moduleId={link.moduleId} />
+              </div>
             </div>
 
-            {link.module.sections.map((section) => (
-              <div key={section.id} className="rounded-[var(--radius-sm)] border">
+            {link.module.sections.map((section, sectionIndex) => (
+              <div
+                key={section.id}
+                className={`rounded-[var(--radius-sm)] border ${section.isVisible ? '' : 'opacity-70'}`}
+              >
                 <div className="border-b bg-[var(--surface-2)] px-4 py-2">
-                  <h3 className="text-sm font-medium">{section.title}</h3>
+                  <SectionControls
+                    productId={product.id}
+                    section={{
+                      id: section.id,
+                      title: section.title,
+                      isVisible: section.isVisible,
+                      materialCount: section.materials.length,
+                    }}
+                    canMoveUp={sectionIndex > 0}
+                    canMoveDown={sectionIndex < link.module.sections.length - 1}
+                  />
                 </div>
 
                 <ul className="divide-y">

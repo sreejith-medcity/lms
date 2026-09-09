@@ -23,7 +23,7 @@ certificates can be checked by a stranger with only the code.
 
 ---
 
-## Phase 1 — Course and batch depth
+## Phase 1 — Course and batch depth · BUILT, AWAITING PUSH
 
 The audit calls these "the two structures the clone lives or dies on", and both
 are currently shallower here than in Edmingle.
@@ -44,6 +44,11 @@ batch staff assignment, batch-level module linking, default flag, edit batch.
 
 **Curriculum.** Clone a section, rearrange sections, per-batch section
 visibility.
+
+Built, and past the brief in one place worth naming: the drip and visibility
+locks are enforced on the asset route and the progress actions as well as in the
+UI, and progress percentage counts only the curriculum a given enrolment was
+actually handed.
 
 ## Phase 2 — Scheduling and recordings
 

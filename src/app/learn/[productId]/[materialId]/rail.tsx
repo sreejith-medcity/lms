@@ -10,6 +10,8 @@ export interface RailMaterial {
   duration: string | null;
   done: boolean;
   bookmarked: boolean;
+  /** Set when the lesson has not been released yet. */
+  lockedLabel?: string | null;
 }
 
 export interface RailModule {
@@ -104,40 +106,65 @@ export function Rail({
                     <ul>
                       {s.materials.map((mat) => {
                         const current = mat.id === currentId;
+                        const locked = Boolean(mat.lockedLabel);
+
+                        const inner = (
+                          <>
+                            <span
+                              aria-hidden
+                              className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[9px] ${
+                                mat.done ? 'border-transparent text-white' : 'text-transparent'
+                              }`}
+                              style={mat.done ? { background: 'var(--brand)' } : undefined}
+                            >
+                              ✓
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className={`block leading-snug ${locked ? 'faint' : ''}`}>
+                                {mat.title}
+                              </span>
+                              <span className="t-micro faint">
+                                {locked
+                                  ? mat.lockedLabel
+                                  : `${mat.typeLabel}${mat.duration ? ` · ${mat.duration}` : ''}`}
+                              </span>
+                            </span>
+                            {locked && (
+                              <span aria-hidden className="shrink-0 faint">
+                                🔒
+                              </span>
+                            )}
+                            {!locked && mat.bookmarked && (
+                              <span aria-label="Bookmarked" className="shrink-0 text-[var(--warn)]">
+                                ★
+                              </span>
+                            )}
+                          </>
+                        );
+
                         return (
                           <li key={mat.id}>
-                            <Link
-                              href={`/learn/${productId}/${mat.id}`}
-                              onClick={() => setSheet(false)}
-                              aria-current={current ? 'page' : undefined}
-                              className={`flex items-start gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm transition ${
-                                current
-                                  ? 'bg-[var(--brand-soft)] font-medium'
-                                  : 'hover:bg-[var(--surface-2)]'
-                              }`}
-                            >
+                            {locked ? (
                               <span
-                                aria-hidden
-                                className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[9px] ${
-                                  mat.done ? 'border-transparent text-white' : 'text-transparent'
-                                }`}
-                                style={mat.done ? { background: 'var(--brand)' } : undefined}
+                                className="flex cursor-not-allowed items-start gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm"
+                                title={mat.lockedLabel ?? undefined}
                               >
-                                ✓
+                                {inner}
                               </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block leading-snug">{mat.title}</span>
-                                <span className="t-micro faint">
-                                  {mat.typeLabel}
-                                  {mat.duration ? ` · ${mat.duration}` : ''}
-                                </span>
-                              </span>
-                              {mat.bookmarked && (
-                                <span aria-label="Bookmarked" className="shrink-0 text-[var(--warn)]">
-                                  ★
-                                </span>
-                              )}
-                            </Link>
+                            ) : (
+                              <Link
+                                href={`/learn/${productId}/${mat.id}`}
+                                onClick={() => setSheet(false)}
+                                aria-current={current ? 'page' : undefined}
+                                className={`flex items-start gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm transition ${
+                                  current
+                                    ? 'bg-[var(--brand-soft)] font-medium'
+                                    : 'hover:bg-[var(--surface-2)]'
+                                }`}
+                              >
+                                {inner}
+                              </Link>
+                            )}
                           </li>
                         );
                       })}

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { MATERIAL_LABELS, formatDuration, percent } from '@/lib/progress';
+import { curriculumGate } from '@/lib/curriculum-access';
 import { Card, EmptyState } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
                   module: {
                     include: {
                       sections: {
+                        where: { isVisible: true },
                         orderBy: { sortOrder: 'asc' },
                         include: { materials: { orderBy: { sortOrder: 'asc' } } },
                       },
@@ -96,11 +98,21 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
   });
   const doneSet = new Set(done.map((d) => d.materialId));
 
-  const materials = enrollment.product.course.modules.flatMap((cm) =>
-    cm.module.sections.flatMap((s) => s.materials),
-  );
+  const gate = await curriculumGate({
+    courseId: enrollment.product.course.id,
+    enrolledAt: enrollment.createdAt,
+    batchId: enrollment.batchId,
+  });
+
+  const modules = enrollment.product.course.modules.filter((cm) => gate.teaches(cm.moduleId));
+
+  const materials = modules.flatMap((cm) => cm.module.sections.flatMap((s) => s.materials));
   const completed = materials.filter((m) => doneSet.has(m.id)).length;
-  const next = materials.find((m) => !doneSet.has(m.id));
+
+  // "Continue" should never land on a locked lesson.
+  const next = modules
+    .flatMap((cm) => cm.module.sections.flatMap((s) => s.materials.map((m) => ({ m, s }))))
+    .find(({ m, s }) => !doneSet.has(m.id) && !gate.lockOf(m.id, s.id))?.m;
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-7">
@@ -201,7 +213,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
         </Card>
       )}
 
-      {enrollment.product.course.modules.map((cm) => (
+      {modules.map((cm) => (
         <Card key={cm.moduleId} className="space-y-4">
           <h2 className="font-medium">{cm.module.name}</h2>
 
@@ -211,29 +223,55 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
               <ul className="divide-y rounded-[var(--radius-sm)] border">
                 {section.materials.map((m) => {
                   const isDone = doneSet.has(m.id);
+                  const lock = gate.lockOf(m.id, section.id);
+
+                  const inner = (
+                    <>
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span
+                          aria-hidden
+                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${
+                            isDone ? 'border-transparent text-white' : 'text-transparent'
+                          }`}
+                          style={isDone ? { background: 'var(--brand)' } : undefined}
+                        >
+                          ✓
+                        </span>
+                        <span className={`truncate text-sm ${lock ? 'faint' : ''}`}>{m.title}</span>
+                      </span>
+                      <span className="shrink-0 t-small faint">
+                        {lock ? (
+                          <span className="inline-flex items-center gap-1">
+                            <span aria-hidden>🔒</span>
+                            {lock.label}
+                          </span>
+                        ) : (
+                          <>
+                            {MATERIAL_LABELS[m.type] ?? m.type}
+                            {m.durationSeconds ? ` · ${formatDuration(m.durationSeconds)}` : ''}
+                          </>
+                        )}
+                      </span>
+                    </>
+                  );
+
                   return (
                     <li key={m.id}>
-                      <Link
-                        href={`/learn/${productId}/${m.id}`}
-                        className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--surface-2)]"
-                      >
-                        <span className="flex min-w-0 items-center gap-3">
-                          <span
-                            aria-hidden
-                            className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px] ${
-                              isDone ? 'border-transparent text-white' : 'text-transparent'
-                            }`}
-                            style={isDone ? { background: 'var(--brand)' } : undefined}
-                          >
-                            ✓
-                          </span>
-                          <span className="truncate text-sm">{m.title}</span>
-                        </span>
-                        <span className="shrink-0 t-small faint">
-                          {MATERIAL_LABELS[m.type] ?? m.type}
-                          {m.durationSeconds ? ` · ${formatDuration(m.durationSeconds)}` : ''}
-                        </span>
-                      </Link>
+                      {lock ? (
+                        <div
+                          className="flex cursor-not-allowed items-center justify-between gap-3 px-4 py-2.5"
+                          title={`Opens ${lock.until.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+                        >
+                          {inner}
+                        </div>
+                      ) : (
+                        <Link
+                          href={`/learn/${productId}/${m.id}`}
+                          className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--surface-2)]"
+                        >
+                          {inner}
+                        </Link>
+                      )}
                     </li>
                   );
                 })}

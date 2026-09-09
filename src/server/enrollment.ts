@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
+import { curriculumGate } from '@/lib/curriculum-access';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -115,7 +116,12 @@ export async function setMaterialComplete(
         organizationId: tenant.organizationId,
         status: { in: ['ENROLLED', 'REGISTERED', 'COMPLETED'] },
       },
-      select: { id: true, product: { select: { course: { select: { id: true } } } } },
+      select: {
+        id: true,
+        batchId: true,
+        createdAt: true,
+        product: { select: { course: { select: { id: true } } } },
+      },
     });
     if (!enrollment?.product.course) return { error: 'You are not enrolled in that course.' };
 
@@ -124,9 +130,28 @@ export async function setMaterialComplete(
         id: materialId,
         section: { module: { courses: { some: { courseId: enrollment.product.course.id } } } },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        sectionId: true,
+        section: { select: { isVisible: true, moduleId: true } },
+      },
     });
     if (!material) return { error: 'That material is not part of this course.' };
+
+    // A lesson that has not opened cannot be ticked off, however the tick arrives.
+    const gate = await curriculumGate({
+      courseId: enrollment.product.course.id,
+      enrolledAt: enrollment.createdAt,
+      batchId: enrollment.batchId,
+    });
+    if (
+      complete &&
+      (!material.section.isVisible ||
+        !gate.teaches(material.section.moduleId) ||
+        gate.lockOf(material.id, material.sectionId))
+    ) {
+      return { error: 'This lesson has not opened yet.' };
+    }
 
     await db.materialProgress.upsert({
       where: { userId_materialId: { userId: user.id, materialId } },
@@ -155,17 +180,35 @@ export async function setMaterialComplete(
   }
 }
 
+/**
+ * Progress against the course this learner was actually given.
+ *
+ * A batch that teaches four of six modules must still be able to reach 100%, and
+ * a section hidden while it is being written must not hold everyone at 94%. So
+ * the denominator is the visible curriculum for this enrolment, not the course
+ * in the abstract.
+ */
 async function recomputeProgress(enrollmentId: string, courseId: string, userId: string) {
-  const total = await db.material.count({
-    where: { section: { module: { courses: { some: { courseId } } } } },
+  const batchModules = await db.batchModule.findMany({
+    where: { batch: { enrollments: { some: { id: enrollmentId } } } },
+    select: { moduleId: true },
   });
+  const moduleIds = batchModules.map((m) => m.moduleId);
+
+  const scope = {
+    section: {
+      isVisible: true,
+      module: {
+        courses: { some: { courseId } },
+        ...(moduleIds.length ? { id: { in: moduleIds } } : {}),
+      },
+    },
+  };
+
+  const total = await db.material.count({ where: scope });
 
   const done = await db.materialProgress.count({
-    where: {
-      userId,
-      completedAt: { not: null },
-      material: { section: { module: { courses: { some: { courseId } } } } },
-    },
+    where: { userId, completedAt: { not: null }, material: scope },
   });
 
   const progressPercent = total > 0 ? Math.round((done / total) * 100) : 0;

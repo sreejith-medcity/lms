@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
@@ -49,7 +50,9 @@ export default async function BatchesPage() {
           {batches.map((b) => (
             <Row key={b.id}>
               <Cell>
-                <span className="font-medium">{b.name}</span>
+                <Link href={`/admin/batches/${b.id}`} className="font-medium hover:underline">
+                  {b.name}
+                </Link>
                 {b.isDefault && (
                   <span className="ml-2">
                     <Badge>default</Badge>

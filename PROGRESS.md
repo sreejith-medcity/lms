@@ -124,25 +124,58 @@ The purchase journey now exists end to end. Razorpay test keys are set locally.
 Untested against a live gateway. The next thing to do with it is walk a test
 card through and confirm the enrolment appears exactly once.
 
+## Phase 1 — course and batch depth (built, awaiting a push)
+
+Typechecks clean. Not yet exercised against the database.
+
+**Course editor.** Details split into what it is / thumbnail / overview blocks
+with weights / how it behaves. Publishing moved onto the pricing tab as its own
+form: web, Android, iOS, on-demand-only, free preview, featured, Apple IAP id.
+A published course that is off the web and not admin-only is refused, because it
+would be reachable by nobody and look like a bug rather than a setting.
+
+**Pricing.** Plans can now be per branch (blank means every branch) and paid in
+full, in instalments or as a subscription. An instalment plan writes out the
+actual dues rather than storing a count: 10,000 in three parts is 3,334 + 3,333
++ 3,333, and the form shows the office that schedule before it saves. Counted
+either from the batch start date or the day they enrol. A struck-through price
+below the real price is refused.
+
+**Drip.** Per lesson: open from the start, so many days after enrolment, so many
+days after the batch starts, or on a date. `src/lib/drip.ts` answers "is this
+open yet" for every screen that asks.
+
+**Batch classroom.** `/admin/batches/[id]`, which did not exist. Header KPIs
+(learners, classes held, attendance, on time), then Learners — sorted worst-first
+by attendance, progress and scores together, because the list exists to find the
+people about to drop out — Classes, Curriculum (which modules this batch
+teaches; empty means all of them) and Team and settings (staff by role, dates,
+seats, default flag). Batch rows on `/admin/batches` now lead here.
+
+**Curriculum.** Sections can be renamed in place, reordered, hidden while they
+are being written, duplicated with their materials, and deleted once empty.
+Modules can be reordered on the course.
+
+**The locks are real, not decorative.** Drip and section visibility are enforced
+in four places, not just in the rail: the outline, the player, the progress
+actions, and `/api/assets/[id]`, so a locked video is not one URL away. Progress
+percentage now counts only the curriculum this enrolment was actually given, so a
+batch teaching four of six modules can still reach 100%.
+
 ## Next runnable step
 
-**Two commands, then walk the purchase journey.**
+**Push Phase 1, then walk it.**
 
-The schema gained `GatewayEvent`, `Order.gatewayOrderId` and a uniqueness
-constraint on `(organizationId, gateway, gatewayRef)`. The Prisma client has to
-be regenerated and the database pushed before any of the commerce code runs:
+Nothing here has met the database yet. On the Mac:
 
 ```
-cd ~/Documents/lms && npx prisma generate && npm run db:push
+cd ~/Documents/lms && npx tsc --noEmit && git add -A && git commit && git push
 ```
 
-Prisma's engine downloads are blocked from this session's network, so this is the
-one step that has to run on the Mac.
+Then, once deployed: open a course, set an instalment plan and a drip rule on one
+lesson, open the batch classroom, and confirm the locked lesson shows "opens on"
+in the learner rail and refuses to play.
 
-Then walk it: put a price on the demo course, sign in as a learner, enrol, pay
-with Razorpay's test card 4111 1111 1111 1111, and confirm one enrolment, one
-payment row and one invoice number. Then close the tab mid-payment and confirm
-the webhook produces the same result.
-
-After that, the two-pane player described under **Design benchmark** in
-`BUILD_PLAN.md`, which is the next visible jump in how the product feels.
+Still open from before Phase 1: the two stuck ₹8,260 orders. Razorpay's dashboard
+will say whether they were captured at 8,260, captured at another amount, or only
+authorised — and that answer picks between two very different bugs.

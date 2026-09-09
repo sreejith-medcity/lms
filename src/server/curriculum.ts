@@ -281,3 +281,233 @@ export async function moveMaterial(
     return fail(err);
   }
 }
+
+/* Sections ----------------------------------------------------------------- */
+
+/** Confirms a section belongs to this tenant. */
+async function ownedSection(sectionId: string, organizationId: string) {
+  return db.section.findFirst({
+    where: { id: sectionId, module: { organizationId } },
+    select: { id: true, moduleId: true, title: true, sortOrder: true, isVisible: true },
+  });
+}
+
+export async function renameSection(
+  sectionId: string,
+  productId: string,
+  title: string,
+): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+    const trimmed = title.trim();
+    if (trimmed.length < 2) return { error: 'Give the section a title.' };
+
+    const section = await ownedSection(sectionId, tenant.organizationId);
+    if (!section) return { error: 'Section not found.' };
+
+    await db.section.update({ where: { id: sectionId }, data: { title: trimmed } });
+
+    revalidatePath(`/admin/courses/${productId}/curriculum`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Hide a section without deleting it.
+ *
+ * Half-built weeks are normal while a course is being written, and the
+ * alternative — deleting the section and rebuilding it later — loses every
+ * material in it. Hidden sections stay out of the learner's rail.
+ */
+export async function setSectionVisible(
+  sectionId: string,
+  productId: string,
+  isVisible: boolean,
+): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+
+    const section = await ownedSection(sectionId, tenant.organizationId);
+    if (!section) return { error: 'Section not found.' };
+
+    await db.section.update({ where: { id: sectionId }, data: { isVisible } });
+
+    revalidatePath(`/admin/courses/${productId}/curriculum`);
+    revalidatePath('/learn', 'layout');
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function moveSection(
+  sectionId: string,
+  productId: string,
+  direction: 'up' | 'down',
+): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+
+    const current = await ownedSection(sectionId, tenant.organizationId);
+    if (!current) return { error: 'Section not found.' };
+
+    const neighbour = await db.section.findFirst({
+      where: {
+        moduleId: current.moduleId,
+        sortOrder: direction === 'up' ? { lt: current.sortOrder } : { gt: current.sortOrder },
+      },
+      orderBy: { sortOrder: direction === 'up' ? 'desc' : 'asc' },
+      select: { id: true, sortOrder: true },
+    });
+    if (!neighbour) return { ok: true };
+
+    await db.$transaction([
+      db.section.update({ where: { id: current.id }, data: { sortOrder: neighbour.sortOrder } }),
+      db.section.update({ where: { id: neighbour.id }, data: { sortOrder: current.sortOrder } }),
+    ]);
+
+    revalidatePath(`/admin/courses/${productId}/curriculum`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Copy a section, materials and all.
+ *
+ * Week 2 is usually week 1 with different files, and rebuilding the shape of it
+ * by hand is the single most tedious thing about writing a course here. The copy
+ * lands hidden and directly below the original, so a half-edited duplicate is
+ * never something a learner sees.
+ */
+export async function cloneSection(sectionId: string, productId: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+
+    const source = await db.section.findFirst({
+      where: { id: sectionId, module: { organizationId: tenant.organizationId } },
+      select: {
+        id: true,
+        moduleId: true,
+        title: true,
+        sortOrder: true,
+        materials: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    if (!source) return { error: 'Section not found.' };
+
+    await db.$transaction(async (tx) => {
+      // Everything below the original shifts down to make room for the copy.
+      await tx.section.updateMany({
+        where: { moduleId: source.moduleId, sortOrder: { gt: source.sortOrder } },
+        data: { sortOrder: { increment: 1 } },
+      });
+
+      const copy = await tx.section.create({
+        data: {
+          moduleId: source.moduleId,
+          title: `${source.title} (copy)`.slice(0, 190),
+          sortOrder: source.sortOrder + 1,
+          isVisible: false,
+        },
+        select: { id: true },
+      });
+
+      if (source.materials.length) {
+        await tx.material.createMany({
+          data: source.materials.map((m, i) => ({
+            sectionId: copy.id,
+            title: m.title,
+            type: m.type,
+            assetId: m.assetId,
+            externalUrl: m.externalUrl,
+            bodyHtml: m.bodyHtml,
+            durationSeconds: m.durationSeconds,
+            isFreePreview: m.isFreePreview,
+            isDownloadable: m.isDownloadable,
+            sortOrder: i,
+          })),
+        });
+      }
+    });
+
+    revalidatePath(`/admin/courses/${productId}/curriculum`);
+    return { ok: true, message: 'Copied, and hidden until you are happy with it.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function deleteSection(sectionId: string, productId: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('module.module_library', 'delete');
+
+    const section = await db.section.findFirst({
+      where: { id: sectionId, module: { organizationId: tenant.organizationId } },
+      select: { id: true, _count: { select: { materials: true } } },
+    });
+    if (!section) return { error: 'Section not found.' };
+
+    // Deleting a section with learner progress behind it would take the progress
+    // with it, so an emptied section is the only one that goes.
+    if (section._count.materials > 0) {
+      return {
+        error: `This section still holds ${section._count.materials} materials. Remove them first, or hide the section instead.`,
+      };
+    }
+
+    await db.section.delete({ where: { id: sectionId } });
+
+    revalidatePath(`/admin/courses/${productId}/curriculum`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function moveModule(
+  productId: string,
+  moduleId: string,
+  direction: 'up' | 'down',
+): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+    const courseId = await courseIdFor(productId, tenant.organizationId);
+    if (!courseId) return { error: 'Course not found.' };
+
+    const current = await db.courseModule.findFirst({
+      where: { courseId, moduleId },
+      select: { moduleId: true, sortOrder: true },
+    });
+    if (!current) return { error: 'Module not found on this course.' };
+
+    const neighbour = await db.courseModule.findFirst({
+      where: {
+        courseId,
+        sortOrder: direction === 'up' ? { lt: current.sortOrder } : { gt: current.sortOrder },
+      },
+      orderBy: { sortOrder: direction === 'up' ? 'desc' : 'asc' },
+      select: { moduleId: true, sortOrder: true },
+    });
+    if (!neighbour) return { ok: true };
+
+    await db.$transaction([
+      db.courseModule.update({
+        where: { courseId_moduleId: { courseId, moduleId: current.moduleId } },
+        data: { sortOrder: neighbour.sortOrder },
+      }),
+      db.courseModule.update({
+        where: { courseId_moduleId: { courseId, moduleId: neighbour.moduleId } },
+        data: { sortOrder: current.sortOrder },
+      }),
+    ]);
+
+    revalidatePath(`/admin/courses/${productId}/curriculum`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}

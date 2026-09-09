@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import type { ActionState } from '@/server/courses';
+import { curriculumGate } from '@/lib/curriculum-access';
 
 /**
  * Notes, bookmarks and the resume position.
@@ -34,9 +35,33 @@ async function entitled(materialId: string) {
         },
       },
     },
-    select: { id: true, productId: true },
+    select: {
+      id: true,
+      productId: true,
+      batchId: true,
+      createdAt: true,
+      product: { select: { course: { select: { id: true } } } },
+    },
   });
   if (!enrollment) throw new Error('NOT_ENROLLED');
+
+  // Enrolled is not the same as released: a dripped lesson is refused here too,
+  // because a lock only the page knows about is a lock anyone can walk past.
+  const courseId = enrollment.product.course?.id;
+  if (courseId) {
+    const material = await db.material.findUnique({
+      where: { id: materialId },
+      select: { sectionId: true, section: { select: { isVisible: true } } },
+    });
+    if (!material || !material.section.isVisible) throw new Error('NOT_OPEN_YET');
+
+    const gate = await curriculumGate({
+      courseId,
+      enrolledAt: enrollment.createdAt,
+      batchId: enrollment.batchId,
+    });
+    if (gate.lockOf(materialId, material.sectionId)) throw new Error('NOT_OPEN_YET');
+  }
 
   return { user, enrollment };
 }
@@ -45,6 +70,7 @@ function fail(err: unknown): ActionState {
   const message = err instanceof Error ? err.message : String(err);
   if (message === 'SIGN_IN_REQUIRED') return { error: 'Please sign in again.' };
   if (message === 'NOT_ENROLLED') return { error: 'This lesson is not part of your enrolment.' };
+  if (message === 'NOT_OPEN_YET') return { error: 'This lesson has not opened yet.' };
   console.error('[notes]', message);
   return { error: 'Something went wrong. Please try again.' };
 }

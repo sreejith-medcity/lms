@@ -4,12 +4,15 @@ import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { Badge } from '@/components/ui';
 import { PublishToggle } from './publish-toggle';
+import { CourseTabs } from './tabs';
 
 export const dynamic = 'force-dynamic';
 
 const TABS = [
   { href: '', label: 'Details' },
   { href: '/curriculum', label: 'Curriculum' },
+  { href: '/drip', label: 'Drip' },
+  { href: '/learners', label: 'Learners' },
   { href: '/pricing', label: 'Pricing and publishing' },
 ];
 
@@ -43,17 +46,7 @@ export default async function CourseLayout({
         <PublishToggle productId={product.id} published={product.status === 'PUBLISHED'} />
       </div>
 
-      <nav className="mb-6 flex gap-1 border-b text-sm">
-        {TABS.map((t) => (
-          <Link
-            key={t.label}
-            href={`/admin/courses/${product.id}${t.href}`}
-            className="border-b-2 border-transparent px-3 pb-2 muted hover:border-slate-300 hover:text-[var(--ink)]"
-          >
-            {t.label}
-          </Link>
-        ))}
-      </nav>
+      <CourseTabs productId={product.id} tabs={TABS} />
 
       {children}
     </div>
