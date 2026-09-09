@@ -18,9 +18,9 @@ export const metadata = { robots: { index: false, follow: false } };
  */
 export default async function RedirectsPage() {
   const tenant = await requireTenant();
-  const me = await requireStaff('settings.website', 'view');
-  const canEdit = me.permissions['settings.website']?.edit ?? false;
-  const canDelete = me.permissions['settings.website']?.delete ?? false;
+  const me = await requireStaff('settings.organization', 'view');
+  const canEdit = me.permissions['settings.organization']?.edit ?? false;
+  const canDelete = me.permissions['settings.organization']?.delete ?? false;
 
   const rules = await db.redirect.findMany({
     where: { organizationId: tenant.organizationId },

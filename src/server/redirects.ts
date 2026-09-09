@@ -11,7 +11,7 @@ import type { ActionState } from '@/server/courses';
 async function guard(action: 'view' | 'edit' | 'delete' = 'edit') {
   const [tenant, user] = await Promise.all([
     requireTenant(),
-    requireStaff('settings.website', action),
+    requireStaff('settings.organization', action),
   ]);
   if (user.organizationId !== tenant.organizationId) throw new Error('FORBIDDEN');
   return { tenant, user };

@@ -67,12 +67,67 @@ function firstStatement(source: string): string {
   return '';
 }
 
+/**
+ * Every permission key the code asks for, checked against the catalogue.
+ *
+ * `requireStaff` throws FORBIDDEN for a key no role can hold, and a key that is
+ * not in `PERMISSION_GROUPS` can never be held by anybody, including a super
+ * admin. So a typo here is not a permissions bug that shows up for some users:
+ * it is a page that is unreachable by everyone, and it fails at runtime with a
+ * server exception rather than at build time.
+ *
+ * This is not hypothetical. The redirects screen shipped asking for
+ * `settings.website`, which does not exist, and nobody could open it.
+ */
+export function auditPermissionKeys(root: string): Violation[] {
+  const catalogue = readFileSync(join(root, 'src', 'lib', 'permissions.ts'), 'utf8');
+
+  const known = new Set<string>();
+  for (const [, group, items] of catalogue.matchAll(/^\s{2}(\w+):\s*\[([^\]]*)\]/gm)) {
+    for (const [, item] of items.matchAll(/'([\w.]+)'/g)) known.add(`${group}.${item}`);
+  }
+
+  if (known.size === 0) {
+    return [
+      {
+        rule: 'permission-key-exists',
+        file: 'src/lib/permissions.ts',
+        detail: 'No permission keys could be read from the catalogue, so this check is not working.',
+      },
+    ];
+  }
+
+  const violations: Violation[] = [];
+
+  for (const file of walk(join(root, 'src'))) {
+    const relative = file.slice(root.length + 1);
+    if (relative === 'src/lib/permissions.ts' || relative === 'src/lib/build-safety.ts') continue;
+
+    const source = readFileSync(file, 'utf8');
+
+    for (const match of source.matchAll(/requireStaff\(\s*'([\w.]+)'/g)) {
+      const key = match[1];
+      if (!known.has(key)) {
+        violations.push({
+          rule: 'permission-key-exists',
+          file: relative,
+          detail: `requireStaff('${key}') asks for a permission that is not in PERMISSION_GROUPS, so nobody can ever hold it and the page throws FORBIDDEN for everyone`,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
 export function auditBuildSafety(root: string): Violation[] {
   const violations: Violation[] = [];
 
   for (const file of walk(join(root, 'src'))) {
     violations.push(...checkSource(file.slice(root.length + 1), readFileSync(file, 'utf8')));
   }
+
+  violations.push(...auditPermissionKeys(root));
 
   return violations;
 }
