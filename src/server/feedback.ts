@@ -260,7 +260,7 @@ export async function submitFeedback(_prev: ActionState, formData: FormData): Pr
       if (session.startsAt > new Date()) return { error: 'That class has not happened yet.' };
 
       const enrolled = await db.enrollment.findFirst({
-        where: { userId: user.id, batchId: session.batchId },
+        where: { organizationId: tenant.organizationId, userId: user.id, batchId: session.batchId },
         select: { id: true },
       });
       if (!enrolled) return { error: 'You are not in that batch.' };

@@ -28,7 +28,7 @@ export default async function CourseLearnersPage({ params }: { params: Promise<{
 
   const [batches, enrolments] = await Promise.all([
     db.batch.findMany({
-      where: { courseId: product.course.id, deletedAt: null },
+      where: { organizationId: tenant.organizationId, courseId: product.course.id, deletedAt: null },
       orderBy: [{ status: 'asc' }, { startDate: 'desc' }],
       select: {
         id: true,
@@ -42,7 +42,11 @@ export default async function CourseLearnersPage({ params }: { params: Promise<{
       },
     }),
     db.enrollment.findMany({
-      where: { productId: product.id, status: { notIn: ['ARCHIVED'] } },
+      where: {
+      organizationId: tenant.organizationId,
+      productId: product.id,
+      status: { notIn: ['ARCHIVED'] },
+    },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,

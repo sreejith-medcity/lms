@@ -161,7 +161,12 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   const [enrollment, instructors] = await Promise.all([
     user
       ? db.enrollment.findFirst({
-          where: { userId: user.id, productId: product.id, status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
+          where: {
+          organizationId: site.organizationId,
+          userId: user.id,
+          productId: product.id,
+          status: { notIn: ['CANCELLED', 'ARCHIVED'] },
+        },
           select: { id: true },
         })
       : Promise.resolve(null),

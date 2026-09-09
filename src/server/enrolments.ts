@@ -142,6 +142,7 @@ export async function enrolManually(
         })
       : await db.batch.findFirst({
           where: {
+            organizationId: tenant.organizationId,
             courseId: product.course.id,
             status: { in: ['ACTIVE', 'UPCOMING'] },
             deletedAt: null,
@@ -152,6 +153,7 @@ export async function enrolManually(
 
     const existing = await db.enrollment.findFirst({
       where: {
+        organizationId: tenant.organizationId,
         userId,
         productId: product.id,
         batchId: batch?.id ?? null,
@@ -337,7 +339,7 @@ export async function createBatch(_prev: ActionState, formData: FormData): Promi
     // Only one default per course, since it is what enrolment falls back to.
     if (d.isDefault) {
       await db.batch.updateMany({
-        where: { courseId: d.courseId, isDefault: true },
+        where: { organizationId: tenant.organizationId, courseId: d.courseId, isDefault: true },
         data: { isDefault: false },
       });
     }

@@ -42,6 +42,7 @@ export default async function MyLearning() {
   const todayClasses = batchIds.length
     ? await db.liveSession.findMany({
         where: {
+          organizationId: tenant.organizationId,
           batchId: { in: batchIds },
           startsAt: { gte: dayStart, lt: dayEnd },
           status: { not: 'CANCELLED' },
@@ -67,6 +68,7 @@ export default async function MyLearning() {
     feedbackForm && batchIds.length
       ? await db.liveSession.findMany({
           where: {
+            organizationId: tenant.organizationId,
             batchId: { in: batchIds },
             status: { not: 'CANCELLED' },
             endsAt: { gte: weekAgo, lte: now },

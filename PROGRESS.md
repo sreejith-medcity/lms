@@ -747,18 +747,62 @@ the highest-value tests in the product and they want a throwaway Postgres to run
 against, which is the next piece of work rather than something to fake. A mocked
 fulfilment test proves the mock works.
 
+## Phase 8, part three — tenant isolation, checked rather than hoped for
+
+The worst bug this codebase can have is one academy seeing another academy's
+learners. It is silent, it is invisible while there is only one academy in the
+database, and it is found by a customer. Type checking cannot catch it, because
+`findMany({})` is perfectly valid TypeScript.
+
+So it is now a check that runs with the tests. For every one of the 53 tables
+that carries an `organizationId`, every query against it must either name that
+column, be pinned to a primary key, be built from a variable that names it, or
+carry a written `// tenant-safe:` note saying why. The note has to be a real
+sentence; a bare marker does not pass. An escape hatch with no argument attached
+is how a check like this quietly stops meaning anything.
+
+**It found three real leaks on the first run.**
+
+The batch progress report read every academy's batches. Its `run()` did not even
+take the context object, so there was nothing to scope it by. On a shared
+deployment that report is somebody else's course list.
+
+The lesson drop-off report did the same with curriculum, reading every academy's
+material through a relation that was never filtered.
+
+And the Razorpay refund webhook looked up a payment by gateway reference alone,
+with no academy attached, then expired the enrolments behind it. Razorpay's
+payment ids are unique across the whole gateway so this was unlikely to fire in
+practice, but a handler that expires somebody's course access is not a place to
+lean on another company's id space staying unique. It now takes the organisation
+the route had already worked out from the order notes and never used.
+
+A fourth was smaller but real: entering a settlement checked the gateway
+reference across every academy, so two institutes settling through the same
+gateway would each be told the other's reference had already been used.
+
+**Twenty more queries were safe by argument and are now safe by construction.**
+Ids that came from an already scoped query are fine, but the argument has to be
+reconstructed by whoever reads the code next. Adding the organisation to the
+where clause is one word and removes the need to make the argument at all. Five
+sites where scoping genuinely was not possible carry a note instead.
+
 ## Next runnable step
 
-**Push, then run the tests once yourself.**
+**Push, then look at the two reports.**
 
 ```
-cd ~/Documents/lms && rm -f .git/*.lock* && git push origin main
-npm test
+cd ~/Documents/lms && git push origin main
+npm run check
 ```
 
-No database change. On your Mac `npm test` should report 49 passing in under a
-second, and from now on `npm run check` does the typecheck and the tests
-together, which is the command worth running before any push.
+No database change. `npm run check` runs the typecheck, the 49 unit tests and
+the isolation audit together, and is worth running before any push from now on.
+
+The two reports that leaked are worth opening once the deploy lands: Progress by
+batch, and the lesson drop-off report. With one academy in the database they
+looked correct before and will look identical now, which is exactly why this
+needed a check rather than a read-through.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another

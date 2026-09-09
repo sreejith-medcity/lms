@@ -206,7 +206,12 @@ export async function joinSession(sessionId: string): Promise<ActionState & { ur
     if (!session) return { error: 'That class is not available.' };
 
     const enrolled = await db.enrollment.findFirst({
-      where: { userId: user.id, batchId: session.batchId, status: { in: ['ENROLLED', 'COMPLETED'] } },
+      where: {
+        organizationId: tenant.organizationId,
+        userId: user.id,
+        batchId: session.batchId,
+        status: { in: ['ENROLLED', 'COMPLETED'] },
+      },
       select: { id: true },
     });
     if (!enrolled && user.kind !== 'STAFF') return { error: 'You are not in this batch.' };

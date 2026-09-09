@@ -40,6 +40,12 @@ would fail quietly rather than loudly.
 - **`clock`** — a 7pm class in Kochi belongs to that Tuesday wherever the server
   is. Every test names a timezone, so none of them pass by accident on a laptop
   set to IST.
+- **`tenant-isolation`** — not a unit test but a check over the whole codebase.
+  Every query against a table that carries `organizationId` must name it, be
+  pinned to a primary key, be built from a variable that names it, or carry a
+  written `// tenant-safe:` note. The worst bug this product can have is one
+  academy seeing another's learners, and it is invisible while there is only one
+  academy in the database.
 
 ## What is not tested yet, and should be
 

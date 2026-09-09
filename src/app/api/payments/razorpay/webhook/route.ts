@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   if (record.processedAt) return NextResponse.json({ ok: true, duplicate: true });
 
   try {
-    const handled = await handle(payload);
+    const handled = await handle(payload, organizationId);
     await db.gatewayEvent.update({
       where: { id: record.id },
       data: { processedAt: new Date(), error: handled ? null : 'IGNORED' },
@@ -87,7 +87,10 @@ export async function POST(request: Request) {
   }
 }
 
-async function handle(payload: RazorpayWebhook): Promise<boolean> {
+async function handle(
+  payload: RazorpayWebhook,
+  organizationId: string | null,
+): Promise<boolean> {
   const payment = payload.payload?.payment?.entity;
 
   if (payload.event === 'payment.captured' || payload.event === 'order.paid') {
@@ -141,8 +144,17 @@ async function handle(payload: RazorpayWebhook): Promise<boolean> {
     const refund = payload.payload?.refund?.entity;
     if (!refund?.payment_id) return false;
 
+    // Scoped to the academy the payment was taken for, which the route worked
+    // out from the notes on the order. A Razorpay payment id is unique across
+    // the whole gateway, so this is belt as well as braces, but a refund that
+    // expires an enrolment is not somewhere to rely on another company's id
+    // space staying unique.
     const existing = await db.payment.findFirst({
-      where: { gateway: 'RAZORPAY', gatewayRef: refund.payment_id },
+      where: {
+        gateway: 'RAZORPAY',
+        gatewayRef: refund.payment_id,
+        ...(organizationId ? { organizationId } : {}),
+      },
       select: { id: true, amountPaise: true, orderId: true },
     });
     if (!existing) return false;
@@ -171,6 +183,8 @@ async function handle(payload: RazorpayWebhook): Promise<boolean> {
 
       // Access ends. The enrolment, its progress and its attendance are history
       // and stay exactly where they are.
+      // tenant-safe: the order item ids come from the payment found above,
+      // which was itself scoped to the academy named on the order.
       await db.enrollment.updateMany({
         where: { orderItemId: { in: await orderItemIds(existing.orderId) }, status: 'ENROLLED' },
         data: { status: 'EXPIRED', expiresAt: new Date() },

@@ -51,7 +51,11 @@ export default async function AttendancePage({
   const batchIds = [...new Set(sessions.map((s) => s.batchId))];
 
   const roster = await db.enrollment.findMany({
-    where: { batchId: { in: batchIds }, status: { in: ['ENROLLED', 'COMPLETED'] } },
+    where: {
+      organizationId: tenant.organizationId,
+      batchId: { in: batchIds },
+      status: { in: ['ENROLLED', 'COMPLETED'] },
+    },
     select: {
       batchId: true,
       user: { select: { id: true, name: true, email: true, phone: true } },

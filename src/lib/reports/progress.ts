@@ -21,9 +21,9 @@ export const progressReports: ReportDef[] = [
       ['Stalled', 'Enrolments with no recorded activity in fourteen days. Somebody who finished is not stalled.'],
     ],
     ignoresRange: true,
-    async run() {
+    async run(ctx) {
       const batches = await db.batch.findMany({
-        where: { deletedAt: null },
+        where: { organizationId: ctx.organizationId, deletedAt: null },
         select: {
           id: true,
           name: true,
@@ -92,8 +92,13 @@ export const progressReports: ReportDef[] = [
       ['Drop', 'The share of people who reached this lesson and did not finish it. A high drop on one lesson is usually the lesson, not the learners.'],
     ],
     ignoresRange: true,
-    async run() {
+    async run(ctx) {
       const materials = await db.material.findMany({
+        // Material has no organizationId of its own, so it is reached through
+        // the section and module that do. Without this the report reads every
+        // academy's curriculum, which on a shared deployment is somebody else's
+        // course catalogue.
+        where: { section: { module: { organizationId: ctx.organizationId } } },
         select: {
           id: true,
           title: true,

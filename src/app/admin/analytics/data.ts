@@ -240,7 +240,7 @@ export async function attendanceData(organizationId: string, since: Date, days: 
   const [rosters, attendances] = await Promise.all([
     db.enrollment.groupBy({
       by: ['batchId'],
-      where: { batchId: { in: batchIds }, status: { in: ['ENROLLED', 'COMPLETED'] } },
+      where: { organizationId, batchId: { in: batchIds }, status: { in: ['ENROLLED', 'COMPLETED'] } },
       _count: { _all: true },
     }),
     db.attendance.findMany({

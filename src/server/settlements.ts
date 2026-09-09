@@ -78,8 +78,15 @@ export async function recordSettlement(
     if (grossPaise <= 0) return { error: 'A settlement of nothing is not a settlement.' };
     if (netPaise < 0) return { error: 'The fee and tax are more than the gross.' };
 
+    // Scoped, or two academies settling through the same gateway would each be
+    // told the other's reference had already been entered: a false refusal, and
+    // a small leak of the fact that somebody else used that reference.
     const existing = await db.settlement.findFirst({
-      where: { gateway: d.gateway, gatewayRef: d.gatewayRef },
+      where: {
+        organizationId: tenant.organizationId,
+        gateway: d.gateway,
+        gatewayRef: d.gatewayRef,
+      },
       select: { id: true },
     });
     if (existing) return { error: `${d.gatewayRef} has already been entered.` };

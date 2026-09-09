@@ -204,6 +204,7 @@ export async function importLearners(
       if (product?.course && userId) {
         const already = await db.enrollment.findFirst({
           where: {
+            organizationId: tenant.organizationId,
             userId,
             productId: product.id,
             status: { notIn: ['CANCELLED', 'ARCHIVED'] },
@@ -221,6 +222,7 @@ export async function importLearners(
           if (apply) {
             const batch = await db.batch.findFirst({
               where: {
+                organizationId: tenant.organizationId,
                 courseId: product.course.id,
                 status: { in: ['ACTIVE', 'UPCOMING'] },
                 deletedAt: null,

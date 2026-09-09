@@ -182,6 +182,7 @@ export async function ensureCourseCommunity(productId: string): Promise<ActionSt
     if (user.kind !== 'STAFF') {
       const enrolled = await db.enrollment.count({
         where: {
+          organizationId: tenant.organizationId,
           userId: user.id,
           productId,
           status: { notIn: ['CANCELLED', 'ARCHIVED'] },

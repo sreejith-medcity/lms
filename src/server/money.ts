@@ -243,6 +243,8 @@ export async function recordOfflineRefund(
       await db.order.update({ where: { id: payment.orderId }, data: { status: 'REFUNDED' } });
 
       // Access ends; progress and attendance stay exactly where they are.
+      // tenant-safe: the items belong to the order this refund is against,
+      // and that order was loaded scoped to this academy.
       await db.enrollment.updateMany({
         where: { orderItemId: { in: items.map((i) => i.id) }, status: 'ENROLLED' },
         data: { status: 'EXPIRED', expiresAt: new Date() },

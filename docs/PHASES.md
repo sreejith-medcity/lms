@@ -172,9 +172,15 @@ account is given a password.
 that decides something consequential and fails quietly. CI typechecks and tests every push.
 Database-backed tests are named as the next piece rather than faked with mocks.
 
-**Part three, still to build:** one cart and one identity across both systems
-while they run side by side, a landing page per course, row-level security,
-database-backed tests, an accessibility pass, and performance measurement.
+**Part three, built: tenant isolation as a check.** Every query against a
+tenant-owned table must name the academy, be pinned to a primary key, or carry a
+written justification. It found three real cross-tenant leaks on its first run,
+in two reports and the refund webhook.
+
+**Part four, still to build:** one cart and one identity across both systems
+while they run side by side, a landing page per course, Postgres row-level
+security as a second line behind this check, database-backed tests, an
+accessibility pass, and performance measurement.
 
 ## Phase 9 — Loyalty as a product of its own
 

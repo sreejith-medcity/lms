@@ -84,6 +84,8 @@ export async function saveTestimonial(_prev: ActionState, formData: FormData): P
     } else {
       // Written by staff, so it is published straight away: somebody with the
       // permission to write it has already made the decision to show it.
+      // tenant-safe: `data` is assembled from the validated form with this
+      // academy's id, a few lines above, and the spread only adds a flag.
       await db.testimonial.create({ data: { ...data, isPublished: true } });
     }
 
@@ -273,6 +275,8 @@ export async function saveBanner(_prev: ActionState, formData: FormData): Promis
       if (!existing) return { error: 'Banner not found.' };
       await db.banner.update({ where: { id }, data });
     } else {
+      // tenant-safe: `data` carries this academy's id from the block above,
+      // and the spread only adds a sort position.
       await db.banner.create({ data: { ...data, sortOrder: count } });
     }
 

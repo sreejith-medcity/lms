@@ -57,7 +57,12 @@ export async function startCheckout(
     }
 
     const existing = await db.enrollment.findFirst({
-      where: { userId: user.id, productId, status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
+      where: {
+        organizationId: tenant.organizationId,
+        userId: user.id,
+        productId,
+        status: { notIn: ['CANCELLED', 'ARCHIVED'] },
+      },
       select: { id: true },
     });
     if (existing) return { ok: false, error: 'You are already enrolled in this course.' };

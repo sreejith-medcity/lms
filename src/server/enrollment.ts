@@ -38,7 +38,12 @@ export async function enrol(productId: string, pricingPlanId?: string): Promise<
     }
 
     const existing = await db.enrollment.findFirst({
-      where: { userId: user.id, productId, status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
+      where: {
+        organizationId: tenant.organizationId,
+        userId: user.id,
+        productId,
+        status: { notIn: ['CANCELLED', 'ARCHIVED'] },
+      },
       select: { id: true },
     });
     if (existing) {
@@ -59,7 +64,11 @@ export async function enrol(productId: string, pricingPlanId?: string): Promise<
       if (!branch) return { error: 'This academy has no branch configured.' };
 
       const batch = await db.batch.findFirst({
-        where: { courseId: product.course.id, status: { in: ['ACTIVE', 'UPCOMING'] } },
+        where: {
+        organizationId: tenant.organizationId,
+        courseId: product.course.id,
+        status: { in: ['ACTIVE', 'UPCOMING'] },
+      },
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
         select: { id: true },
       });

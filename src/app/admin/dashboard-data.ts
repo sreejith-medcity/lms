@@ -99,7 +99,7 @@ export async function attendanceRate(
   const [rosters, present] = await Promise.all([
     db.enrollment.groupBy({
       by: ['batchId'],
-      where: { batchId: { in: batchIds }, status: { in: ['ENROLLED', 'COMPLETED'] } },
+      where: { organizationId, batchId: { in: batchIds }, status: { in: ['ENROLLED', 'COMPLETED'] } },
       _count: { _all: true },
     }),
     db.attendance.count({

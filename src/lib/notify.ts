@@ -162,6 +162,8 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
     }
   }
 
+  // tenant-safe: every row was built above with the organisation this queue
+  // request named, so there is nothing here that could belong to another one.
   if (rows.length) await db.notificationLog.createMany({ data: rows, skipDuplicates: true });
 
   return { queued: rows.length, skipped, unreachable };
