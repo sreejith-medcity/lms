@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
+import { getSessionUser } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
 import { getTenantState } from '@/lib/tenant';
 
@@ -12,20 +13,49 @@ export default async function Home() {
   if (state.status === 'no-tenant') return <NoTenantNotice />;
 
   const tenant = state.tenant;
+  const user = await getSessionUser();
 
   const courses = await db.product.findMany({
     where: { organizationId: tenant.organizationId, type: 'COURSE', status: 'PUBLISHED' },
     include: { course: true, pricingPlans: { where: { isActive: true }, take: 1 } },
+    orderBy: { createdAt: 'desc' },
     take: 24,
   });
 
   return (
     <main className="mx-auto max-w-6xl p-8">
-      <header className="mb-8 flex items-center justify-between">
+      <header className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{tenant.name}</h1>
-        <Link href="/login" className="text-sm text-slate-600 hover:underline">
-          Sign in
-        </Link>
+        <nav className="flex items-center gap-4 text-sm">
+          {user ? (
+            <>
+              <Link href="/learn" className="text-slate-600 hover:underline">
+                My learning
+              </Link>
+              {user.kind === 'STAFF' && (
+                <Link href="/admin" className="text-slate-600 hover:underline">
+                  Admin
+                </Link>
+              )}
+              <a href="/logout" className="text-slate-600 hover:underline">
+                Sign out
+              </a>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="text-slate-600 hover:underline">
+                Sign in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-lg px-3 py-2 font-medium text-white"
+                style={{ background: 'var(--brand)' }}
+              >
+                Create account
+              </Link>
+            </>
+          )}
+        </nav>
       </header>
 
       <h2 className="mb-4 text-lg font-medium">Explore courses</h2>
@@ -33,7 +63,11 @@ export default async function Home() {
         {courses.map((p) => {
           const plan = p.pricingPlans[0];
           return (
-            <article key={p.id} className="rounded-xl border bg-white p-5">
+            <Link
+              key={p.id}
+              href={`/course/${p.slug}`}
+              className="block rounded-xl border bg-white p-5 transition hover:border-slate-300 hover:shadow-sm"
+            >
               <h3 className="font-medium">{p.title}</h3>
               <p className="mt-1 line-clamp-2 text-sm text-slate-500">
                 {p.course?.description ?? ''}
@@ -48,7 +82,7 @@ export default async function Home() {
                   </span>
                 ) : null}
               </div>
-            </article>
+            </Link>
           );
         })}
         {courses.length === 0 && (
