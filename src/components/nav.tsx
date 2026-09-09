@@ -132,6 +132,16 @@ export function NavIcon({ name }: { name: string }) {
   );
 }
 
+/**
+ * The square mark that goes with a lockup, where we shipped one.
+ *
+ * Only the bundled artwork can be swapped like this, because only for that do
+ * we know a mark exists. An academy's own upload is used as it is.
+ */
+function markFor(logoUrl: string): string {
+  return logoUrl === '/brand/logo.png' ? '/brand/mark.png' : logoUrl;
+}
+
 export function Sidebar({
   features,
   orgName,
@@ -145,8 +155,27 @@ export function Sidebar({
     <aside className="hidden w-60 shrink-0 flex-col bg-[var(--shell)] text-[var(--shell-ink)] lg:flex">
       <div className="flex h-14 items-center gap-2 border-b border-[var(--shell-line)] px-5">
         {logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logoUrl} alt={orgName} className="h-7 w-auto max-w-40 object-contain" />
+          <>
+            {/*
+              The mark rather than the full lockup, and the name set in the
+              shell's own ink beside it.
+
+              A full-colour logo on a dark sidebar is a coin toss: Medcity's
+              wordmark is the same purple as this shell, so it was rendering
+              invisibly and only the amber mark showed. Nothing can be assumed
+              about a tenant's artwork either, so the readable part of this is
+              text we control, and the logo is reduced to the piece that stays
+              legible on any background.
+            */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={markFor(logoUrl)}
+              alt=""
+              aria-hidden="true"
+              className="h-7 w-7 shrink-0 object-contain"
+            />
+            <span className="truncate text-sm font-semibold">{orgName}</span>
+          </>
         ) : (
           <>
             <span
