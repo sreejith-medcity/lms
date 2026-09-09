@@ -148,13 +148,29 @@ Gmail address may add themselves to.
 Not done: reCAPTCHA still has nothing verifying it, and its card says Phase 8
 rather than claiming otherwise.
 
-## Phase 8 — One system, and go-live
+## Phase 8 — One system, and go-live · PART ONE BUILT, AWAITING PUSH
 
 The strongest argument for this whole build, per the audit: collapsing two
 systems into one. Absorb the WooCommerce storefront, one cart and one identity,
 a landing page per course, and a redirect for every old URL so the SEO survives.
 Then the release work: Postgres row-level security, a test suite, an
 accessibility pass, performance measurement, and the migration itself.
+
+**Part one, built: nothing breaks at cutover.** Redirects as data rather than a
+config file, with wildcards for a whole tree, hit counting so the map can be
+seen to be finished, and a catch-all route that answers where a 404 would
+otherwise be. A read-only WooCommerce client, and a migration console where
+every step rehearses before it runs and every step is safe to run twice.
+
+Three deliberate refusals in that importer, each of which a naive version would
+get wrong. Products are not copied, only their URLs. Orders are kept as history
+and never written into the live ledger, because mixing them in would make every
+settlement and tax report wrong for the periods they touch. And no migrated
+account is given a password.
+
+**Part two, still to build:** one cart and one identity across both systems
+while they run side by side, a landing page per course, row-level security, a
+test suite, an accessibility pass, and performance measurement.
 
 ## Phase 9 — Loyalty as a product of its own
 

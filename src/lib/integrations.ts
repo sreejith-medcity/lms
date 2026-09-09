@@ -1303,8 +1303,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 1,
     purpose:
       'The store this replaces. While both are running, an order there becomes an enrolment here, and a course published here appears there. When the migration is finished this is how the archive is read.',
-    status: 'planned',
-    landsIn: 'Phase 8',
+    status: 'wired',
     requires:
       'WooCommerce REST keys with read and write, generated under WooCommerce then Settings then Advanced. Permalinks must not be set to plain, or the REST route disappears.',
     fallback: 'Orders taken on the old store have to be entered here by hand during the changeover.',

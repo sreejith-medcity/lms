@@ -640,23 +640,81 @@ connected the provider, so nobody is offered a door that leads to an error page.
 **Still not done, and labelled so.** reCAPTCHA has nothing verifying it, and its
 card now says Phase 8. Secondary field validation at signup is not built either.
 
+## Phase 8, part one — nothing breaks at cutover
+
+The two pieces of the migration that cannot be repaired afterwards.
+
+**Redirects, as data.** Rankings live on specific paths. A store that
+disappears into 404s loses them in weeks and takes months to win back, if ever;
+everything else in this build can be corrected on a Tuesday, and this cannot. So
+the map is a table an academy maintains, not a config file somebody edits at
+cutover.
+
+A rule can cover a whole tree: `/shop/*` to `/courses/*` carries the rest of the
+path across, which is how one row replaces the four hundred product URLs a
+WooCommerce store accumulates, and the longest matching prefix wins so a
+specific rule still beats the sweep it sits inside. Paths are normalised on the
+way in and on the way out, because WordPress serves `/Courses/IELTS/` and
+`/courses/ielts` as the same page and a map that only matches one of them has
+holes in it. A pasted list is accepted in whatever shape a spreadsheet or a
+Search Console export produces, and anything unusable comes back with a reason
+rather than being dropped, since a rule quietly skipped is a 404 nobody finds
+out about until the traffic has gone. Rules that would chain into a second hop
+are named rather than accepted.
+
+Hits are counted, which is the only honest way to know the map is finished:
+watch which old paths are still being asked for. The lookup runs in a catch-all
+route, so it answers exactly where a 404 would have been, and anything genuinely
+unknown still gets a 404 rather than being swallowed.
+
+**A read-only WooCommerce client, and a console that rehearses.** Read-only on
+purpose: while both systems run, WooCommerce is the record for anything sold
+there, and a migration tool that writes back can corrupt the thing it is copying
+from. Every step has a dry run that reports exactly what would happen, nothing
+is written until somebody has seen it, and the real run needs the delete
+permission rather than edit, because importing four thousand accounts is not the
+same class of action as changing a setting. Every row that crosses writes a
+`MigrationRecord` keyed on the source id, so a second run finds the work already
+done. A migration that cannot be re-run is one nobody dares start.
+
+Three refusals in it, each the thing a naive importer gets wrong:
+
+Products are not copied, only their URLs. The courses here are properly authored
+with modules and pricing plans; a store product is a title and a price, and
+importing them would leave four hundred shells for somebody to delete.
+
+Orders are kept as history and never written into the live ledger, and never
+turned into enrolments. Mixing orders taken by another system under another
+gateway into this ledger would make every settlement and tax report wrong for
+the periods they touch. And what somebody bought there is a question for a
+person: a heuristic on a product name either grants access nobody paid for or
+withholds access somebody did.
+
+No migrated account is given a password. They sign in with a code, which Phase
+7b built, or set one through the forgotten-password flow. Generating passwords
+and emailing them to four thousand people is how a migration becomes a security
+incident.
+
 ## Next runnable step
 
-**Push, then turn two factor on for your own account.**
+**Push, then rehearse the migration before you need it.**
 
 ```
 cd ~/Documents/lms && rm -f .git/*.lock* && git push origin main
 ```
 
-No database change this time, so no `prisma db push`. Once it deploys:
+No database change, so no `prisma db push`. Once it deploys:
 
-Go to `/account/security` and set up two factor on the admin account. That is
-the one worth protecting, and it is also the fastest way to check the whole
-chain works, because it makes your own next sign-in go through the new gate.
+Generate WooCommerce REST keys with **read** access under WooCommerce, Settings,
+Advanced on medcitylms.in, and put them on the WordPress and WooCommerce card in
+Settings, Integrations. Then open Settings, Migration and press Check, then
+Rehearse on each of the three steps. Nothing is written by a rehearsal, and what
+comes back will tell you how much of the catalogue actually lines up by slug
+before any of it matters.
 
-Then try `/login/code` with your mobile number. It will tell you honestly that
-no SMS provider is connected, which is the correct answer until MSG91 is filled
-in on Settings, Integrations. Fill it in, then try again.
+The redirects screen is worth a first pass now rather than at cutover. One rule,
+`/shop/*` to `/courses/*`, probably covers most of it, and the product URL
+rehearsal will show you what it misses.
 
 Still open from before Phase 1: the two stuck INR 8,260 orders. Razorpay's
 dashboard will say whether they were captured at 8,260, captured at another
