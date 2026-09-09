@@ -1,6 +1,8 @@
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 
+export const dynamic = 'force-dynamic';
+
 export default async function BatchesPage() {
   const tenant = await requireTenant();
 

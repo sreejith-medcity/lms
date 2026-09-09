@@ -83,3 +83,24 @@ Phase 0. The data model, tenancy, RBAC, metering and the admin shell are in plac
 Migration from Edmingle and WooCommerce is deliberately deferred until the product
 is built; `MigrationRecord` exists so the cutover can be verified row by row when
 that time comes.
+
+## Deploying to Vercel
+
+Set these in the Vercel project before the first build:
+
+| Variable | Notes |
+|---|---|
+| `DATABASE_URL` | Postgres with `pgvector`. Neon, Supabase or RDS. Use the pooled URL for the app. |
+| `DIRECT_URL` | Unpooled URL, needed by `prisma migrate` |
+| `APP_BASE_DOMAIN` | e.g. `medcitylms.app` — tenant subdomains hang off this |
+| `PLATFORM_HOST` | e.g. `admin.medcitylms.app` |
+| `AUTH_SECRET` | any 32+ char random string |
+
+`postinstall` runs `prisma generate`, so the client is built during Vercel's install
+step. Run `npm run db:push && npm run db:seed` once against the database before the
+first request, otherwise every page renders empty.
+
+Wildcard domains: add `*.<APP_BASE_DOMAIN>` in Vercel's domain settings so tenant
+subdomains resolve without adding each one by hand. Custom tenant domains
+(`lms.medcitylms.in` and friends) are added per domain and matched by the
+`TenantDomain` table.

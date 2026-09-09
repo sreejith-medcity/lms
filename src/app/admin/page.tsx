@@ -3,6 +3,8 @@ import { requireTenant } from '@/lib/tenant';
 import { Stat } from '@/components/stat';
 import { formatMoney } from '@/lib/money';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminHome() {
   const tenant = await requireTenant();
   const orgId = tenant.organizationId;

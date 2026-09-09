@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
 
+export const dynamic = 'force-dynamic';
+
 export default async function CoursesPage() {
   const tenant = await requireTenant();
 

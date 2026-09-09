@@ -2,6 +2,8 @@ import { db } from '@/lib/db';
 import { Stat } from '@/components/stat';
 import { formatMoney } from '@/lib/money';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * Platform control plane. Reached on the PLATFORM_HOST only; tenant sessions
  * never resolve here.
