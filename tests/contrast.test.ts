@@ -155,3 +155,48 @@ test('resolveColor follows a var and a color-mix, and gives up rather than guess
   assert.equal(resolveColor('oklch(0.6 0.1 200)', tokens), null);
   assert.equal(resolveColor('var(--nope)', tokens), null);
 });
+
+/**
+ * The dark panel.
+ *
+ * The home page hero and the closing band on a course page both put text on
+ * the shell purple, which is a background no automated sweep of the rendered
+ * page can measure: it is painted with a gradient, and a gradient lives in
+ * background-image where `backgroundColor` reads as transparent. A browser
+ * check therefore reports white behind it and fails every line on the panel.
+ * These are the numbers that sweep cannot see.
+ */
+test('text on the dark panel is readable', () => {
+  const raw = rawTokensIn(themes.light);
+  const shell = resolveColor(raw.shell, raw);
+  assert.ok(shell, 'no --shell');
+
+  const failures: string[] = [];
+  for (const [name, need] of [
+    ['shell-ink', AA_TEXT],
+    ['shell-muted', AA_TEXT],
+    // The amber is the headline's second line and the button face, both large.
+    ['accent', AA_TEXT],
+  ] as const) {
+    const fg = resolveColor(raw[name], raw);
+    if (!fg) {
+      failures.push(`--${name} did not resolve`);
+      continue;
+    }
+    const ratio = contrastRatio(fg, shell!);
+    if (ratio < need) failures.push(`--${name} on --shell is ${ratio.toFixed(2)}:1, needs ${need}`);
+  }
+
+  assert.deepEqual(failures, [], `\n${failures.join('\n')}\n`);
+});
+
+test('the line on the dark panel is visible without being a border of its own', () => {
+  const raw = rawTokensIn(themes.light);
+  const line = resolveColor(raw['shell-line'], raw);
+  const shell = resolveColor(raw.shell, raw);
+  assert.ok(line && shell);
+  const ratio = contrastRatio(line!, shell!);
+  // Not text, so 3:1 is the wrong bar. It has to be seen and not shouted.
+  assert.ok(ratio > 1.2, `--shell-line on --shell is ${ratio.toFixed(2)}:1, which is invisible`);
+  assert.ok(ratio < 4, `--shell-line on --shell is ${ratio.toFixed(2)}:1, which is a stripe`);
+});

@@ -2,7 +2,9 @@ import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { Card, PageHeader } from '@/components/ui';
+import { settingText } from '@/lib/settings/store';
 import { SocialForm, PolicyEditor } from './forms';
+import { HeroImageForm } from './hero-form';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -31,6 +33,7 @@ export default async function WebsiteSettings() {
     }),
   ]);
 
+  const heroImage = await settingText(tenant.organizationId, 'website.heroImageAssetId');
   const social = (org.social ?? {}) as Record<string, string>;
   const byKind = new Map(policies.map((p) => [p.kind as string, p]));
 
@@ -40,6 +43,17 @@ export default async function WebsiteSettings() {
         title="Website"
         description="What the public side says about you, beyond the courses themselves."
       />
+
+      <Card>
+        <h2 className="t-heading">The home page photograph</h2>
+        <p className="t-small muted mt-1 max-w-prose">
+          The words around it, and your Google rating, are on the Preferences screen under
+          &ldquo;The public site&rdquo;.
+        </p>
+        <div className="mt-4">
+          <HeroImageForm assetId={heroImage} canEdit={canEdit} />
+        </div>
+      </Card>
 
       <Card>
         <h2 className="t-heading">Where else you are</h2>

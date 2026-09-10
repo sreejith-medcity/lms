@@ -19,6 +19,7 @@ export function GoogleBadge({
   rating,
   reviewCount,
   compact = false,
+  onDark = false,
   className = '',
 }: {
   rating: string;
@@ -30,6 +31,8 @@ export function GoogleBadge({
    * unwrapped.
    */
   compact?: boolean;
+  /** On the purple hero panel, where the page's ink would be unreadable. */
+  onDark?: boolean;
   className?: string;
 }) {
   if (!rating.trim() || !reviewCount.trim()) return null;
@@ -39,7 +42,7 @@ export function GoogleBadge({
       // w-fit, because inside a card's flex column an inline-flex still gets
       // stretched to the full width and the pill reads as an empty bar.
       className={`inline-flex w-fit max-w-full items-center gap-2 self-start whitespace-nowrap
-        rounded-full border bg-[var(--surface)] px-2.5 py-1 ${className}`}
+        rounded-full border px-2.5 py-1 ${onDark ? '' : 'bg-[var(--surface)]'} ${className}`}
       role="img"
       aria-label={`Google rating ${rating} out of 5 from ${reviewCount} reviews`}
     >
@@ -54,11 +57,25 @@ export function GoogleBadge({
       <span aria-hidden className="text-[0.8125rem]" style={{ color: 'var(--accent)' }}>
         ★★★★★
       </span>
-      <span className="t-small font-semibold tabular-nums">{rating}</span>
+      <span
+        className="t-small font-semibold tabular-nums"
+        style={onDark ? { color: 'var(--shell-ink)' } : undefined}
+      >
+        {rating}
+      </span>
       {!compact && (
         <>
-          <span aria-hidden className="h-3 w-px" style={{ background: 'var(--line-strong)' }} />
-          <span className="t-small faint tabular-nums">{reviewCount} reviews</span>
+          <span
+            aria-hidden
+            className="h-3 w-px"
+            style={{ background: onDark ? 'var(--shell-line)' : 'var(--line-strong)' }}
+          />
+          <span
+            className={`t-small tabular-nums ${onDark ? '' : 'faint'}`}
+            style={onDark ? { color: 'var(--shell-muted)' } : undefined}
+          >
+            {reviewCount} reviews
+          </span>
         </>
       )}
     </span>

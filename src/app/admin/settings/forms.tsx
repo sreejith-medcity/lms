@@ -11,6 +11,7 @@ import {
   BUNDLED_LOGOS,
   type BundledAsset,
 } from '@/lib/brand-assets';
+import { IMAGE_ACCEPT } from '@/lib/image-formats';
 
 const initial: ActionState = {};
 
@@ -357,7 +358,7 @@ function ArtworkField({
         {mode === 'upload' &&
           (storageReady ? (
             <Uploader
-              accept="image/*"
+              accept={IMAGE_ACCEPT}
               label={`Drop the ${label.toLowerCase()} here`}
               hint="PNG or SVG. It is stored like any other file in the library."
               onUploaded={(asset) => onChange(`/api/assets/${asset.id}`)}

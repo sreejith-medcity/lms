@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import {
   inferMimeType,
+  securityHeadersFor,
   localPathFor,
   localReadStream,
   storageDriver,
@@ -59,6 +60,7 @@ export async function GET(
     // Immutable because the key contains a UUID: this URL can only ever mean
     // this file. A year at the edge is what makes the CDN worth having.
     'Cache-Control': 'public, max-age=31536000, immutable',
+    ...securityHeadersFor(mimeType),
   });
   if (download) {
     headers.set(

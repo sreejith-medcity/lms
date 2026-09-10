@@ -15,6 +15,7 @@ import {
   Input,
   Select,
 } from '@/components/ui';
+import { IMAGE_ACCEPT } from '@/lib/image-formats';
 
 const initial: ActionState = {};
 
@@ -123,7 +124,7 @@ export function NewBanner({ storageReady }: { storageReady: boolean }) {
 
       {storageReady ? (
         <Uploader
-          accept="image/*"
+          accept={IMAGE_ACCEPT}
           label="Drop the artwork here"
           hint="A wide image. It is shown at full width."
           onUploaded={(asset) => {

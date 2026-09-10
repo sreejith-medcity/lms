@@ -14,6 +14,7 @@ import {
   Input,
   Textarea,
 } from '@/components/ui';
+import { IMAGE_ACCEPT } from '@/lib/image-formats';
 
 const initial: ActionState = {};
 
@@ -117,7 +118,7 @@ export function DetailsForm({
             </div>
           ) : (
             <Uploader
-              accept="image/*"
+              accept={IMAGE_ACCEPT}
               label="Drop an image"
               hint="Landscape works best. It is cropped to fit a card."
               onUploaded={(asset) => setThumbnail(asset.id)}

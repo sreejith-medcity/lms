@@ -389,7 +389,11 @@ export async function saveSetting(key: string, raw: string): Promise<ActionState
       if (!def.options?.some((o) => o.value === raw)) return { error: 'That is not one of the choices.' };
       value = raw;
     } else {
-      value = raw.trim().slice(0, 500);
+      // A one-line setting is a phrase; a multiline one can be a provider's
+      // embed snippet, and 500 characters would silently cut the end off it.
+      // Silently, because a truncated snippet still saves and still looks
+      // right in the box.
+      value = raw.trim().slice(0, def.multiline ? 8000 : 500);
     }
 
     const storageKey = `pref.${def.key}`;

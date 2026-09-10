@@ -5,6 +5,7 @@ import { getTenantContext } from '@/lib/tenant';
 import { meter } from '@/lib/usage';
 import { readUrlFor, storageConfigured } from '@/lib/storage';
 import { curriculumGate } from '@/lib/curriculum-access';
+import { settingText } from '@/lib/settings/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,14 @@ export async function GET(
     select: { id: true },
   });
 
+  // The home page photograph, same argument again: it is the first thing on
+  // the public site, so it cannot sit behind a session. Read through the
+  // settings store and compared here rather than filtered in the query,
+  // because the value column is JSON and a string match on it is a subtlety
+  // nobody should have to remember when they change how settings are stored.
+  const heroAssetId = await settingText(tenant.organizationId, 'website.heroImageAssetId');
+  const heroImage = heroAssetId.trim() !== '' && heroAssetId.trim() === asset.id;
+
   // Course artwork is public for the same reason. It is the picture on the
   // catalogue card and at the top of the sales page, both of which are pages
   // we want a search engine and a stranger to see. Only the thumbnail of a
@@ -76,7 +85,10 @@ export async function GET(
 
   // Staff see everything in their own organisation.
   let allowed =
-    Boolean(branding) || Boolean(artwork) || Boolean(user && sameOrg && user.kind === 'STAFF');
+    Boolean(branding) ||
+    Boolean(artwork) ||
+    heroImage ||
+    Boolean(user && sameOrg && user.kind === 'STAFF');
 
   // Anyone, signed in or not, may see a material marked as a free preview.
   const freePreview = asset.materials.some((m) => m.isFreePreview);
@@ -195,7 +207,7 @@ export async function GET(
   // on every single page view. The answer there does not depend on who is
   // asking, so it can be held at the edge. Two minutes is comfortably inside
   // the five-minute life of the link it points at.
-  const publicArtwork = Boolean(artwork) && !streaming;
+  const publicArtwork = (Boolean(artwork) || heroImage) && !streaming;
 
   return NextResponse.redirect(new URL(url, request.url), {
     status: 302,

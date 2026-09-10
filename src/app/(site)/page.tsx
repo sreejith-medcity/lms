@@ -5,7 +5,8 @@ import { getTenantState } from '@/lib/tenant';
 import { getSiteContext, courseCardSelect, type CourseCard as Card } from '@/lib/site';
 import { CourseCard } from '@/components/course-card';
 import { SetupNotice, NoTenantNotice } from '@/components/tenant-notices';
-import { HomeSearch } from './home-search';
+import { settingText } from '@/lib/settings/store';
+import { HomeHero } from './home-hero';
 import { Banners } from '@/components/banners';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,16 @@ export default async function Home() {
   if (!site) return <NoTenantNotice />;
 
   const org = site.organization;
+
+  const hero = Promise.all([
+    settingText(site.organizationId, 'website.heroEyebrow'),
+    settingText(site.organizationId, 'website.heroTitle'),
+    settingText(site.organizationId, 'website.heroHighlight'),
+    settingText(site.organizationId, 'website.heroBlurb'),
+    settingText(site.organizationId, 'website.heroImageAssetId'),
+    settingText(site.organizationId, 'website.googleRating'),
+    settingText(site.organizationId, 'website.googleReviewCount'),
+  ]);
 
   const [featured, all, samples, testimonials, published] = await Promise.all([
     db.product.findMany({
@@ -67,13 +78,27 @@ export default async function Home() {
 
   const cards = featured as unknown as Card[];
 
+  const [heroEyebrow, heroTitle, heroHighlight, heroBlurb, heroImage, googleRating, googleCount] =
+    await hero;
+
   return (
     <>
-      <Hero
-        name={org.name}
-        courseCount={all}
-        upcomingSessions={published}
+      <HomeHero
+        eyebrow={heroEyebrow.trim() || org.name}
+        title={heroTitle.trim()}
+        highlight={heroHighlight.trim()}
+        blurb={heroBlurb.trim()}
+        imageAssetId={heroImage.trim() || null}
+        google={
+          googleRating.trim() && googleCount.trim()
+            ? { rating: googleRating.trim(), reviewCount: googleCount.trim() }
+            : null
+        }
         sampleId={samples?.id ?? null}
+        facts={[
+          { label: 'Courses published', value: String(all) },
+          { label: 'Classes scheduled ahead', value: String(published) },
+        ].filter((f) => f.value !== '0')}
       />
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -166,77 +191,6 @@ export default async function Home() {
 }
 
 /* Sections ---------------------------------------------------------------- */
-
-function Hero({
-  name,
-  courseCount,
-  upcomingSessions,
-  sampleId,
-}: {
-  name: string;
-  courseCount: number;
-  upcomingSessions: number;
-  sampleId: string | null;
-}) {
-  return (
-    <section className="relative overflow-hidden border-b">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 -top-40 h-80 opacity-[0.07] blur-3xl"
-        style={{ background: 'var(--brand)' }}
-      />
-      <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 md:py-24">
-        <p className="t-small font-medium" style={{ color: 'var(--brand)' }}>
-          {name}
-        </p>
-        <h1 className="mt-3 max-w-3xl text-4xl font-semibold leading-[1.1] tracking-tight md:text-5xl">
-          Learn a language, clear the exam, get to work.
-        </h1>
-        <p className="muted mt-4 max-w-2xl text-base leading-relaxed md:text-lg">
-          Structured courses with live classes, recorded lessons and practice you can
-          actually schedule around a job. One place for your batch, your material and
-          your progress.
-        </p>
-
-        <div className="mt-7 flex flex-wrap items-center gap-3">
-          <Link
-            href="/courses"
-            className="inline-flex h-11 items-center rounded-[var(--radius-sm)] px-5 text-sm font-medium text-[var(--brand-ink)]"
-            style={{ background: 'var(--brand)' }}
-          >
-            Explore courses
-          </Link>
-          {sampleId && (
-            <Link
-              href="/sample"
-              className="inline-flex h-11 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-5 text-sm font-medium"
-            >
-              Try a sample lesson
-            </Link>
-          )}
-        </div>
-
-        <div className="mt-8 max-w-md">
-          <HomeSearch />
-        </div>
-
-        <dl className="mt-10 flex flex-wrap gap-x-10 gap-y-4">
-          <Fact label="Courses published" value={courseCount} />
-          <Fact label="Classes scheduled ahead" value={upcomingSessions} />
-        </dl>
-      </div>
-    </section>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <dt className="t-micro faint uppercase tracking-wide">{label}</dt>
-      <dd className="mt-0.5 text-2xl font-semibold tabular-nums">{value}</dd>
-    </div>
-  );
-}
 
 function Section({
   title,

@@ -436,3 +436,33 @@ export function formatBytes(bytes: number | bigint): string {
   const value = n / Math.pow(1024, i);
   return `${value >= 100 || i === 0 ? Math.round(value) : value.toFixed(1)} ${units[i]}`;
 }
+
+/**
+ * Headers that make a file safe to serve from our own origin.
+ *
+ * An SVG is not a picture, it is a document: it can carry a `<script>` and it
+ * runs with the privileges of whatever origin served it. In an `<img>` tag
+ * that script is inert, but nothing stops somebody opening the file's URL
+ * directly, and course artwork is public. Uploaded by staff, yes, but "only
+ * an admin can do it" is not a security boundary when an admin account can be
+ * phished.
+ *
+ * So SVG is served with a policy that permits nothing except the shapes and
+ * the inline styles it needs. This is the same approach GitHub takes with
+ * user-uploaded SVG, and it is better than stripping tags on the way in,
+ * because a sanitiser has to be right about every future SVG feature and a
+ * policy of "no scripts, no network, no frames" does not.
+ *
+ * nosniff goes on everything. Without it a browser is free to decide that a
+ * file we called an image is really HTML.
+ */
+export function securityHeadersFor(mimeType: string): Record<string, string> {
+  const headers: Record<string, string> = { 'X-Content-Type-Options': 'nosniff' };
+
+  if (mimeType === 'image/svg+xml') {
+    headers['Content-Security-Policy'] =
+      "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox";
+  }
+
+  return headers;
+}
