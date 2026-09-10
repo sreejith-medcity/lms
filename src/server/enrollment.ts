@@ -36,6 +36,11 @@ export async function enrol(productId: string, pricingPlanId?: string): Promise<
     if (product.course.onDemandOnly) {
       return { error: 'This course is enrolled by the academy. Please contact them.' };
     }
+    // An add-on is bought alongside a course, through checkout. Free
+    // enrolment is not a side door onto one.
+    if (product.isAddonOnly) {
+      return { error: 'This is offered alongside a course rather than on its own.' };
+    }
 
     const existing = await db.enrollment.findFirst({
       where: {

@@ -10,6 +10,10 @@ import { Badge } from '@/components/ui';
 import { CourseMedia } from '@/components/course-media';
 import { Rating } from '@/components/rating';
 import { NoTenantNotice } from '@/components/tenant-notices';
+import { addonsFor } from '@/lib/addons';
+import { settingText } from '@/lib/settings/store';
+import { GoogleBadge, ReviewWidget } from '@/components/review-badge';
+import { AddonPicker } from './addon-picker';
 import { CourseCta } from './course-cta';
 import { Curriculum } from './curriculum';
 import { EnrolBar } from './enrol-bar';
@@ -27,6 +31,8 @@ async function load(slug: string) {
       slug,
       type: 'COURSE',
       status: 'PUBLISHED',
+      // An add-on has no page of its own: it is a tick box on a course.
+      isAddonOnly: false,
       deletedAt: null,
     },
     select: {
@@ -156,7 +162,15 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   // by the call to action after the page has arrived, which is what lets a
   // cache hold the page at all. Adding a single server-side session read here
   // would quietly make every course page uncacheable again.
-  const [instructors, related] = await Promise.all([
+  // Started before the queries below rather than after them, so three cached
+  // setting reads do not cost a round trip of their own.
+  const siteBits = Promise.all([
+    settingText(site.organizationId, 'website.googleRating'),
+    settingText(site.organizationId, 'website.googleReviewCount'),
+    settingText(site.organizationId, 'website.reviewWidgetHtml'),
+  ]);
+
+  const [instructors, related, addons] = await Promise.all([
     // Named only where a trainer is actually assigned to a running batch.
     db.user.findMany({
       where: { id: { in: course.batches.flatMap((b) => b.staff.map((s) => s.userId)) } },
@@ -176,6 +190,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             status: 'PUBLISHED',
             deletedAt: null,
             id: { not: product.id },
+            isAddonOnly: false,
             course: { categories: { some: { category: { slug: category.slug } } } },
           },
           orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
@@ -194,7 +209,11 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           },
         })
       : Promise.resolve([]),
+    addonsFor(site.organizationId, product.id),
   ]);
+
+  const [googleRating, googleCount, reviewWidgetHtml] = await siteBits;
+  const hasReviewWidget = reviewWidgetHtml.trim().length > 0;
 
   // A trainer may ask not to be named publicly, and that is theirs to decide.
   const shownInstructors = instructors.filter((i) => !i.instructorProfile?.hideNameOnCards);
@@ -261,7 +280,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
     { id: 'curriculum', label: 'Curriculum' },
     course.batches.length > 0 ? { id: 'batches', label: 'Batches' } : null,
     shownInstructors.length > 0 ? { id: 'trainers', label: 'Trainers' } : null,
-    reviews.length > 0 ? { id: 'reviews', label: 'Reviews' } : null,
+    reviews.length > 0 || hasReviewWidget ? { id: 'reviews', label: 'Reviews' } : null,
     { id: 'faq', label: 'Before you enrol' },
   ].filter((i): i is { id: string; label: string } => Boolean(i));
 
@@ -303,7 +322,23 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
 
   const purchase = (
     <>
+      <GoogleBadge rating={googleRating.trim()} reviewCount={googleCount.trim()} className="mb-3" />
+
       <PriceBlock plan={plan} isFree={isFree} saving={saving} />
+
+      {addons.length > 0 && (
+        <AddonPicker
+          productId={product.id}
+          className="mt-4"
+          options={addons.map((a) => ({
+            productId: a.productId,
+            label: a.label,
+            note: a.note,
+            priceLabel: a.priceLabel,
+            isPreselected: a.isPreselected,
+          }))}
+        />
+      )}
 
       <div className="mt-4">
         <CourseCta
@@ -633,8 +668,9 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           )}
 
           {/* Reviews ------------------------------------------------------ */}
-          {reviews.length > 0 && (
+          {(reviews.length > 0 || hasReviewWidget) && (
             <Section id="reviews" eyebrow="Learner reviews" title="What learners say">
+              {hasReviewWidget && <ReviewWidget html={reviewWidgetHtml} className="mb-5" />}
               <ul className="grid gap-3 sm:grid-cols-2">
                 {reviews.map((r) => (
                   <li key={r.id} className="rounded-[var(--radius)] border bg-[var(--surface)] p-4">

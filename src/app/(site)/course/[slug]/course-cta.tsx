@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { EnrolButton } from './enrol-button';
+import { useSelectedAddons } from './addon-selection';
 import { LinkButton } from '@/components/ui';
 
 /**
@@ -66,6 +67,9 @@ export function CourseCta({
   fullWidth?: boolean;
   continueLabel?: string;
 }) {
+  // Whatever the buyer ticked in the purchase card, wherever this button is.
+  const addonProductIds = useSelectedAddons(productId);
+
   const [state, setState] = useState<CourseState>({
     signedIn: false,
     enrolled: false,
@@ -87,7 +91,7 @@ export function CourseCta({
     };
   }, [productId]);
 
-  if (state.enrolled) {
+  if (state.enrolled && addonProductIds.length === 0) {
     return (
       <LinkButton
         href={learnHref}
@@ -108,6 +112,7 @@ export function CourseCta({
       pricePaise={pricePaise}
       currency={currency}
       pointsWorthPaise={state.pointsWorthPaise}
+      addonProductIds={addonProductIds}
       fullWidth={fullWidth}
     />
   );

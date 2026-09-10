@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
 import { courseCardSelect, ratingsFor, type CourseCard as Card } from '@/lib/site';
+import { formatMoney } from '@/lib/money';
+import { settingText } from '@/lib/settings/store';
 import { CourseCard } from '@/components/course-card';
 
 export interface CatalogueFilters {
@@ -39,6 +41,9 @@ export async function Catalogue({
       organizationId,
       type: 'COURSE',
       status: 'PUBLISHED',
+      // Something sold only alongside a course is not a course. It has no
+      // page of its own, so a card linking to one would be a dead end.
+      isAddonOnly: false,
       deletedAt: null,
       ...(q
         ? {
@@ -90,14 +95,61 @@ export async function Catalogue({
     );
   }
 
-  const [levels, ratings] = await Promise.all([
+  const [levels, ratings, addonRows, googleRating, googleCount] = await Promise.all([
     db.course.findMany({
       where: { organizationId, level: { not: null }, product: { status: 'PUBLISHED' } },
       distinct: ['level'],
       select: { level: true },
     }),
     ratingsFor(organizationId, cards.map((c) => c.id)),
+    // One query for the whole grid rather than one per card. Only the first
+    // extra per course reaches a card: a card is a summary, and a course with
+    // three extras is a decision that belongs on its own page.
+    db.productAddon.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+        productId: { in: cards.map((c) => c.id) },
+        addonProduct: { status: 'PUBLISHED', deletedAt: null },
+      },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        productId: true,
+        label: true,
+        addonProduct: {
+          select: {
+            id: true,
+            title: true,
+            pricingPlans: {
+              where: { isActive: true },
+              orderBy: { sortOrder: 'asc' },
+              take: 1,
+              select: { pricePaise: true, currency: true },
+            },
+          },
+        },
+      },
+    }),
+    settingText(organizationId, 'website.googleRating'),
+    settingText(organizationId, 'website.googleReviewCount'),
   ]);
+
+  const google =
+    googleRating.trim() && googleCount.trim()
+      ? { rating: googleRating.trim(), reviewCount: googleCount.trim() }
+      : undefined;
+
+  const addonByProduct = new Map<string, { productId: string; label: string; priceLabel: string }>();
+  for (const row of addonRows) {
+    if (addonByProduct.has(row.productId)) continue;
+    const plan = row.addonProduct.pricingPlans[0];
+    if (!plan || plan.pricePaise <= 0) continue;
+    addonByProduct.set(row.productId, {
+      productId: row.addonProduct.id,
+      label: row.label ?? `Add ${row.addonProduct.title}`,
+      priceLabel: `+${formatMoney(plan.pricePaise, plan.currency)}`,
+    });
+  }
 
   const active = Boolean(q || filters.category || filters.level || filters.format);
 
@@ -210,7 +262,14 @@ export async function Catalogue({
       ) : (
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {cards.map((c, i) => (
-            <CourseCard key={c.id} card={c} rating={ratings.get(c.id)} priority={i < 4} />
+            <CourseCard
+              key={c.id}
+              card={c}
+              rating={ratings.get(c.id)}
+              addon={addonByProduct.get(c.id)}
+              google={google}
+              priority={i < 4}
+            />
           ))}
         </div>
       )}

@@ -16,6 +16,7 @@ export function EnrolButton({
   pricePaise = 0,
   currency = 'INR',
   pointsWorthPaise = 0,
+  addonProductIds = [],
   fullWidth = false,
 }: {
   productId: string;
@@ -26,6 +27,8 @@ export function EnrolButton({
   currency?: string;
   /** What this learner's points could take off this order, if they choose to. */
   pointsWorthPaise?: number;
+  /** Extras ticked in the purchase card. Ids only: they are priced server side. */
+  addonProductIds?: string[];
   fullWidth?: boolean;
 }) {
   const [pending, start] = useTransition();
@@ -54,12 +57,14 @@ export function EnrolButton({
               return;
             }
 
-            if (isPaid) {
+            // A free course with a paid extra ticked is still a purchase.
+            if (isPaid || addonProductIds.length > 0) {
               const started = await startCheckout(
                 productId,
                 pricingPlanId,
                 applied?.code,
                 usePoints,
+                addonProductIds,
               );
               if (started.ok) router.push(`/checkout/${started.orderId}`);
               else if (started.signIn) router.push('/login');

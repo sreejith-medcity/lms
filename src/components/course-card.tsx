@@ -8,6 +8,8 @@ import {
   type CourseCard as Card,
 } from '@/lib/site';
 import { CourseMedia } from '@/components/course-media';
+import { AddonToggle } from '@/components/addon-toggle';
+import { GoogleBadge } from '@/components/review-badge';
 import { Rating } from '@/components/rating';
 
 /**
@@ -25,10 +27,16 @@ import { Rating } from '@/components/rating';
 export function CourseCard({
   card,
   rating,
+  addon,
+  google,
   priority = false,
 }: {
   card: Card;
   rating?: { average: number; count: number };
+  /** The academy's own Google rating, read once for the whole grid. */
+  google?: { rating: string; reviewCount: string };
+  /** The one extra worth offering from a card. More than one belongs on the page. */
+  addon?: { productId: string; label: string; priceLabel: string };
   priority?: boolean;
 }) {
   const plan = card.pricingPlans[0];
@@ -73,7 +81,11 @@ export function CourseCard({
 
         <p className="t-small faint">{metaLine(card)}</p>
 
-        {rating && <Rating average={rating.average} count={rating.count} />}
+        {rating ? (
+          <Rating average={rating.average} count={rating.count} />
+        ) : (
+          google && <GoogleBadge rating={google.rating} reviewCount={google.reviewCount} compact />
+        )}
 
         {card.course?.description && (
           <p className="t-small muted line-clamp-2 leading-relaxed">{card.course.description}</p>
@@ -128,24 +140,35 @@ export function CourseCard({
                 : ''}
           </p>
 
-          <div className="mt-3.5 grid grid-cols-2 gap-2">
-            <Link
-              href={href}
-              className="inline-flex h-10 items-center justify-center rounded-[var(--radius-sm)] border
-                bg-[var(--surface)] px-3 text-sm font-medium transition
-                hover:border-[var(--brand)] hover:text-[var(--brand)]"
-            >
-              Details
-            </Link>
-            <Link
-              href={`${href}#enrol`}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)]
-                px-3 text-sm font-semibold transition hover:brightness-105"
-              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
-            >
-              Enrol now
-              <span aria-hidden>→</span>
-            </Link>
+          <div className="mt-3.5">
+            {addon ? (
+              <AddonToggle
+                href={href}
+                addonProductId={addon.productId}
+                label={addon.label}
+                priceLabel={addon.priceLabel}
+              />
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href={href}
+                  className="inline-flex h-10 items-center justify-center rounded-[var(--radius-sm)] border
+                    bg-[var(--surface)] px-3 text-sm font-medium transition
+                    hover:border-[var(--brand)] hover:text-[var(--brand)]"
+                >
+                  Details
+                </Link>
+                <Link
+                  href={`${href}#enrol`}
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)]
+                    px-3 text-sm font-semibold transition hover:brightness-105"
+                  style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+                >
+                  Enrol now
+                  <span aria-hidden>→</span>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>

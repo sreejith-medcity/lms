@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveSetting, exportSettings } from '@/server/settings';
 import type { ActionState } from '@/server/courses';
-import { Badge, Button, Card, Input, Select } from '@/components/ui';
+import { Badge, Button, Card, Input, Select, Textarea } from '@/components/ui';
 import { ImportSettings } from './transfer';
 
 export interface SettingRow {
@@ -18,6 +18,8 @@ export interface SettingRow {
   max: number | null;
   unit: string | null;
   live: boolean;
+  multiline: boolean;
+  placeholder: string | null;
   waitingOn: string | null;
   default: boolean | number | string;
   value: boolean | number | string;
@@ -248,12 +250,26 @@ function SettingItem({ setting, canEdit }: { setting: SettingRow; canEdit: boole
           </div>
         )}
 
-        {setting.kind === 'text' && (
+        {setting.kind === 'text' && !setting.multiline && (
           <Input
             value={String(value)}
             disabled={disabled}
             className="w-56"
             aria-label={setting.label}
+            placeholder={setting.placeholder ?? undefined}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={(e) => save(e.target.value)}
+          />
+        )}
+
+        {setting.kind === 'text' && setting.multiline && (
+          <Textarea
+            value={String(value)}
+            disabled={disabled}
+            rows={4}
+            className="w-full min-w-0 font-mono text-[0.75rem] sm:w-96"
+            aria-label={setting.label}
+            placeholder={setting.placeholder ?? undefined}
             onChange={(e) => setValue(e.target.value)}
             onBlur={(e) => save(e.target.value)}
           />

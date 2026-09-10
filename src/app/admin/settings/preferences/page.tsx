@@ -69,6 +69,8 @@ export default async function PreferencesPage() {
           max: s.max ?? null,
           unit: s.unit ?? null,
           live: s.live,
+          multiline: s.multiline ?? false,
+          placeholder: s.placeholder ?? null,
           waitingOn: s.waitingOn ?? null,
           default: s.default,
           value: values[s.key],

@@ -3,7 +3,8 @@
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
-import { computeTax } from '@/lib/money';
+import { priceOrder } from '@/lib/order-lines';
+import { resolveSelectedAddons } from '@/lib/addons';
 import { createRazorpayOrder, paymentsConfigured } from '@/lib/razorpay';
 import { claimPromo, PromoRefused } from '@/lib/promo-claim';
 import { rememberIntent } from '@/lib/cart';
@@ -27,6 +28,12 @@ export async function startCheckout(
   pricingPlanId?: string,
   promoCode?: string,
   usePoints = false,
+  /**
+   * Extras the buyer ticked. Product ids only: the price of each one is read
+   * from its own plan here, and anything not attached to this course as an
+   * add-on is dropped rather than bought.
+   */
+  addonProductIds: string[] = [],
 ): Promise<CheckoutStart> {
   try {
     const tenant = await requireTenant();
@@ -47,6 +54,7 @@ export async function startCheckout(
       select: {
         id: true,
         title: true,
+        isAddonOnly: true,
         course: { select: { id: true, onDemandOnly: true } },
         pricingPlans: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } },
       },
@@ -55,6 +63,26 @@ export async function startCheckout(
     if (product.course?.onDemandOnly) {
       return { ok: false, error: 'This course is enrolled by the academy. Please contact them.' };
     }
+    // An add-on is something you tick alongside a course. Sold on its own it
+    // would be a product with no page, bought by somebody who guessed an id.
+    if (product.isAddonOnly) {
+      return { ok: false, error: 'This is offered alongside a course rather than on its own.' };
+    }
+
+    const plan = product.pricingPlans.find((p) => p.id === pricingPlanId) ?? product.pricingPlans[0];
+    if (!plan) return { ok: false, error: 'This course has no price set. Please contact the academy.' };
+
+    // Extras are resolved before anything is priced, because whether the buyer
+    // already owns the course only decides the outcome once we know whether
+    // they are here for something else as well. Nothing the browser sent is
+    // trusted for money: it sends product ids, and gets back whatever those
+    // products actually cost, if it is allowed them at all.
+    const addons = await resolveSelectedAddons({
+      organizationId: tenant.organizationId,
+      userId: user.id,
+      productId: product.id,
+      requested: addonProductIds,
+    });
 
     const existing = await db.enrollment.findFirst({
       where: {
@@ -65,11 +93,15 @@ export async function startCheckout(
       },
       select: { id: true },
     });
-    if (existing) return { ok: false, error: 'You are already enrolled in this course.' };
 
-    const plan = product.pricingPlans.find((p) => p.id === pricingPlanId) ?? product.pricingPlans[0];
-    if (!plan) return { ok: false, error: 'This course has no price set. Please contact the academy.' };
-    if (plan.pricePaise <= 0) {
+    // Somebody who bought the course in June and wants the question bank in
+    // September is a normal customer, not an error. They buy the extra on its
+    // own, and the course they already have is not charged for again.
+    const buyingCourse = !existing;
+    if (existing && addons.length === 0) {
+      return { ok: false, error: 'You are already enrolled in this course.' };
+    }
+    if (buyingCourse && plan.pricePaise <= 0 && addons.length === 0) {
       return { ok: false, error: 'This course is free. Use Enrol rather than checkout.' };
     }
 
@@ -85,8 +117,10 @@ export async function startCheckout(
     });
 
     // The discount comes off before tax, because GST is owed on what was
-    // actually charged, not on the list price.
-    const claim = promoCode?.trim()
+    // actually charged, not on the list price. A code is quoted against the
+    // course, so an order that is only an extra never claims one: reserving a
+    // redemption that then discounts nothing spends the code for nothing.
+    const claim = promoCode?.trim() && buyingCourse
       ? await db
           .$transaction((tx) =>
             claimPromo(tx, {
@@ -106,22 +140,43 @@ export async function startCheckout(
     if (claim instanceof PromoRefused) return { ok: false, error: claim.message };
 
     const discountPaise = claim?.discountPaise ?? 0;
-    const taxablePaise = Math.max(0, plan.pricePaise - discountPaise);
 
-    const tax = computeTax({
-      amountPaise: taxablePaise,
-      cgstPercent: taxConfig?.cgstPercent ?? 9,
-      sgstPercent: taxConfig?.sgstPercent ?? 9,
-      igstPercent: taxConfig?.igstPercent ?? 18,
-      // No billing state is collected yet, so supply is treated as intra-state.
-      // When the checkout asks for one, this is the only line that changes.
-      interState: false,
-      pricesAreExclusive: taxConfig?.pricesAreExclusive ?? true,
+    const priced = priceOrder({
+      lines: [
+        ...(buyingCourse
+          ? [
+              {
+                productId: product.id,
+                pricingPlanId: plan.id,
+                title: product.title,
+                pricePaise: plan.pricePaise,
+                isPrimary: true,
+              },
+            ]
+          : []),
+        ...addons.map((a) => ({
+          productId: a.productId,
+          pricingPlanId: a.pricingPlanId,
+          title: a.title,
+          pricePaise: a.pricePaise,
+          isPrimary: false,
+        })),
+      ],
+      discountPaise,
+      tax: {
+        cgstPercent: taxConfig?.cgstPercent ?? 9,
+        sgstPercent: taxConfig?.sgstPercent ?? 9,
+        igstPercent: taxConfig?.igstPercent ?? 18,
+        // No billing state is collected yet, so supply is treated as
+        // intra-state. When checkout asks for one, this is the line to change.
+        interState: false,
+        pricesAreExclusive: taxConfig?.pricesAreExclusive ?? true,
+        enabled: taxConfig?.enabled ?? true,
+      },
     });
 
-    const taxPaise = tax.totalPaise - tax.taxablePaise;
-    const enabled = taxConfig?.enabled ?? true;
-    const beforePoints = enabled ? tax.totalPaise : taxablePaise;
+    const taxPaise = priced.taxPaise;
+    const beforePoints = priced.beforePointsPaise;
 
     // Points come off the payable total rather than the price, because the
     // academy still owes GST on what the course was sold for.
@@ -160,21 +215,26 @@ export async function startCheckout(
           orderNo,
           status: 'PENDING',
           currency: plan.currency,
-          subtotalPaise: plan.pricePaise,
-          discountPaise,
-          taxPaise: enabled ? taxPaise : 0,
+          subtotalPaise: priced.subtotalPaise,
+          discountPaise: priced.discountPaise,
+          taxPaise,
           walletPaise,
           totalPaise,
           promoCodeId: claim?.promoCodeId ?? null,
           items: {
-            create: {
-              productId: product.id,
-              pricingPlanId: plan.id,
-              titleSnapshot: product.title,
-              pricePaise: plan.pricePaise,
-              taxPaise: enabled ? taxPaise : 0,
-              totalPaise,
-            },
+            // One row per line. The line totals are before any loyalty credit,
+            // because the credit is a payment against the order rather than a
+            // reduction of what each thing was sold for, and the invoice has
+            // to show what each thing was sold for.
+            create: priced.lines.map((l) => ({
+              productId: l.productId,
+              pricingPlanId: l.pricingPlanId,
+              titleSnapshot: l.title,
+              pricePaise: l.pricePaise,
+              discountPaise: l.discountPaise,
+              taxPaise: l.taxPaise,
+              totalPaise: l.totalPaise,
+            })),
           },
         },
         select: { id: true, orderNo: true, currency: true, totalPaise: true },
@@ -210,6 +270,7 @@ export async function startCheckout(
     // Recorded before the gateway is called, so somebody who bounces off the
     // payment screen still shows up on the recovery list.
     await rememberIntent(product.id, plan.id);
+    for (const a of addons) await rememberIntent(a.productId, a.pricingPlanId);
 
     const gatewayOrder = await createRazorpayOrder({
       amountPaise: order.totalPaise,

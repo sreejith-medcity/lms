@@ -37,6 +37,10 @@ export interface SettingDef {
   waitingOn?: string;
   /** A sentence showing the current value's consequence. */
   effect?: (value: boolean | number | string) => string;
+  /** Text that will not fit on one line, such as an embed snippet. */
+  multiline?: boolean;
+  /** Shown in the empty field, as an example rather than as a default. */
+  placeholder?: string;
 }
 
 export const SETTING_GROUPS = [
@@ -47,6 +51,7 @@ export const SETTING_GROUPS = [
   { key: 'community', label: 'Community', blurb: 'What learners may post, and whether anybody reads it first.' },
   { key: 'commerce', label: 'Selling', blurb: 'Where you sell, and in what currency.' },
   { key: 'loyalty', label: 'Loyalty', blurb: 'Who runs the points, and who does the arithmetic.' },
+  { key: 'website', label: 'The public site', blurb: 'What a stranger sees before they have an account.' },
 ] as const;
 
 export type SettingGroupKey = (typeof SETTING_GROUPS)[number]['key'];
@@ -325,6 +330,40 @@ export const SETTINGS: SettingDef[] = [
           ? 'Nobody awards anything. Existing balances are left alone rather than cleared.'
           : 'The wallet in this product awards and redeems, which is what runs today.',
   },
+  /* The public site -------------------------------------------------------- */
+  {
+    key: 'website.googleRating',
+    group: 'website',
+    label: 'Your Google rating',
+    help: 'Shown as a small badge on course cards and on the course page. Blank hides the badge entirely, which is the right answer until the number is real: a five star badge with nothing behind it is worse than no badge.',
+    kind: 'text',
+    default: '',
+    placeholder: '4.8',
+    live: true,
+    effect: (v) => (String(v).trim() ? `Cards will show ${String(v).trim()} out of 5.` : 'No badge is shown.'),
+  },
+  {
+    key: 'website.googleReviewCount',
+    group: 'website',
+    label: 'How many Google reviews that is from',
+    help: 'The count beside the rating. The badge needs both, so a rating with no count is not shown.',
+    kind: 'text',
+    default: '',
+    placeholder: '14593',
+    live: true,
+  },
+  {
+    key: 'website.reviewWidgetHtml',
+    group: 'website',
+    label: 'Live reviews embed',
+    help: 'The snippet your review provider gives you, pasted whole. It appears once on each course page, under the learner reviews. Scripts in it do run, so paste only what your provider gave you and nothing you were sent by anybody else.',
+    kind: 'text',
+    multiline: true,
+    default: '',
+    placeholder: '<div data-widget-id="..."></div><script src="https://cdn.example.com/widget.js" defer></script>',
+    live: true,
+  },
+
 ];
 
 export function settingByKey(key: string): SettingDef | undefined {
