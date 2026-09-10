@@ -98,6 +98,78 @@ export async function saveCategory(_prev: ActionState, formData: FormData): Prom
   }
 }
 
+/**
+ * The storefront card for a subject.
+ *
+ * Separate from saveCategory because they answer different questions. That
+ * one is about the taxonomy: the name, the address, where it sits in the
+ * tree, and changing it moves a public URL. This one is about how the subject
+ * is sold, and none of it can break a link.
+ */
+const categoryCard = z.object({
+  id: z.string().min(1),
+  tagline: z.string().trim().max(160).optional().or(z.literal('')),
+  imageAssetId: z.string().trim().optional().or(z.literal('')),
+  ctaLabel: z.string().trim().max(48).optional().or(z.literal('')),
+  comingSoon: z.boolean(),
+  showOnHome: z.boolean(),
+  sortOrder: z.coerce.number().int().min(0).max(999),
+});
+
+export async function saveCategoryCard(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('category.manage_categories');
+
+    const parsed = categoryCard.safeParse({
+      id: formData.get('id'),
+      tagline: formData.get('tagline') || '',
+      imageAssetId: formData.get('imageAssetId') || '',
+      ctaLabel: formData.get('ctaLabel') || '',
+      comingSoon: formData.get('comingSoon') === 'on',
+      showOnHome: formData.get('showOnHome') === 'on',
+      sortOrder: formData.get('sortOrder') || 0,
+    });
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+    const d = parsed.data;
+
+    const owned = await db.category.findFirst({
+      where: { id: d.id, organizationId: tenant.organizationId },
+      select: { id: true, name: true },
+    });
+    if (!owned) return { error: 'Category not found.' };
+
+    await db.category.update({
+      where: { id: d.id },
+      data: {
+        tagline: d.tagline || null,
+        imageAssetId: d.imageAssetId || null,
+        ctaLabel: d.ctaLabel || null,
+        comingSoon: d.comingSoon,
+        showOnHome: d.showOnHome,
+        sortOrder: d.sortOrder,
+      },
+    });
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'category.card.saved',
+      entity: 'Category',
+      entityId: d.id,
+      after: { comingSoon: d.comingSoon, showOnHome: d.showOnHome, sortOrder: d.sortOrder },
+    });
+
+    revalidatePath('/admin/categories');
+    revalidatePath('/', 'layout');
+    return { ok: true, message: `Saved. ${owned.name} looks like that on the home page now.` };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 export async function setCategoryActive(id: string, isActive: boolean): Promise<ActionState> {
   try {
     const { tenant } = await guard('category.manage_categories');

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { GoogleBadge } from '@/components/review-badge';
+import { GoogleBadge, ReviewWidget } from '@/components/review-badge';
 
 /**
  * The band at the top of the home page.
@@ -26,6 +26,7 @@ export function HomeHero({
   blurb,
   imageAssetId,
   google,
+  badgeHtml,
   sampleId,
 }: {
   /** Usually empty. Kept for an academy running a launch or an intake. */
@@ -36,6 +37,8 @@ export function HomeHero({
   blurb: string;
   imageAssetId: string | null;
   google: { rating: string; reviewCount: string } | null;
+  /** A provider's own badge widget. Takes the place of the plain one. */
+  badgeHtml: string;
   sampleId: string | null;
 }) {
   return (
@@ -109,15 +112,24 @@ export function HomeHero({
             </Link>
           </div>
 
-          {google && (
+          {/* The provider's own badge if there is one, and the plain one
+              otherwise. Not both: two review badges in one hero is an
+              argument with itself. */}
+          {badgeHtml.trim() ? (
             <div className="mt-7 flex justify-center lg:justify-start">
-              <GoogleBadge
-                rating={google.rating}
-                reviewCount={google.reviewCount}
-                onDark
-                className="border-[var(--shell-line)] bg-[color-mix(in_srgb,var(--shell)_55%,transparent)] backdrop-blur"
-              />
+              <ReviewWidget html={badgeHtml} />
             </div>
+          ) : (
+            google && (
+              <div className="mt-7 flex justify-center lg:justify-start">
+                <GoogleBadge
+                  rating={google.rating}
+                  reviewCount={google.reviewCount}
+                  onDark
+                  className="border-[var(--shell-line)] bg-[color-mix(in_srgb,var(--shell)_55%,transparent)] backdrop-blur"
+                />
+              </div>
+            )
           )}
         </div>
 

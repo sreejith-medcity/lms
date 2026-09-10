@@ -10,6 +10,7 @@ import {
 } from '@/server/catalogue';
 import type { ActionState } from '@/server/courses';
 import { Badge, Button, Card, Field, FormError, FormSuccess, Input, Select } from '@/components/ui';
+import { CategoryCardForm } from './card-form';
 
 const initial: ActionState = {};
 
@@ -19,6 +20,12 @@ interface Category {
   slug: string;
   parentId: string | null;
   isActive: boolean;
+  tagline: string | null;
+  imageAssetId: string | null;
+  ctaLabel: string | null;
+  comingSoon: boolean;
+  showOnHome: boolean;
+  sortOrder: number;
   _count: { courses: number; children: number };
 }
 
@@ -71,6 +78,7 @@ export function CategoryList({
   courses: Course[];
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [card, setCard] = useState<string | null>(null);
 
   return (
     <div className="space-y-3">
@@ -102,6 +110,13 @@ export function CategoryList({
                 >
                   {open === c.id ? 'Close' : 'Courses'}
                 </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCard((o) => (o === c.id ? null : c.id))}
+                >
+                  {card === c.id ? 'Close' : 'Home page card'}
+                </Button>
                 <ToggleActive id={c.id} isActive={c.isActive} />
                 {c._count.courses === 0 && c._count.children === 0 && <Remove id={c.id} />}
               </div>
@@ -110,6 +125,23 @@ export function CategoryList({
             {open === c.id && (
               <div className="mt-4 border-t pt-4">
                 <CoursePicker categoryId={c.id} courses={courses} />
+              </div>
+            )}
+
+            {card === c.id && (
+              <div className="mt-4 border-t pt-4">
+                <CategoryCardForm
+                  values={{
+                    id: c.id,
+                    name: c.name,
+                    tagline: c.tagline,
+                    imageAssetId: c.imageAssetId,
+                    ctaLabel: c.ctaLabel,
+                    comingSoon: c.comingSoon,
+                    showOnHome: c.showOnHome,
+                    sortOrder: c.sortOrder,
+                  }}
+                />
               </div>
             )}
           </Card>

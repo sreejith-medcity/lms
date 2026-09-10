@@ -68,6 +68,13 @@ export async function GET(
   const heroAssetId = await settingText(tenant.organizationId, 'website.heroImageAssetId');
   const heroImage = heroAssetId.trim() !== '' && heroAssetId.trim() === asset.id;
 
+  // A subject card's picture, on the same argument once more: it is on the
+  // home page, which is the page nobody has signed in to yet.
+  const categoryArt = await db.category.findFirst({
+    where: { organizationId: tenant.organizationId, imageAssetId: asset.id, isActive: true },
+    select: { id: true },
+  });
+
   // Course artwork is public for the same reason. It is the picture on the
   // catalogue card and at the top of the sales page, both of which are pages
   // we want a search engine and a stranger to see. Only the thumbnail of a
@@ -88,6 +95,7 @@ export async function GET(
   let allowed =
     Boolean(branding) ||
     Boolean(artwork) ||
+    Boolean(categoryArt) ||
     heroImage ||
     Boolean(user && sameOrg && user.kind === 'STAFF');
 
@@ -208,7 +216,7 @@ export async function GET(
   // on every single page view. The answer there does not depend on who is
   // asking, so it can be held at the edge. Two minutes is comfortably inside
   // the five-minute life of the link it points at.
-  const publicArtwork = (Boolean(artwork) || heroImage) && !streaming;
+  const publicArtwork = (Boolean(artwork) || Boolean(categoryArt) || heroImage) && !streaming;
 
   return redirectResponse(url, {
     status: 302,

@@ -85,35 +85,62 @@ export function GoogleBadge({
 /**
  * A provider's own embed, pasted into settings.
  *
- * React renders the markup but will not run a `<script>` inside
- * `dangerouslySetInnerHTML`, which is why a pasted widget looks like it does
- * nothing. So the markup arrives with the page, and on mount each script node
- * is replaced with a fresh one, which is what makes the browser fetch and run
- * it. Replacing rather than appending keeps the provider's own ordering.
+ * The obvious build is `dangerouslySetInnerHTML` plus a mount effect that
+ * re-creates each `<script>`, because React renders a script tag from a
+ * string but the browser will not run one that arrived that way. That is
+ * what this was, and against the real Trustindex loader it failed in a way
+ * worth writing down: every request succeeded, every global was defined, and
+ * no widget appeared.
  *
- * This runs whatever a staff member with organisation settings access pasted.
- * That is the same trust already given to the policy editor, and it is the
- * only way to support an embed nobody has written an integration for, but it
- * is worth being clear-eyed that it is a real permission and not a text box.
+ * The reason is that these loaders are anchored to their own script tag. They
+ * fetch their content and then insert it next to where they were called from.
+ * The server had already sent the script inside the page, so the browser ran
+ * it during parsing, and the effect then replaced that tag with a fresh one.
+ * Replacing detaches the original, so by the time the loader's fetch came
+ * back it was inserting the widget beside a node no longer in the document.
+ * The widget rendered perfectly, into nothing anybody can see.
+ *
+ * So the markup is not server-rendered at all. The container goes out empty
+ * and is filled here on mount, once, with scripts this code created. React
+ * owns no children inside it, so nothing it does later can detach them, and a
+ * soft navigation behaves exactly like a first load rather than being the one
+ * case where the embed silently does not run. The cost is that a widget below
+ * the fold arrives a moment after the page, which is the right trade for a
+ * third-party script anyway.
  */
 export function ReviewWidget({ html, className = '' }: { html: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const host = ref.current;
-    if (!host) return;
+    if (!host || !html.trim()) return;
 
-    for (const old of Array.from(host.querySelectorAll('script'))) {
-      const fresh = document.createElement('script');
-      for (const attr of Array.from(old.attributes)) {
-        fresh.setAttribute(attr.name, attr.value);
+    // A template parses the markup without running or fetching anything, so
+    // what lands in the page is only what we deliberately move there.
+    const parsed = document.createElement('template');
+    parsed.innerHTML = html;
+
+    for (const node of Array.from(parsed.content.childNodes)) {
+      if (node instanceof HTMLScriptElement) {
+        const script = document.createElement('script');
+        for (const attr of Array.from(node.attributes)) {
+          script.setAttribute(attr.name, attr.value);
+        }
+        script.text = node.textContent ?? '';
+        host.appendChild(script);
+      } else {
+        host.appendChild(node);
       }
-      fresh.text = old.textContent ?? '';
-      old.replaceWith(fresh);
     }
+
+    return () => {
+      // Strict mode mounts twice in development, and two copies of a review
+      // widget is a confusing thing to debug.
+      host.replaceChildren();
+    };
   }, [html]);
 
   if (!html.trim()) return null;
 
-  return <div ref={ref} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div ref={ref} className={className} />;
 }

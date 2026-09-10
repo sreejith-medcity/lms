@@ -6,6 +6,7 @@ import { getSiteContext, courseCardSelect, type CourseCard as Card } from '@/lib
 import { CourseCard } from '@/components/course-card';
 import { SetupNotice, NoTenantNotice } from '@/components/tenant-notices';
 import { settingText } from '@/lib/settings/store';
+import { SubjectCard } from '@/components/subject-card';
 import { HomeHero } from './home-hero';
 import { Banners } from '@/components/banners';
 
@@ -41,6 +42,7 @@ export default async function Home() {
     settingText(site.organizationId, 'website.heroImageAssetId'),
     settingText(site.organizationId, 'website.googleRating'),
     settingText(site.organizationId, 'website.googleReviewCount'),
+    settingText(site.organizationId, 'website.reviewBadgeHtml'),
   ]);
 
   // The two counts that fed the hero's counter row are gone with it. They were
@@ -71,8 +73,16 @@ export default async function Home() {
 
   const cards = featured as unknown as Card[];
 
-  const [heroEyebrow, heroTitle, heroHighlight, heroBlurb, heroImage, googleRating, googleCount] =
-    await hero;
+  const [
+    heroEyebrow,
+    heroTitle,
+    heroHighlight,
+    heroBlurb,
+    heroImage,
+    googleRating,
+    googleCount,
+    reviewBadgeHtml,
+  ] = await hero;
 
   return (
     <>
@@ -87,6 +97,7 @@ export default async function Home() {
             ? { rating: googleRating.trim(), reviewCount: googleCount.trim() }
             : null
         }
+        badgeHtml={reviewBadgeHtml}
         sampleId={samples?.id ?? null}
       />
 
@@ -94,19 +105,20 @@ export default async function Home() {
         <Banners organizationId={site.organizationId} placement="SITE_HOME" className="mb-2" />
       </div>
 
-      {site.categories.length > 0 && (
-        <section className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
-          <div className="flex flex-wrap gap-2">
-            {site.categories.map((c) => (
-              <Link
-                key={c.slug}
-                href={`/courses/${c.slug}`}
-                className="rounded-full border bg-[var(--surface)] px-4 py-2 text-sm transition
-                  hover:border-[var(--brand)] hover:text-[var(--brand)]"
-              >
-                {c.name}
-                <span className="t-micro faint ml-2 tabular-nums">{c._count.courses}</span>
-              </Link>
+      {site.homeCategories.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
+          <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
+            What we teach
+          </p>
+          <h2 className="t-section mt-1.5">Our courses</h2>
+          <p className="t-lead muted mt-2 max-w-2xl">
+            Pick the subject you are here for. Every course inside it has its own dates, price
+            and curriculum.
+          </p>
+
+          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {site.homeCategories.map((c, i) => (
+              <SubjectCard key={c.slug} subject={c} priority={i < 5} />
             ))}
           </div>
         </section>

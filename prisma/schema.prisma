@@ -460,6 +460,18 @@ model Category {
   sortOrder      Int     @default(0)
   isActive       Boolean @default(true)
 
+  /// The subject card on the home page: a picture, a line about it and the
+  /// words on its button. A category used to be a name and a slug, which is
+  /// all a filter chip needs and none of what a storefront card needs.
+  tagline      String?
+  imageAssetId String?
+  /// "Browse German courses" reads better than a generic label on every card.
+  ctaLabel     String?
+  /// Announced but not open. It gets a card and no link, rather than a card
+  /// that leads to an empty page.
+  comingSoon   Boolean @default(false)
+  showOnHome   Boolean @default(true)
+
   parent   Category?        @relation("categoryTree", fields: [parentId], references: [id])
   children Category[]       @relation("categoryTree")
   courses  CourseCategory[]

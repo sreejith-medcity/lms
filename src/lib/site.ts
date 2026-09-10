@@ -37,6 +37,11 @@ export const getSiteContext = cache(async () => {
         id: true,
         name: true,
         slug: true,
+        tagline: true,
+        imageAssetId: true,
+        ctaLabel: true,
+        comingSoon: true,
+        showOnHome: true,
         _count: { select: { courses: true } },
       },
     }),
@@ -48,8 +53,15 @@ export const getSiteContext = cache(async () => {
     tenantId: tenant.tenantId,
     organizationId: tenant.organizationId,
     organization,
-    // A category with nothing published behind it is a dead end for a visitor.
+    // A category with nothing published behind it is a dead end for a visitor,
+    // so it stays out of the filter rail on the catalogue.
     categories: categories.filter((c) => c._count.courses > 0),
+    // The home page is the other case. A subject announced but not open yet
+    // is worth showing, because "coming soon" is information; it just does
+    // not get a link to an empty page.
+    homeCategories: categories.filter(
+      (c) => c.showOnHome && (c._count.courses > 0 || c.comingSoon),
+    ),
   };
 });
 
