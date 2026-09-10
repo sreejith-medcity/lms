@@ -6,15 +6,11 @@ import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { parseSubjects, type SubjectRow } from '@/lib/import-subjects';
-import {
-  buildObjectKey,
-  inferMimeType,
-  inferType,
-  putObject,
-  sanitiseFileName,
-  storageConfigured,
-} from '@/lib/storage';
-import { IMAGE_MIME_TYPES } from '@/lib/image-formats';
+import { storageConfigured } from '@/lib/storage';
+/* One picture fetcher, shared with the landing page importer, because both
+   have the same job: bring the image over so the old host can be switched
+   off without leaving holes. */
+import { fetchImageAsAsset as fetchImage } from '@/lib/remote-image';
 
 /**
  * Bringing the subject cards across from the old storefront.
@@ -39,62 +35,6 @@ export interface SubjectImportResult {
   problems: string[];
   /** A line per row, so a person can read the whole thing before committing. */
   lines: string[];
-}
-
-/** Big enough for any card artwork, small enough that it cannot exhaust memory. */
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-
-async function fetchImage(
-  url: string,
-  organizationId: string,
-  uploadedById: string,
-): Promise<{ assetId: string } | { problem: string }> {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(20_000),
-      headers: { accept: 'image/*' },
-    });
-  } catch {
-    return { problem: `could not reach ${url}` };
-  }
-
-  if (!response.ok) return { problem: `${url} answered ${response.status}` };
-
-  const declared = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-  if (declared && !IMAGE_MIME_TYPES.includes(declared as (typeof IMAGE_MIME_TYPES)[number])) {
-    return { problem: `${url} is ${declared}, which is not an image format we take` };
-  }
-
-  const buffer = new Uint8Array(await response.arrayBuffer());
-  if (buffer.byteLength === 0) return { problem: `${url} came back empty` };
-  if (buffer.byteLength > MAX_IMAGE_BYTES) {
-    return { problem: `${url} is larger than 8 MB, so it was skipped` };
-  }
-
-  const fileName = sanitiseFileName(decodeURIComponent(new URL(url).pathname.split('/').pop() || 'image'));
-  const key = buildObjectKey(organizationId, fileName);
-  const mimeType = declared || inferMimeType(fileName);
-
-  await putObject(key, buffer, mimeType);
-
-  const asset = await db.asset.create({
-    data: {
-      organizationId,
-      name: fileName,
-      fileName,
-      type: inferType(fileName),
-      storageKey: key,
-      mimeType,
-      sizeBytes: BigInt(buffer.byteLength),
-      uploadedById,
-      transcodeStatus: 'READY',
-    },
-    select: { id: true },
-  });
-
-  return { assetId: asset.id };
 }
 
 export async function importSubjects(csv: string, apply: boolean): Promise<SubjectImportResult> {

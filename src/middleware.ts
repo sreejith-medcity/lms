@@ -32,6 +32,14 @@ const CACHEABLE = [
   /^\/help$/,
   /^\/policies\/[\w-]+$/,
   /^\/blog(\/[\w-]+)?$/,
+  /*
+   * The landing pages carried over from the old store, which are where the
+   * advertising lands and therefore the pages most worth holding at the
+   * edge. Matched by their shape rather than by a list, since the slugs live
+   * in the database: every one of them ends in "course" or "courses", and no
+   * route in this app does, so /cart and /login cannot be swept in by it.
+   */
+  /^\/[a-z0-9-]+-courses?$/,
 ];
 
 /** A minute at the edge, and up to ten more while the origin catches up. */

@@ -15,6 +15,8 @@ import { settingText } from '@/lib/settings/store';
 import { GoogleBadge, ReviewWidget } from '@/components/review-badge';
 import { AddonPicker } from './addon-picker';
 import { AddToCart } from '@/components/add-to-cart';
+import { PageBlocks } from '@/components/page-blocks';
+import { parseBlocks } from '@/lib/page-blocks';
 import { CourseCta } from './course-cta';
 import { Curriculum } from './curriculum';
 import { EnrolBar } from './enrol-bar';
@@ -50,6 +52,18 @@ async function load(slug: string) {
           durationMinutes: true,
           thumbnailAssetId: true,
           accessAfterCompletion: true,
+          /* The marketing page this course was sold from before, if it was
+             brought across. Its words go on this page and its old path is
+             where the page answers, so the links in circulation keep working. */
+          landingPage: {
+            select: {
+              slug: true,
+              status: true,
+              blocks: true,
+              seoTitle: true,
+              seoDescription: true,
+            },
+          },
           categories: { select: { category: { select: { name: true, slug: true } } } },
           modules: {
             orderBy: { sortOrder: 'asc' },
@@ -132,14 +146,23 @@ export async function generateMetadata({
   const found = await load((await params).slug);
   if (!found) return { title: 'Course not found' };
 
+  const landing =
+    found.course.landingPage?.status === 'PUBLISHED' ? found.course.landingPage : null;
+
   const description =
+    landing?.seoDescription ??
     found.course.description?.slice(0, 155) ??
     `${found.product.title} at ${found.site.organization.name}.`;
 
+  const title = landing?.seoTitle ?? `${found.product.title} — ${found.site.organization.name}`;
+
   return {
-    title: `${found.product.title} — ${found.site.organization.name}`,
+    title,
     description,
-    alternates: { canonical: `/course/${found.product.slug}` },
+    /* One address for one page. Where a course kept its old marketing URL,
+       that is the one search engines were told about for years, so it stays
+       the canonical one and /course/<slug> points at it. */
+    alternates: { canonical: landing ? `/${landing.slug}` : `/course/${found.product.slug}` },
     openGraph: { title: found.product.title, description, type: 'website' },
   };
 }
@@ -223,6 +246,15 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   const totalSeconds = lessons.reduce((n, l) => n + (l.durationSeconds ?? 0), 0);
   const preview = lessons.find((l) => l.isFreePreview);
 
+  const landingBlocks =
+    course.landingPage?.status === 'PUBLISHED' ? parseBlocks(course.landingPage.blocks) : [];
+
+  const landingHeading =
+    landingBlocks[0] && 'heading' in landingBlocks[0] ? landingBlocks[0].heading : undefined;
+  const landingBody = landingHeading
+    ? [{ ...landingBlocks[0], heading: undefined }, ...landingBlocks.slice(1)]
+    : landingBlocks;
+
   const outcomes = Array.isArray(course.overviewBlocks)
     ? (course.overviewBlocks as { heading?: string; body?: string }[]).filter(
         (b) => b.heading || b.body,
@@ -278,6 +310,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   const navItems = [
     { id: 'overview', label: 'Overview' },
     outcomes.length > 0 ? { id: 'outcomes', label: 'What you learn' } : null,
+    landingBlocks.length > 0 ? { id: 'about', label: 'About the course' } : null,
     { id: 'curriculum', label: 'Curriculum' },
     course.batches.length > 0 ? { id: 'batches', label: 'Batches' } : null,
     shownInstructors.length > 0 ? { id: 'trainers', label: 'Trainers' } : null,
@@ -559,6 +592,20 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                   </li>
                 ))}
               </ol>
+            </Section>
+          )}
+
+          {/* The page this course used to be sold from ------------------- */}
+          {landingBlocks.length > 0 && (
+            /* The page brought over usually opens with its own heading, and
+               printing ours above it reads as a stutter. Where it has one, it
+               becomes the section's heading rather than a second one. */
+            <Section
+              id="about"
+              eyebrow="About the course"
+              title={landingHeading ?? `More about ${product.title}`}
+            >
+              <PageBlocks blocks={landingBody} ctaHref="#enrol" />
             </Section>
           )}
 

@@ -40,8 +40,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       select: { slug: true, publishedAt: true },
     }),
     db.storefrontPage.findMany({
-      where: { organizationId: tenant.organizationId, status: 'PUBLISHED', kind: 'STATIC' },
-      select: { slug: true, updatedAt: true },
+      where: {
+        organizationId: tenant.organizationId,
+        status: 'PUBLISHED',
+        kind: { in: ['STATIC', 'COURSE_LANDING'] },
+      },
+      select: { slug: true, updatedAt: true, kind: true },
     }),
   ]);
 
@@ -71,11 +75,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly' as const,
       priority: 0.6,
     })),
+    /* A course landing page is the address that course is actually sold
+       from, so it ranks with the course pages rather than with the static
+       ones. Its /course/<slug> twin points here as canonical. */
     ...pages.map((p) => ({
       url: `${base}/${p.slug}`,
       lastModified: p.updatedAt,
-      changeFrequency: 'monthly' as const,
-      priority: 0.5,
+      changeFrequency: p.kind === 'COURSE_LANDING' ? ('weekly' as const) : ('monthly' as const),
+      priority: p.kind === 'COURSE_LANDING' ? 0.9 : 0.5,
     })),
     ...policies.map((p) => ({
       url: `${base}/policies/${p.kind.toLowerCase()}`,
