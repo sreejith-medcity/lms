@@ -7,6 +7,8 @@ import { requireTenant } from '@/lib/tenant';
 import { priceOrder } from '@/lib/order-lines';
 import { promoTarget } from '@/lib/cart-rules';
 import { loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
+import { settingBool, settingNumber } from '@/lib/settings/store';
+import { estimatedGatewayFeePaise } from '@/lib/payment-amount';
 import { quotePromoCode } from '@/server/promo';
 import {
   addToBasket,
@@ -130,6 +132,14 @@ export interface CartQuote {
   /** What this learner's points could take off, if they are signed in. */
   pointsWorthPaise: number;
   pointsApplied: number;
+  /**
+   * What the gateway will add at payment, where the academy's account
+   * charges its fee to the buyer. An estimate, and labelled as one: the real
+   * fee depends on whether they pay by UPI, card or an international card.
+   */
+  gatewayFeePaise: number;
+  /** Total plus that fee, which is what the card is actually charged. */
+  chargedPaise: number;
   signedIn: boolean;
   count: number;
 }
@@ -159,6 +169,8 @@ export async function quoteCart(options: {
     taxIncluded: false,
     pointsWorthPaise: 0,
     pointsApplied: 0,
+    gatewayFeePaise: 0,
+    chargedPaise: 0,
     signedIn: Boolean(user),
     count: 0,
   };
@@ -199,6 +211,11 @@ export async function quoteCart(options: {
     },
   });
 
+  const [customerBearsFee, feePercent] = await Promise.all([
+    settingBool(tenant.organizationId, 'commerce.customerBearsGatewayFee'),
+    settingNumber(tenant.organizationId, 'commerce.gatewayFeePercent'),
+  ]);
+
   const loyalty = await loyaltyConfig(tenant.organizationId);
   const wallet = user
     ? await db.walletAccount.findUnique({
@@ -212,6 +229,10 @@ export async function quoteCart(options: {
     : 0;
   const pointsApplied = options.usePoints ? spendable : 0;
   const walletPaise = pointsToPaise(pointsApplied, loyalty);
+  const totalPaise = Math.max(0, priced.beforePointsPaise - walletPaise);
+  const gatewayFeePaise = customerBearsFee
+    ? estimatedGatewayFeePaise(totalPaise, feePercent)
+    : 0;
 
   return {
     lines: basket.lines.map((l) => ({
@@ -228,7 +249,9 @@ export async function quoteCart(options: {
     subtotalPaise: priced.subtotalPaise,
     discountPaise: priced.discountPaise,
     taxPaise: priced.taxPaise,
-    totalPaise: Math.max(0, priced.beforePointsPaise - walletPaise),
+    totalPaise,
+    gatewayFeePaise,
+    chargedPaise: totalPaise + gatewayFeePaise,
     currency: basket.currency,
     taxIncluded: (taxConfig?.enabled ?? true) && !(taxConfig?.pricesAreExclusive ?? true),
     promo,

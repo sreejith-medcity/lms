@@ -6,6 +6,8 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
 import { razorpayConfig } from '@/lib/razorpay';
+import { settingBool, settingNumber } from '@/lib/settings/store';
+import { estimatedGatewayFeePaise } from '@/lib/payment-amount';
 import { CART_COOKIE } from '@/lib/cart-cookie';
 import { contactOf, mayViewOrder } from '@/lib/guest-order';
 import { PayNow } from './pay-now';
@@ -108,6 +110,17 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
 
   const taxable = order.subtotalPaise - order.discountPaise;
 
+  // Where the academy's gateway account charges its fee to the buyer, the
+  // card is charged more than the order. It is said here, before the payment
+  // window opens, rather than discovered on a statement afterwards.
+  const [customerBearsFee, feePercent] = await Promise.all([
+    settingBool(tenant.organizationId, 'commerce.customerBearsGatewayFee'),
+    settingNumber(tenant.organizationId, 'commerce.gatewayFeePercent'),
+  ]);
+  const gatewayFeePaise = customerBearsFee
+    ? estimatedGatewayFeePaise(order.totalPaise, feePercent)
+    : 0;
+
   return (
     <Shell title="Complete your enrolment">
       <div className="rounded-[var(--radius)] border bg-[var(--surface)] p-6">
@@ -149,6 +162,27 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
             </dd>
           </div>
         </dl>
+
+        {gatewayFeePaise > 0 && (
+          <div className="mt-4 rounded-[var(--radius-sm)] border border-dashed p-3">
+            <div className="flex items-baseline justify-between gap-4">
+              <span className="t-small muted">Payment gateway fee, added by the gateway</span>
+              <span className="t-small tabular-nums">
+                about {formatMoney(gatewayFeePaise, order.currency)}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-baseline justify-between gap-4">
+              <span className="t-small font-medium">Charged to your card</span>
+              <span className="t-small font-semibold tabular-nums">
+                about {formatMoney(order.totalPaise + gatewayFeePaise, order.currency)}
+              </span>
+            </div>
+            <p className="t-small faint mt-1.5 leading-relaxed">
+              The exact fee depends on how you pay, and UPI is usually the cheapest. Your invoice is
+              for {formatMoney(order.totalPaise, order.currency)}, the course price.
+            </p>
+          </div>
+        )}
 
         <div className="mt-6">
           <PayNow

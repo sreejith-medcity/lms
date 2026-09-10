@@ -39,6 +39,15 @@ export function checkPaidAmount(input: {
   orderPaise: number;
   /** From the payment object. Absent on older records and on some methods. */
   feePaise?: number | null;
+  /**
+   * The most the gateway may add on top, where the academy has said its
+   * account charges the fee to the buyer. It covers the case where the
+   * gateway confirms the capture before it reports what it took as a fee.
+   * Overpaying is not an attack: the ceiling exists so an unexplained
+   * amount is still refused, not to protect against somebody paying us too
+   * much.
+   */
+  maxExtraPaise?: number | null;
 }): AmountCheck {
   const gross = Math.round(input.grossPaise);
   const order = Math.round(input.orderPaise);
@@ -56,6 +65,11 @@ export function checkPaidAmount(input: {
   // is the fee the customer was charged for us, which nets back to the order.
   const difference = gross - order;
   if (fee > 0 && Math.abs(difference - fee) <= SLACK_PAISE) {
+    return { ...base, ok: true, customerPaidFeePaise: difference };
+  }
+
+  const allowance = Math.max(0, Math.round(input.maxExtraPaise ?? 0));
+  if (allowance > 0 && difference <= allowance + SLACK_PAISE) {
     return { ...base, ok: true, customerPaidFeePaise: difference };
   }
 
@@ -79,4 +93,21 @@ export function explainAmount(check: AmountCheck, format: (paise: number) => str
   return `The gateway took ${format(check.grossPaise)} against an order priced at ${format(
     check.orderPaise,
   )}, and the difference is not the gateway's own fee. Nothing was granted on a guess.`;
+}
+
+/**
+ * What the card will actually be charged, when the academy's gateway account
+ * charges its fee to the buyer.
+ *
+ * This is an estimate and is always described as one. The real fee depends on
+ * how they end up paying: UPI is often free, an Indian card is around two per
+ * cent, an international card more again, and GST is charged on top of
+ * whichever it is. Quoting a figure that is close and saying it is close is
+ * far better than quoting the course price and letting them find the
+ * difference on a statement.
+ */
+export function estimatedGatewayFeePaise(totalPaise: number, percent: number): number {
+  if (!Number.isFinite(percent) || percent <= 0) return 0;
+  const capped = Math.min(percent, 15);
+  return Math.round((Math.max(0, Math.round(totalPaise)) * capped) / 100);
 }

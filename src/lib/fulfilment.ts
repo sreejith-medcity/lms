@@ -8,7 +8,8 @@ import { emit } from '@/lib/webhooks';
 import { memberRef } from '@/lib/loyalty-provider';
 import { queueNotifications } from '@/lib/notify';
 import { invoicePrefix, nextInvoiceNumber } from '@/lib/invoice-number';
-import { checkPaidAmount } from '@/lib/payment-amount';
+import { checkPaidAmount, estimatedGatewayFeePaise } from '@/lib/payment-amount';
+import { settingBool, settingNumber } from '@/lib/settings/store';
 
 /**
  * The one place a payment becomes access.
@@ -128,10 +129,20 @@ export async function fulfilPaidOrder(input: {
    * is a correct payment arriving as a larger number. That case is
    * recognised and recorded; everything else is still refused.
    */
+  const [customerBearsFee, feePercent] = await Promise.all([
+    settingBool(input.organizationId, 'commerce.customerBearsGatewayFee'),
+    settingNumber(input.organizationId, 'commerce.gatewayFeePercent'),
+  ]);
+
   const amount = checkPaidAmount({
     grossPaise: input.amountPaise,
     orderPaise: order.totalPaise,
     feePaise: input.feePaise ?? null,
+    // Only where the academy has said its account works that way, and never
+    // more than the percentage it declared.
+    maxExtraPaise: customerBearsFee
+      ? estimatedGatewayFeePaise(order.totalPaise, feePercent)
+      : 0,
   });
 
   if (!amount.ok) {

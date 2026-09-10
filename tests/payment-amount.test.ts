@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkPaidAmount, explainAmount } from '../src/lib/payment-amount';
+import {
+  checkPaidAmount,
+  estimatedGatewayFeePaise,
+  explainAmount,
+} from '../src/lib/payment-amount';
 
 const rupees = (paise: number) => `₹${(paise / 100).toFixed(2)}`;
 
@@ -63,4 +67,54 @@ test('each outcome explains itself in one sentence', () => {
 
   const short = explainAmount(checkPaidAmount({ grossPaise: 10, orderPaise: 826000 }), rupees);
   assert.match(short, /less than/);
+});
+
+test('the fee quoted before payment is the percentage of the total', () => {
+  // 3% plus 18% GST on the fee is 3.54%, which is what this academy's
+  // account charges and what the refused payment was short by.
+  assert.equal(estimatedGatewayFeePaise(826000, 3.54), 29240);
+  assert.equal(estimatedGatewayFeePaise(1000000, 2.36), 23600);
+});
+
+test('a fee percentage that is missing, zero or nonsense quotes nothing', () => {
+  for (const percent of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(estimatedGatewayFeePaise(826000, percent), 0, String(percent));
+  }
+});
+
+test('an absurd percentage is capped rather than quoted', () => {
+  assert.equal(estimatedGatewayFeePaise(100000, 900), estimatedGatewayFeePaise(100000, 15));
+});
+
+test('a declared fee-bearing account covers a capture the gateway has not costed yet', () => {
+  const check = checkPaidAmount({
+    grossPaise: 855240,
+    orderPaise: 826000,
+    feePaise: null,
+    maxExtraPaise: estimatedGatewayFeePaise(826000, 3.54),
+  });
+  assert.equal(check.ok, true);
+  assert.equal(check.customerPaidFeePaise, 29240);
+});
+
+test('the allowance is a ceiling, not a blank cheque', () => {
+  const check = checkPaidAmount({
+    grossPaise: 900000,
+    orderPaise: 826000,
+    feePaise: null,
+    maxExtraPaise: estimatedGatewayFeePaise(826000, 3.54),
+  });
+  assert.equal(check.ok, false);
+  assert.equal(check.reason, 'OVERPAID');
+});
+
+test('no declared allowance means an unexplained overpayment is still refused', () => {
+  const check = checkPaidAmount({ grossPaise: 855240, orderPaise: 826000, maxExtraPaise: 0 });
+  assert.equal(check.ok, false);
+});
+
+test('an allowance never excuses underpaying', () => {
+  const check = checkPaidAmount({ grossPaise: 1, orderPaise: 826000, maxExtraPaise: 999999 });
+  assert.equal(check.ok, false);
+  assert.equal(check.reason, 'UNDERPAID');
 });

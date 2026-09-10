@@ -173,6 +173,28 @@ export function CartView({
             <span className="t-price">{money(quote.totalPaise)}</span>
           </div>
 
+          {/* Where the academy's gateway account charges its fee to the
+              buyer, the card is charged more than the total above. Saying so
+              here is the difference between a surprise and a disclosure. */}
+          {quote.gatewayFeePaise > 0 && (
+            <div className="mt-3 rounded-[var(--radius-sm)] border border-dashed p-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="t-small muted">Payment gateway fee, added by the gateway</span>
+                <span className="t-small tabular-nums">about {money(quote.gatewayFeePaise)}</span>
+              </div>
+              <div className="mt-1.5 flex items-baseline justify-between gap-3">
+                <span className="t-small font-medium">Charged to your card</span>
+                <span className="t-small font-semibold tabular-nums">
+                  about {money(quote.chargedPaise)}
+                </span>
+              </div>
+              <p className="t-small faint mt-1.5 leading-relaxed">
+                The exact fee depends on how you pay, and UPI is usually the cheapest. Your invoice
+                is for {money(quote.totalPaise)}, the course price.
+              </p>
+            </div>
+          )}
+
           {/* Promo code */}
           <form
             className="mt-4 flex gap-2"
@@ -279,7 +301,11 @@ export function CartView({
               })
             }
           >
-            {working ? 'Working...' : `Pay ${money(quote.totalPaise)}`}
+            {working
+              ? 'Working...'
+              : quote.gatewayFeePaise > 0
+                ? `Pay about ${money(quote.chargedPaise)}`
+                : `Pay ${money(quote.totalPaise)}`}
           </button>
 
           {error && <p className="t-small mt-3 text-[var(--bad)]">{error}</p>}

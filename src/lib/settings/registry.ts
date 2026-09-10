@@ -274,6 +274,33 @@ export const SETTINGS: SettingDef[] = [
 
   /* Selling ----------------------------------------------------------------- */
   {
+    key: 'commerce.customerBearsGatewayFee',
+    group: 'commerce',
+    label: 'The learner pays the payment gateway fee',
+    help: 'Set this to match your Razorpay account, because Razorpay decides it, not us: Account and Settings, then Payment configuration. On, Razorpay adds its fee to the card at the moment of payment, so a 8,260 course is charged as about 8,552, and this site says so before they pay rather than letting them discover it on a statement. The invoice stays the course price either way, because the fee is Razorpay charging the buyer rather than something you sold.',
+    kind: 'boolean',
+    default: false,
+    live: true,
+    effect: (value) =>
+      value
+        ? 'Checkout shows the fee as a separate line and quotes the larger figure the card will be charged.'
+        : 'Checkout quotes the course price, and the fee comes out of what the academy receives.',
+  },
+  {
+    key: 'commerce.gatewayFeePercent',
+    group: 'commerce',
+    label: 'What that fee comes to, as a percentage',
+    help: 'Only used to show a figure before payment, since the exact fee depends on how they pay: cards cost more than UPI, and international cards more again. Include the GST charged on the fee. Razorpay\u2019s common Indian card rate is 2% plus 18% GST, which is 2.36; a 3% account comes to 3.54.',
+    kind: 'number',
+    default: 2.36,
+    min: 0,
+    max: 15,
+    unit: '%',
+    live: true,
+    effect: (value) =>
+      `A 10,000 course would be quoted as about ${(10000 * (1 + Number(value) / 100)).toFixed(0)} at checkout.`,
+  },
+  {
     key: 'commerce.international',
     group: 'commerce',
     label: 'Sell outside India',
