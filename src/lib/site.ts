@@ -56,12 +56,18 @@ export const getSiteContext = cache(async () => {
     // A category with nothing published behind it is a dead end for a visitor,
     // so it stays out of the filter rail on the catalogue.
     categories: categories.filter((c) => c._count.courses > 0),
-    // The home page is the other case. A subject announced but not open yet
-    // is worth showing, because "coming soon" is information; it just does
-    // not get a link to an empty page.
-    homeCategories: categories.filter(
-      (c) => c.showOnHome && (c._count.courses > 0 || c.comingSoon),
-    ),
+    // The home page is the other case, and it takes the academy's word for
+    // it. Hiding a subject with nothing published yet was the first rule
+    // here and it was wrong: it meant the six subjects marked coming soon
+    // appeared and the four real ones did not, because their courses had
+    // not been migrated yet. The storefront showed placeholders and hid the
+    // business.
+    //
+    // showOnHome is somebody deciding this subject belongs on the front
+    // page. A card whose category has nothing in it links to a page that
+    // says so plainly, which is a better answer than pretending the subject
+    // is not taught.
+    homeCategories: categories.filter((c) => c.showOnHome),
   };
 });
 
