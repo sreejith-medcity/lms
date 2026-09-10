@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
 import { SESSION_COOKIE } from '@/lib/auth';
+import { WHO_COOKIE } from '@/lib/who-cookie';
 
 /**
  * Route handlers must return a Response, so the redirect is built here rather
@@ -17,6 +18,7 @@ async function endSession(req: NextRequest) {
 
   const res = NextResponse.redirect(new URL('/login', req.url));
   res.cookies.delete(SESSION_COOKIE);
+  res.cookies.delete(WHO_COOKIE);
   return res;
 }
 

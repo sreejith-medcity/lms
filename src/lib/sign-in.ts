@@ -2,6 +2,7 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { SESSION_COOKIE } from '@/lib/auth';
+import { WHO_COOKIE } from '@/lib/who-cookie';
 import { resolveTenantByHost } from '@/lib/tenant';
 
 /**
@@ -87,10 +88,26 @@ export async function issueSession(userId: string): Promise<void> {
     },
   });
 
-  await db.user.update({ where: { id: userId }, data: { lastSeenAt: new Date() } });
+  const person = await db.user.update({
+    where: { id: userId },
+    data: { lastSeenAt: new Date() },
+    select: { kind: true },
+  });
 
   const jar = await cookies();
   jar.delete(PENDING_COOKIE);
+
+  // Set beside the session and cleared with it, so the two can never disagree
+  // about whether somebody is signed in. Readable on purpose: the header uses
+  // it in the browser, and it grants nothing on its own.
+  jar.set(WHO_COOKIE, person.kind === 'STAFF' ? 'staff' : 'learner', {
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    expires: expiresAt,
+  });
+
   jar.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',

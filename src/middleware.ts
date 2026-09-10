@@ -9,6 +9,44 @@ import { HOST_HEADER } from '@/lib/http-headers';
  *                         resolveTenantByHost, since middleware has no DB access
  *                         on the edge runtime)
  */
+/**
+ * Public pages a CDN may hold, and the reason each one is on the list.
+ *
+ * Every page here renders identically for a signed-in visitor and a stranger.
+ * That is the whole test, and it is why the account link in the header moved
+ * into the browser: one server-rendered "Admin" link made every public page
+ * per-user, and a page that differs per user cannot be cached for anybody.
+ *
+ * `/course/<slug>` is deliberately absent. Its purchase panel shows whether
+ * you are already enrolled and how many loyalty points you could spend, so it
+ * is genuinely different for each person. Moving that into the browser is a
+ * change to the money path and wants doing on its own.
+ */
+const CACHEABLE = [
+  /^\/$/,
+  /^\/courses(\/[\w-]+)?$/,
+  /^\/about$/,
+  /^\/contact$/,
+  /^\/help$/,
+  /^\/policies\/[\w-]+$/,
+  /^\/blog(\/[\w-]+)?$/,
+];
+
+/** A minute at the edge, and up to ten more while the origin catches up. */
+const PUBLIC_CACHE = 'public, s-maxage=60, stale-while-revalidate=600';
+
+function mayCache(req: NextRequest): boolean {
+  if (req.method !== 'GET') return false;
+
+  // Somebody signed in gets the live page. They are a handful of people, they
+  // are the ones who notice staleness, and it keeps a session cookie from ever
+  // being the thing that decides what lands in a shared cache.
+  if (req.cookies.has('mlms_session')) return false;
+
+  const path = req.nextUrl.pathname;
+  return CACHEABLE.some((pattern) => pattern.test(path));
+}
+
 export function middleware(req: NextRequest) {
   const host = req.headers.get('host') ?? '';
   const hostname = host.split(':')[0].toLowerCase();
@@ -21,6 +59,15 @@ export function middleware(req: NextRequest) {
   if (hostname === platformHost) {
     requestHeaders.set('x-platform', '1');
     return NextResponse.next({ request: { headers: requestHeaders } });
+  }
+
+  if (mayCache(req)) {
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    response.headers.set('Cache-Control', PUBLIC_CACHE);
+    // Without this a cache could hand the same entry to a different academy on
+    // a different hostname, which is the one way this could go badly wrong.
+    response.headers.set('Vary', 'Host, Accept-Encoding');
+    return response;
   }
 
   // Subdomain slug is a cheap hint; the DB lookup confirms it downstream.

@@ -1,16 +1,16 @@
 import Link from 'next/link';
 import { Suspense, type ReactNode } from 'react';
 import { BrandLockup } from '@/components/brand-lockup';
-import { getSessionUser } from '@/lib/auth';
 import { getSiteContext } from '@/lib/site';
 import { MobileMenu, SearchBox } from '@/components/site-nav';
+import { AccountLink } from '@/components/account-link';
 
 /**
  * The public shell. Deliberately quiet: one accent colour from the tenant's own
  * brand, generous space, and no decoration that does not carry information.
  */
 export async function SiteHeader() {
-  const [site, user] = await Promise.all([getSiteContext(), getSessionUser()]);
+  const site = await getSiteContext();
   if (!site) return null;
 
   const links = [
@@ -51,31 +51,12 @@ export async function SiteHeader() {
             </Suspense>
           </div>
 
-          {user ? (
-            <Link
-              href={user.kind === 'STAFF' ? '/admin' : '/learn'}
-              className="inline-flex h-9 items-center rounded-[var(--radius-sm)] px-3.5 text-sm font-medium text-[var(--brand-ink)]"
-              style={{ background: 'var(--brand)' }}
-            >
-              {user.kind === 'STAFF' ? 'Admin' : 'My learning'}
-            </Link>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="hidden h-9 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3.5 text-sm font-medium sm:inline-flex"
-              >
-                Sign in
-              </Link>
-              <Link
-                href="/signup"
-                className="inline-flex h-9 items-center rounded-[var(--radius-sm)] px-3.5 text-sm font-medium text-[var(--brand-ink)]"
-                style={{ background: 'var(--brand)' }}
-              >
-                Get started
-              </Link>
-            </>
-          )}
+          {/*
+            Decided in the browser, from a cookie that carries no secret. The
+            server used to render this, which made every public page different
+            for a signed-in visitor and stopped any CDN holding them.
+          */}
+          <AccountLink />
 
           <Suspense>
             <MobileMenu links={links} />
