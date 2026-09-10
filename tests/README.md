@@ -57,6 +57,35 @@ Both audits test their own detectors against deliberately broken input as well
 as against the codebase. An audit that reports nothing is either a clean
 codebase or a broken check, and from the outside those look identical.
 
+- **`smoke`** — not a unit test but the runner for `npm run smoke`, checked
+  against a real HTTP server that answers whatever the test tells it to. It
+  proves the runner reports a 500 on one admin page, that an admin page
+  redirecting to login counts as a failure rather than a pass, that the session
+  cookie goes only to the pages that need it, and that a machine which cannot
+  reach the host is told so instead of being sent to read deployment logs.
+
+## Smoke testing a deploy
+
+```
+npm run smoke -- https://demo.medcitylms.in
+```
+
+Fetches every page that must answer and exits non-zero if one does not. It
+exists because a screen shipped throwing a server error for every user and
+nobody noticed for hours.
+
+The part that matters is the session. That failure was a permission check
+throwing for a signed-in administrator, so an anonymous run would have been
+redirected to the login form and reported a cheerful pass. Sign in, copy the
+`mlms_session` cookie out of the browser, and:
+
+```
+SMOKE_SESSION=<the cookie value> npm run smoke -- https://demo.medcitylms.in
+```
+
+Without it the admin pages are skipped, and the output says so rather than
+implying they were checked.
+
 ## What is not tested yet, and should be
 
 Anything that needs the database: fulfilment, the drain, entitlement, the

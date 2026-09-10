@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/resolve.mjs --test tests/*.test.ts",
     "check": "npm run typecheck && npm run test",
+    "smoke": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/resolve.mjs scripts/smoke.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
