@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { SESSION_COOKIE } from '@/lib/auth';
 import { WHO_COOKIE } from '@/lib/who-cookie';
 import { resolveTenantByHost } from '@/lib/tenant';
+import { adoptGuestBasket, publishBasketCountForUser } from '@/lib/cart';
 
 /**
  * Becoming signed in.
@@ -91,8 +92,14 @@ export async function issueSession(userId: string): Promise<void> {
   const person = await db.user.update({
     where: { id: userId },
     data: { lastSeenAt: new Date() },
-    select: { kind: true },
+    select: { kind: true, organizationId: true },
   });
+
+  // A basket filled before signing in follows them through the door. Without
+  // this, the most common reason somebody signs in at all, to pay for what
+  // they just chose, drops them on an empty cart.
+  await adoptGuestBasket(person.organizationId, userId);
+  await publishBasketCountForUser(person.organizationId, userId);
 
   const jar = await cookies();
   jar.delete(PENDING_COOKIE);

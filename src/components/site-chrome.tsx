@@ -4,6 +4,7 @@ import { BrandLockup } from '@/components/brand-lockup';
 import { getSiteContext } from '@/lib/site';
 import { MobileMenu, SearchBox } from '@/components/site-nav';
 import { AccountLink } from '@/components/account-link';
+import { CartLink } from '@/components/cart-link';
 
 /**
  * The public shell. Deliberately quiet: one accent colour from the tenant's own
@@ -56,6 +57,8 @@ export async function SiteHeader() {
             server used to render this, which made every public page different
             for a signed-in visitor and stopped any CDN holding them.
           */}
+          <CartLink />
+
           <AccountLink />
 
           <Suspense>

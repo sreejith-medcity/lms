@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { getTenantContext } from '@/lib/tenant';
 import { fetchRazorpayPayment, verifyCheckoutSignature } from '@/lib/razorpay';
 import { fulfilPaidOrder, recordFailedPayment } from '@/lib/fulfilment';
+import { CART_COOKIE } from '@/lib/cart-cookie';
+import { mayViewOrder } from '@/lib/guest-order';
+import { issueSession } from '@/lib/sign-in';
 
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +25,7 @@ export const runtime = 'nodejs';
 export async function POST(request: Request) {
   const tenant = await getTenantContext();
   const user = await getSessionUser();
-  if (!tenant || !user) return NextResponse.json({ error: 'Not allowed' }, { status: 401 });
+  if (!tenant) return NextResponse.json({ error: 'Not allowed' }, { status: 401 });
 
   const body = (await request.json().catch(() => null)) as {
     razorpay_order_id?: string;
@@ -36,10 +40,30 @@ export async function POST(request: Request) {
   }
 
   const order = await db.order.findFirst({
-    where: { id: orderId, organizationId: tenant.organizationId, userId: user.id },
-    select: { id: true, gatewayOrderId: true },
+    where: { id: orderId, organizationId: tenant.organizationId },
+    select: {
+      id: true,
+      gatewayOrderId: true,
+      userId: true,
+      billingAddress: true,
+      user: { select: { passwordHash: true } },
+    },
   });
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+
+  // The learner it belongs to, or the browser that bought it as a guest.
+  const cartCookie = (await cookies()).get(CART_COOKIE)?.value ?? null;
+  const guest = !user;
+  if (
+    !mayViewOrder({
+      orderUserId: order.userId,
+      sessionUserId: user?.id ?? null,
+      orderBillingAddress: order.billingAddress,
+      cartCookie,
+    })
+  ) {
+    return NextResponse.json({ error: 'Not allowed' }, { status: 401 });
+  }
 
   // The signed order id has to be the one we created for this order. Without
   // this check a valid signature from any other order would pass.
@@ -69,7 +93,7 @@ export async function POST(request: Request) {
     await recordFailedPayment({
       organizationId: tenant.organizationId,
       orderId: order.id,
-      userId: user.id,
+      userId: order.userId,
       gatewayPaymentId: payment.id,
       amountPaise: payment.amount,
       reason: payment.error_description ?? null,
@@ -104,5 +128,24 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, orderId: result.orderId, invoiceNo: result.invoiceNo });
+  /*
+   * The moment a guest becomes a learner.
+   *
+   * The session is issued here rather than at checkout, because at checkout
+   * nothing had been proved: anybody can type an email address. Here the
+   * gateway has confirmed the money against this order, and the account being
+   * entered has no password, so nothing is being bypassed.
+   */
+  let claimed = false;
+  if (guest && !order.user.passwordHash) {
+    await issueSession(order.userId);
+    claimed = true;
+  }
+
+  return NextResponse.json({
+    ok: true,
+    orderId: result.orderId,
+    invoiceNo: result.invoiceNo,
+    claimed,
+  });
 }

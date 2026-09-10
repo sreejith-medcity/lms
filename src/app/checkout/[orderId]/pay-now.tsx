@@ -95,7 +95,7 @@ export function PayNow({
           }
 
           const body = (await res.json().catch(() => null)) as
-            | { error?: string; reference?: string }
+            | { error?: string; reference?: string; claimed?: boolean }
             | null;
           if (!res.ok) {
             setStage('error');
@@ -104,6 +104,13 @@ export function PayNow({
           }
 
           setStage('done');
+          // Somebody who bought as a guest is now signed in and has no
+          // password yet, so they land back here, where the receipt and the
+          // one-time "set a password" step are, rather than in the player.
+          if (body?.claimed) {
+            router.refresh();
+            return;
+          }
           router.replace(productId ? `/learn/${productId}` : '/learn');
         } catch {
           // The money may well have gone through; the webhook settles it. Say

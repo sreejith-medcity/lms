@@ -1,5 +1,7 @@
 'use server';
 
+import { cookies } from 'next/headers';
+import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
@@ -7,7 +9,11 @@ import { priceOrder } from '@/lib/order-lines';
 import { resolveSelectedAddons } from '@/lib/addons';
 import { createRazorpayOrder, paymentsConfigured } from '@/lib/razorpay';
 import { claimPromo, PromoRefused } from '@/lib/promo-claim';
-import { rememberIntent } from '@/lib/cart';
+import { rememberIntent, readBasket, CART_COOKIE } from '@/lib/cart';
+import { promoTarget } from '@/lib/cart-rules';
+import { normaliseContact, type GuestContact } from '@/lib/guest-checkout';
+import { headers } from 'next/headers';
+import { authAttemptKeys, checkAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
 import { credit, loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
 
 /**
@@ -288,6 +294,286 @@ export async function startCheckout(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[checkout]', message);
+    if (message.startsWith('RAZORPAY:')) {
+      return { ok: false, error: 'The payment gateway refused to start this order. Please try again.' };
+    }
+    return { ok: false, error: 'We could not start checkout just now. Please try again.' };
+  }
+}
+
+/* Checking out a whole basket ----------------------------------------------
+ *
+ * The function above sells one course. This one sells a basket, and the
+ * difference that matters is not the loop: it is that the buyer may not have
+ * an account yet.
+ *
+ * A student who has chosen two courses and has a card in their hand should not
+ * be sent to a signup form first. So the account is created here, from what
+ * they typed at checkout, and they set a password afterwards from the
+ * confirmation screen. Nothing is sent to them to make that work, which is
+ * deliberate: no email or SMS provider is connected yet, and a purchase that
+ * depends on one would be a purchase nobody can complete.
+ *
+ * An address that already has an account is the one case that stops. That
+ * account may hold somebody else's enrolments, and letting a stranger buy
+ * their way into it for the price of a course would be a way in. Their order
+ * is not created; they are asked to sign in, and their basket is waiting for
+ * them when they do.
+ */
+
+export type CartCheckoutStart =
+  | { ok: true; orderId: string }
+  | { ok: false; error: string; signIn?: true; contactNeeded?: true };
+
+export async function startCartCheckout(input: {
+  promoCode?: string;
+  usePoints?: boolean;
+  contact?: GuestContact;
+}): Promise<CartCheckoutStart> {
+  try {
+    const tenant = await requireTenant();
+
+    if (!paymentsConfigured()) {
+      return { ok: false, error: 'Online payment is not switched on yet. Please contact the academy.' };
+    }
+
+    const basket = await readBasket(tenant.organizationId);
+    if (basket.lines.length === 0) {
+      return {
+        ok: false,
+        error:
+          basket.needsOwnCheckout.length > 0
+            ? 'That plan is paid for on its own. Open the course and enrol from there.'
+            : 'Your cart is empty.',
+      };
+    }
+
+    const signedIn = await getSessionUser();
+    let buyerId = signedIn?.id ?? null;
+    let guestToken: string | null = null;
+
+    if (!buyerId) {
+      const contact = normaliseContact(input.contact);
+      if (!contact.ok) return { ok: false, error: contact.error, contactNeeded: true };
+
+      // Guest checkout creates an account, so it is a way to make accounts in
+      // bulk if it is left open. Ten in ten minutes from one address is far
+      // more than a family buying courses and far less than a script.
+      const ip = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+      const limit = checkAll(
+        authAttemptKeys('guest-checkout', tenant.organizationId, contact.email, ip),
+        10,
+        600,
+      );
+      if (!limit.ok) {
+        return { ok: false, error: tooManyAttemptsMessage(limit.retryAfterSeconds) };
+      }
+
+      const existing = await db.user.findFirst({
+        where: {
+          organizationId: tenant.organizationId,
+          deletedAt: null,
+          OR: [
+            ...(contact.email ? [{ email: contact.email }] : []),
+            ...(contact.phone ? [{ phone: contact.phone }] : []),
+          ],
+        },
+        select: { id: true, passwordHash: true, _count: { select: { enrollments: true } } },
+      });
+
+      if (existing && (existing.passwordHash || existing._count.enrollments > 0)) {
+        return {
+          ok: false,
+          signIn: true,
+          error:
+            'There is already an account with those details. Please sign in and your cart will be waiting.',
+        };
+      }
+
+      // A returning guest with no password and nothing bought yet is the same
+      // person coming back, so they get their own record rather than a second.
+      const buyer =
+        existing ??
+        (await db.user.create({
+          data: {
+            organizationId: tenant.organizationId,
+            name: contact.name,
+            email: contact.email,
+            phone: contact.phone,
+            kind: 'LEARNER',
+            status: 'ACTIVE',
+          },
+          select: { id: true, passwordHash: true, _count: { select: { enrollments: true } } },
+        }));
+
+      buyerId = buyer.id;
+      guestToken = (await cookies()).get(CART_COOKIE)?.value ?? null;
+
+      if (existing) {
+        await db.user.update({
+          where: { id: existing.id },
+          data: { name: contact.name, email: contact.email, phone: contact.phone },
+        });
+      }
+    }
+
+    const userId = buyerId as string;
+
+    const branch = await db.branch.findFirst({
+      where: { organizationId: tenant.organizationId, isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (!branch) return { ok: false, error: 'This academy has no branch configured.' };
+
+    const taxConfig = await db.taxConfig.findFirst({
+      where: { organizationId: tenant.organizationId },
+    });
+
+    // The code is quoted against one course, the dearest in the basket, and
+    // claimed for that course. Spreading a course code across a basket would
+    // make it worth more than it says on the campaign.
+    const target = promoTarget(basket.lines);
+    const claim =
+      input.promoCode?.trim() && target
+        ? await db
+            .$transaction((tx) =>
+              claimPromo(tx, {
+                organizationId: tenant.organizationId,
+                rawCode: input.promoCode as string,
+                userId,
+                productId: target.productId,
+                subtotalPaise: target.pricePaise,
+              }),
+            )
+            .catch((err: unknown) => {
+              if (err instanceof PromoRefused) return err;
+              throw err;
+            })
+        : null;
+
+    if (claim instanceof PromoRefused) return { ok: false, error: claim.message };
+
+    const priced = priceOrder({
+      lines: basket.lines.map((l) => ({
+        productId: l.productId,
+        pricingPlanId: l.pricingPlanId,
+        title: l.title,
+        pricePaise: l.pricePaise,
+        isPrimary: target ? l.productId === target.productId : false,
+      })),
+      discountPaise: claim?.discountPaise ?? 0,
+      tax: {
+        cgstPercent: taxConfig?.cgstPercent ?? 9,
+        sgstPercent: taxConfig?.sgstPercent ?? 9,
+        igstPercent: taxConfig?.igstPercent ?? 18,
+        interState: false,
+        pricesAreExclusive: taxConfig?.pricesAreExclusive ?? true,
+        enabled: taxConfig?.enabled ?? true,
+      },
+    });
+
+    // Points belong to an account, so a guest never spends any: there is no
+    // balance to spend until the account exists, and it is created empty.
+    const loyalty = await loyaltyConfig(tenant.organizationId);
+    const wallet =
+      input.usePoints && signedIn
+        ? await db.walletAccount.findUnique({
+            where: { userId },
+            select: { balancePoints: true },
+          })
+        : null;
+
+    const spendPoints = wallet
+      ? redeemablePoints(wallet.balancePoints, priced.beforePointsPaise, loyalty)
+      : 0;
+    const walletPaise = pointsToPaise(spendPoints, loyalty);
+    const totalPaise = Math.max(0, priced.beforePointsPaise - walletPaise);
+
+    if (totalPaise <= 0) {
+      return { ok: false, error: 'Points cannot cover the whole order. Please contact the academy.' };
+    }
+
+    const count = await db.order.count({ where: { organizationId: tenant.organizationId } });
+    const orderNo = `ORD-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
+
+    const order = await db.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          organizationId: tenant.organizationId,
+          branchId: branch.id,
+          userId,
+          orderNo,
+          status: 'PENDING',
+          currency: basket.currency,
+          subtotalPaise: priced.subtotalPaise,
+          discountPaise: priced.discountPaise,
+          taxPaise: priced.taxPaise,
+          walletPaise,
+          totalPaise,
+          promoCodeId: claim?.promoCodeId ?? null,
+          // What the buyer typed, and the basket cookie that paid. The second
+          // one is how the confirmation page recognises a guest as the person
+          // who just paid, without a session existing yet.
+          billingAddress: guestToken
+            ? ({ ...input.contact, guestToken } as Prisma.InputJsonValue)
+            : undefined,
+          items: {
+            create: priced.lines.map((l) => ({
+              productId: l.productId,
+              pricingPlanId: l.pricingPlanId,
+              titleSnapshot: l.title,
+              pricePaise: l.pricePaise,
+              discountPaise: l.discountPaise,
+              taxPaise: l.taxPaise,
+              totalPaise: l.totalPaise,
+            })),
+          },
+        },
+        select: { id: true, orderNo: true, currency: true, totalPaise: true },
+      });
+
+      if (claim) {
+        await tx.promoRedemption.create({
+          data: {
+            promoCodeId: claim.promoCodeId,
+            userId,
+            orderId: created.id,
+            amountPaise: claim.discountPaise,
+          },
+        });
+      }
+
+      if (spendPoints > 0) {
+        await credit({
+          tx,
+          userId,
+          points: -spendPoints,
+          reason: 'REDEMPTION',
+          note: `Spent on ${created.orderNo}`,
+          orderId: created.id,
+        });
+      }
+
+      return created;
+    });
+
+    const gatewayOrder = await createRazorpayOrder({
+      amountPaise: order.totalPaise,
+      currency: order.currency,
+      receipt: order.orderNo,
+      notes: { orderId: order.id, organizationId: tenant.organizationId },
+    });
+
+    await db.order.update({
+      where: { id: order.id },
+      data: { gatewayOrderId: gatewayOrder.id },
+    });
+
+    return { ok: true, orderId: order.id };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[cart checkout]', message);
     if (message.startsWith('RAZORPAY:')) {
       return { ok: false, error: 'The payment gateway refused to start this order. Please try again.' };
     }

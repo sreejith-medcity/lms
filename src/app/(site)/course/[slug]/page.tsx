@@ -14,6 +14,7 @@ import { addonsFor } from '@/lib/addons';
 import { settingText } from '@/lib/settings/store';
 import { GoogleBadge, ReviewWidget } from '@/components/review-badge';
 import { AddonPicker } from './addon-picker';
+import { AddToCart } from '@/components/add-to-cart';
 import { CourseCta } from './course-cta';
 import { Curriculum } from './curriculum';
 import { EnrolBar } from './enrol-bar';
@@ -351,6 +352,15 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           fullWidth
         />
       </div>
+
+      {/* Buying two courses at once is normal for this academy: German and
+          IELTS together, a course and its question bank. Enrol now is still
+          the first button, because most people are here for one thing. */}
+      {!isFree && (
+        <div className="mt-2.5">
+          <AddToCart productId={product.id} pricingPlanId={plan?.id} fullWidth />
+        </div>
+      )}
 
       <p className="t-small faint mt-2.5 text-center">
         Secure checkout. A coupon can be applied before you pay.

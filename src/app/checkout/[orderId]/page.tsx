@@ -1,11 +1,15 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
 import { razorpayConfig } from '@/lib/razorpay';
+import { CART_COOKIE } from '@/lib/cart-cookie';
+import { contactOf, mayViewOrder } from '@/lib/guest-order';
 import { PayNow } from './pay-now';
+import { SetPassword } from './set-password';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Checkout', robots: { index: false, follow: false } };
@@ -14,19 +18,43 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
   const { orderId } = await params;
   const tenant = await requireTenant();
   const user = await getSessionUser();
-  if (!user) redirect('/login');
 
   const config = razorpayConfig();
 
   const order = await db.order.findFirst({
-    where: { id: orderId, organizationId: tenant.organizationId, userId: user.id },
+    where: { id: orderId, organizationId: tenant.organizationId },
     include: {
       items: { select: { id: true, titleSnapshot: true, pricePaise: true, productId: true } },
       invoice: { select: { invoiceNo: true } },
       promo: { select: { code: true } },
+      user: { select: { id: true, name: true, email: true, passwordHash: true } },
     },
   });
   if (!order) notFound();
+
+  /*
+   * Two people may open this page: the learner it belongs to, and the browser
+   * that bought it as a guest and has no account password yet. Anybody else
+   * is sent to sign in, which is also what a stale link gets.
+   */
+  const cartCookie = (await cookies()).get(CART_COOKIE)?.value ?? null;
+  const allowed = mayViewOrder({
+    orderUserId: order.userId,
+    sessionUserId: user?.id ?? null,
+    orderBillingAddress: order.billingAddress,
+    cartCookie,
+  });
+  if (!allowed) redirect(`/login?next=${encodeURIComponent(`/checkout/${orderId}`)}`);
+
+  const contact = contactOf(order.billingAddress);
+  const buyer = {
+    name: order.user.name || contact.name || 'Learner',
+    email: order.user.email ?? contact.email ?? null,
+  };
+  /* A buyer who has never set one is offered it here rather than emailed a
+     link, because no email provider is connected yet and a purchase that
+     depends on one is a purchase nobody can finish. */
+  const needsPassword = !order.user.passwordHash;
 
   const org = await db.organization.findUnique({
     where: { id: tenant.organizationId },
@@ -42,6 +70,12 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
           Payment received against order {order.orderNo}
           {order.invoice ? `, invoice ${order.invoice.invoiceNo}` : ''}.
         </p>
+
+        {needsPassword && Boolean(user) && (
+          <div className="mt-6">
+            <SetPassword email={buyer.email} />
+          </div>
+        )}
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href={productId ? `/learn/${productId}` : '/learn'}
@@ -126,8 +160,8 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
             currency={order.currency}
             organizationName={org?.name ?? 'Academy'}
             brandColor={org?.brandColor ?? '#322046'}
-            learnerName={user.name}
-            learnerEmail={user.email}
+            learnerName={buyer.name}
+            learnerEmail={buyer.email}
             productId={order.items[0]?.productId ?? null}
           />
         </div>
