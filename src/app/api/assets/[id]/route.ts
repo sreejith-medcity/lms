@@ -6,6 +6,7 @@ import { meter } from '@/lib/usage';
 import { readUrlFor, storageConfigured } from '@/lib/storage';
 import { curriculumGate } from '@/lib/curriculum-access';
 import { settingText } from '@/lib/settings/store';
+import { redirectResponse } from '@/lib/http-headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -209,7 +210,7 @@ export async function GET(
   // the five-minute life of the link it points at.
   const publicArtwork = (Boolean(artwork) || heroImage) && !streaming;
 
-  return NextResponse.redirect(new URL(url, request.url), {
+  return redirectResponse(url, {
     status: 302,
     headers: {
       'Cache-Control': publicArtwork

@@ -102,3 +102,32 @@ test('a dynamic import of an application module is left alone', () => {
   const good = "const { verifyPassword } = await import('@/lib/password');";
   assert.deepEqual(rules(good), []);
 });
+
+test('a redirect built off request.url is caught', () => {
+  // The shape every Next tutorial uses, and the one that pointed every course
+  // page's artwork at the server's own bind address.
+  const bad = `
+    import { NextResponse } from 'next/server';
+    export async function GET(request: Request) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+  `;
+  const found = checkSource('app/x/route.ts', bad);
+  assert.ok(
+    found.some((v) => v.rule === 'no-redirect-off-request-url'),
+    'the detector did not fire on the exact shape that broke production',
+  );
+});
+
+test('the redirect rule does not fire on a redirect to somewhere else entirely', () => {
+  const fine = `
+    import { NextResponse } from 'next/server';
+    export async function GET() {
+      return NextResponse.redirect(authorizeUrl);
+    }
+  `;
+  assert.deepEqual(
+    checkSource('app/x/route.ts', fine).filter((v) => v.rule === 'no-redirect-off-request-url'),
+    [],
+  );
+});

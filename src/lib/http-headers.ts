@@ -6,3 +6,32 @@
  */
 export const TENANT_HEADER = 'x-tenant-id';
 export const HOST_HEADER = 'x-tenant-host';
+
+/**
+ * A redirect that does not guess where the site lives.
+ *
+ * `NextResponse.redirect(new URL(path, request.url))` looks right and is a
+ * trap behind a reverse proxy: `request.url` is the address the Node process
+ * was reached on, not the address the visitor typed. On this deployment that
+ * is the bind address, so every one of those redirects was sending browsers
+ * to https://0.0.0.0:3000, which is what broke course artwork. The image was
+ * allowed, found and signed correctly, and then the browser was pointed at a
+ * machine that does not exist.
+ *
+ * Relative is the fix rather than a better guess. HTTP has always allowed a
+ * relative Location and the browser resolves it against the URL it actually
+ * asked for, which is by definition the right one. Nothing to configure, and
+ * no header to get wrong.
+ *
+ * An absolute target, such as a presigned bucket URL or an identity
+ * provider's authorize endpoint, is passed through untouched.
+ */
+export function redirectResponse(
+  target: string,
+  init: { status?: number; headers?: Record<string, string> } = {},
+): Response {
+  return new Response(null, {
+    status: init.status ?? 302,
+    headers: { ...init.headers, Location: target },
+  });
+}

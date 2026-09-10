@@ -16,7 +16,10 @@ async function endSession(req: NextRequest) {
     await db.authSession.deleteMany({ where: { sessionToken: token } });
   }
 
-  const res = NextResponse.redirect(new URL('/login', req.url));
+  // Relative, so the browser resolves it against the address it actually
+  // asked for. Behind a proxy `req.url` is the bind address, and a logout
+  // that lands on 0.0.0.0:3000 looks to a user like the site going down.
+  const res = new NextResponse(null, { status: 302, headers: { Location: '/login' } });
   res.cookies.delete(SESSION_COOKIE);
   res.cookies.delete(WHO_COOKIE);
   return res;

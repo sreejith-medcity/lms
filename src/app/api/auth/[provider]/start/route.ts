@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getTenantContext } from '@/lib/tenant';
 import { providerConfig, issueState, type Provider } from '@/lib/sso';
+import { redirectResponse } from '@/lib/http-headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,7 @@ export async function GET(
   if (!config) {
     // Back to the form with something a person can act on, rather than a JSON
     // error on a blank page.
-    return NextResponse.redirect(new URL('/login?sso=unconfigured', request.url));
+    return redirectResponse('/login?sso=unconfigured');
   }
 
   const state = await issueState(provider as Provider);

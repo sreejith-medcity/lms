@@ -199,8 +199,28 @@ export function auditBuildSafety(root: string): Violation[] {
  * deliberately broken input. A check that has only ever been run on code that
  * passes is a check nobody has any reason to trust.
  */
+
+/**
+ * Source with its prose removed, for rules that would otherwise fire on the
+ * comment explaining them. The audit's own file already had to be skipped
+ * whole for this reason; this is the narrower version of that, so a rule can
+ * be documented in the file it protects.
+ *
+ * Block comments go entirely. Only whole-line `//` comments go, because a
+ * `//` inside a string is usually a URL and cutting there would corrupt the
+ * code the rule is about to read.
+ */
+export function withoutComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => !/^\s*\/\//.test(line))
+    .join('\n');
+}
+
 export function checkSource(relative: string, source: string): Violation[] {
   const violations: Violation[] = [];
+  const code = withoutComments(source);
 
   const hasClient = /^\s*['"]use client['"];?\s*$/m.test(source);
   const hasServer = /^\s*['"]use server['"];?\s*$/m.test(source);
@@ -248,6 +268,32 @@ export function checkSource(relative: string, source: string): Violation[] {
   /**
    * Rule three.
    *
+   * `NextResponse.redirect(new URL(path, request.url))` is the shape every
+   * Next tutorial uses and it is wrong behind a reverse proxy. `request.url`
+   * is the address the Node process was reached on, not the one the visitor
+   * typed, and on this deployment that is the bind address. Course artwork
+   * was being found, allowed and signed correctly and then the browser was
+   * redirected to https://0.0.0.0:3000, so every course page showed a broken
+   * image. Logout and the whole SSO callback had the same bug waiting.
+   *
+   * A relative Location has none of this: the browser resolves it against
+   * the URL it actually asked for. `redirectResponse` in http-headers.ts.
+   */
+  for (const match of code.matchAll(
+    /NextResponse\.redirect\(\s*new URL\(([^)]*?)(request|req)\.url/g,
+  )) {
+    violations.push({
+      rule: 'no-redirect-off-request-url',
+      file: relative,
+      detail:
+        `redirects against ${match[2]}.url, which behind a proxy is the bind address rather than the site; ` +
+        'use redirectResponse() from @/lib/http-headers for a relative Location',
+    });
+  }
+
+  /**
+   * Rule four.
+   *
    * Destructuring a Node builtin out of a dynamic import gives undefined in
    * the production bundle while working perfectly in development. This cost a
    * live feature: `const { Readable } = await import('node:stream')` in the
@@ -268,7 +314,7 @@ export function checkSource(relative: string, source: string): Violation[] {
   }
 
   /**
-   * Rule four. A client component that imports a server module drags it into
+   * Rule five. A client component that imports a server module drags it into
    * the browser bundle. For most of these that is a build error; for a few it
    * would be worse than an error, because `secrets.ts` holds the code that
    * unseals gateway keys and `integration-store.ts` reads them.

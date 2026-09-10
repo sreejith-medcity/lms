@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { providerConfig, consumeState, exchangeCode, type Provider } from '@/lib/sso';
 import { completeSignIn } from '@/lib/sign-in';
+import { redirectResponse } from '@/lib/http-headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic';
  * to find out who studies at an academy.
  */
 function back(request: Request, reason: string) {
-  return NextResponse.redirect(new URL(`/login?sso=${reason}`, request.url));
+  return redirectResponse(`/login?sso=${reason}`);
 }
 
 export async function GET(
@@ -114,8 +115,8 @@ export async function GET(
 
   if (outcome.status === 'blocked') return back(request, 'inactive');
   if (outcome.status === 'second-factor') {
-    return NextResponse.redirect(new URL('/login/verify', request.url));
+    return redirectResponse('/login/verify');
   }
 
-  return NextResponse.redirect(new URL(outcome.redirectTo, request.url));
+  return redirectResponse(outcome.redirectTo);
 }
