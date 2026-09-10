@@ -254,7 +254,25 @@ function explain(reason: string | null, p: Record<string, unknown>): string {
   if (reason === 'AMOUNT_MISMATCH') {
     const gateway = Number(p.gatewayAmountPaise ?? 0);
     const order = Number(p.orderTotalPaise ?? 0);
-    return `The gateway took ${formatMoney(gateway)} but the order was priced at ${formatMoney(order)}. Access was not granted on a guess. Refund or enrol manually, whichever is right.`;
+    const difference = gateway - order;
+
+    if (p.why === 'UNDERPAID') {
+      return `The gateway took ${formatMoney(gateway)}, less than the ${formatMoney(order)} the order was for. Nothing was granted.`;
+    }
+
+    /*
+     * The one overpayment with an ordinary explanation. An account set to
+     * charge the gateway fee to the customer captures the order plus that
+     * fee, which is about three and a half percent more. That is accepted
+     * now when the gateway reports the fee, so a refusal here usually means
+     * it did not, and the fix is one setting rather than a refund.
+     */
+    const feeShaped = difference > 0 && difference < order * 0.06;
+    return `The gateway took ${formatMoney(gateway)} against an order priced at ${formatMoney(order)}, ${formatMoney(difference)} more. ${
+      feeShaped
+        ? 'That is the shape of a gateway fee charged to the customer. Check who bears the fee in the Razorpay dashboard, then press Try again.'
+        : 'Access was not granted on a guess. Refund or enrol manually, whichever is right.'
+    }`;
   }
   if (reason === 'ORDER_NOT_FOUND') {
     return 'The payment referenced an order this academy does not have. Usually a stale checkout page from before a database reset.';

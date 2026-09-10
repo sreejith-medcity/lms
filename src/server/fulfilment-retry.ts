@@ -60,6 +60,7 @@ export async function retryFulfilment(
       orderId: order.id,
       gatewayPaymentId: payment.id,
       amountPaise: payment.amount,
+      feePaise: payment.fee ?? null,
       method: payment.method ?? null,
       raw: payment,
     });

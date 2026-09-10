@@ -99,6 +99,14 @@ export interface RazorpayPayment {
   method?: string;
   amount: number;
   currency: string;
+  /**
+   * The gateway's fee on this payment, in paise, inclusive of the GST it
+   * charges on that fee. Present once a payment is captured. It matters
+   * because an account can be configured so the customer pays it, in which
+   * case the captured amount is the order plus this.
+   */
+  fee?: number | null;
+  tax?: number | null;
   error_description?: string | null;
   [key: string]: unknown;
 }

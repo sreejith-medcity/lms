@@ -111,6 +111,7 @@ async function handle(
       orderId: order.id,
       gatewayPaymentId: payment.id,
       amountPaise: payment.amount,
+      feePaise: payment.fee ?? null,
       method: payment.method ?? null,
       raw: payment,
     });
@@ -204,6 +205,8 @@ async function orderItemIds(orderId: string): Promise<string[]> {
 interface RazorpayEntity {
   id: string;
   amount: number;
+  /** The gateway's fee, where the account charges it to the customer. */
+  fee?: number | null;
   order_id?: string | null;
   payment_id?: string;
   method?: string | null;

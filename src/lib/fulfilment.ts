@@ -8,6 +8,7 @@ import { emit } from '@/lib/webhooks';
 import { memberRef } from '@/lib/loyalty-provider';
 import { queueNotifications } from '@/lib/notify';
 import { invoicePrefix, nextInvoiceNumber } from '@/lib/invoice-number';
+import { checkPaidAmount } from '@/lib/payment-amount';
 
 /**
  * The one place a payment becomes access.
@@ -83,6 +84,13 @@ export async function fulfilPaidOrder(input: {
   orderId: string;
   gatewayPaymentId: string;
   amountPaise: number;
+  /**
+   * The gateway's own fee on this payment, in paise, as the gateway reports
+   * it. It matters when the academy's account charges that fee to the
+   * customer: the captured amount is then the order plus the fee, and
+   * without this the payment reads as the wrong amount.
+   */
+  feePaise?: number | null;
   method?: string | null;
   raw?: unknown;
 }): Promise<FulfilResult> {
@@ -111,9 +119,22 @@ export async function fulfilPaidOrder(input: {
     };
   }
 
-  // The gateway is the authority on the amount. If it disagrees with the order we
-  // priced, something is wrong and no access is granted on a guess.
-  if (input.amountPaise !== order.totalPaise) {
+  /*
+   * The gateway is the authority on the amount, and the amount has to
+   * reconcile with the order before anything is granted.
+   *
+   * "Reconcile" is not "be equal". An academy whose Razorpay account charges
+   * the gateway fee to the customer captures the order plus that fee, which
+   * is a correct payment arriving as a larger number. That case is
+   * recognised and recorded; everything else is still refused.
+   */
+  const amount = checkPaidAmount({
+    grossPaise: input.amountPaise,
+    orderPaise: order.totalPaise,
+    feePaise: input.feePaise ?? null,
+  });
+
+  if (!amount.ok) {
     await recordRefusal({
       organizationId: input.organizationId,
       orderId: order.id,
@@ -123,6 +144,8 @@ export async function fulfilPaidOrder(input: {
         orderNo: order.orderNo,
         gatewayAmountPaise: input.amountPaise,
         orderTotalPaise: order.totalPaise,
+        gatewayFeePaise: input.feePaise ?? null,
+        why: amount.reason,
         gatewayPaymentId: input.gatewayPaymentId,
       },
     });
@@ -135,7 +158,7 @@ export async function fulfilPaidOrder(input: {
       userId: order.userId,
       gatewayPaymentId: input.gatewayPaymentId,
       amountPaise: input.amountPaise,
-      reason: `Amount did not match order ${order.orderNo}: gateway ${input.amountPaise}, order ${order.totalPaise}`,
+      reason: `Amount did not reconcile with order ${order.orderNo} (${amount.reason}): gateway ${input.amountPaise}, order ${order.totalPaise}, fee ${input.feePaise ?? 'unknown'}`,
       raw: input.raw,
     });
 
@@ -145,7 +168,7 @@ export async function fulfilPaidOrder(input: {
       orderId: order.id,
       enrollmentIds: [],
       reference: order.orderNo,
-      error: `AMOUNT_MISMATCH: gateway ${input.amountPaise}, order ${order.totalPaise}`,
+      error: `AMOUNT_MISMATCH (${amount.reason}): gateway ${input.amountPaise}, order ${order.totalPaise}`,
     };
   }
 
