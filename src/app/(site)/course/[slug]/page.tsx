@@ -1,3 +1,4 @@
+import { languageName } from '@/lib/language';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -257,7 +258,9 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Badge tone="brand">{format}</Badge>
             {course.level && <Badge tone="neutral">Level {course.level}</Badge>}
-            {course.language && <Badge tone="neutral">{course.language}</Badge>}
+            {languageName(course.language) && (
+              <Badge tone="neutral">{languageName(course.language)}</Badge>
+            )}
             {lessons.length > 0 && (
               <Badge tone="neutral">
                 {lessons.length} lesson{lessons.length === 1 ? '' : 's'}
@@ -320,9 +323,9 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
 
           {course.batches.length > 0 && (
             <section>
-              <h2 className="text-lg font-semibold">Upcoming batches</h2>
+              <h2 className="text-lg font-semibold">Batches you can join</h2>
               <p className="t-small muted mt-1">
-                Timings come from the live class schedule, so these are the batches actually running.
+                Timings come from the live class schedule. A batch that has already started is still open where there are seats, and you get the recordings of the classes you missed.
               </p>
               <ul className="mt-4 divide-y rounded-[var(--radius)] border bg-[var(--surface)]">
                 {course.batches.map((b) => {
@@ -415,7 +418,9 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                     ? 'Live classes with a trainer on a scheduled weekly pattern.'
                     : 'Recorded lessons you work through in your own time.'}
               </Row>
-              <Row label="Teaching language">{course.language ?? 'Confirmed at enrolment'}</Row>
+              <Row label="Teaching language">
+                {languageName(course.language) ?? 'Confirmed at enrolment'}
+              </Row>
               <Row label="Level">{course.level ?? 'Open to all levels'}</Row>
               <Row label="Access period">
                 {plan?.validityDays

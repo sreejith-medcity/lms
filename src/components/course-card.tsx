@@ -1,3 +1,4 @@
+import { languageName } from '@/lib/language';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/money';
 import { learningFormat, materialCount, type CourseCard as Card } from '@/lib/site';
@@ -34,7 +35,7 @@ export function CourseCard({ card }: { card: Card }) {
 
       <p className="t-small faint mt-3">
         {lessons > 0 ? `${lessons} lesson${lessons === 1 ? '' : 's'}` : 'Curriculum in preparation'}
-        {card.course?.language ? ` · ${card.course.language}` : ''}
+        {languageName(card.course?.language) ? ` · ${languageName(card.course?.language)}` : ''}
         {plan?.validityDays ? ` · ${plan.validityDays} days access` : ''}
       </p>
 
