@@ -12,12 +12,20 @@ const base = process.argv[2] ?? process.env.SMOKE_BASE_URL;
 
 if (!base) {
   console.error('Give it a base URL: npm run smoke -- https://your-host');
-  process.exit(2);
+  process.exitCode = 2;
 }
 
-const report = await runSmoke(base, {
-  sessionCookie: process.env.SMOKE_SESSION?.trim() || null,
-});
+if (base) {
+  const report = await runSmoke(base, {
+    sessionCookie: process.env.SMOKE_SESSION?.trim() || null,
+  });
 
-console.log(formatReport(report));
-process.exit(report.failed > 0 ? 1 : 0);
+  console.log(formatReport(report));
+
+  // `process.exitCode` rather than `process.exit()` throughout. When stdout is
+  // a pipe rather than a terminal, which is exactly what happens under
+  // `npm run`, writes are asynchronous and process.exit() can cut the report
+  // off before a byte of it is flushed. The symptom is a command that prints
+  // its own banner and then nothing at all.
+  process.exitCode = report.failed > 0 ? 1 : 0;
+}
