@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
+import { RetryFulfilment } from './retry';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -118,14 +119,22 @@ export default async function PaymentsPage() {
                             payment {String(p.gatewayPaymentId ?? '—')}
                           </p>
                         </div>
-                        <span className="t-small faint shrink-0">
-                          {r.receivedAt.toLocaleString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
+                        <div className="flex shrink-0 flex-col items-end gap-2">
+                          <span className="t-small faint">
+                            {r.receivedAt.toLocaleString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {/* Fix the cause, then finish the order from here
+                              rather than from the database. */}
+                          <RetryFulfilment
+                            orderId={String(p.orderId ?? '')}
+                            gatewayPaymentId={String(p.gatewayPaymentId ?? '')}
+                          />
+                        </div>
                       </div>
                     </li>
                   );

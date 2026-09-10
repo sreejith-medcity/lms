@@ -7,6 +7,7 @@ import { reportConversion } from '@/lib/analytics-server';
 import { emit } from '@/lib/webhooks';
 import { memberRef } from '@/lib/loyalty-provider';
 import { queueNotifications } from '@/lib/notify';
+import { invoicePrefix, nextInvoiceNumber } from '@/lib/invoice-number';
 
 /**
  * The one place a payment becomes access.
@@ -65,6 +66,16 @@ async function recordRefusal(input: {
   } catch (err) {
     console.error('[fulfilment] could not record the refusal', err);
   }
+}
+
+/** Prisma's code for a unique index refusing a second row. */
+function isDuplicate(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code: unknown }).code === 'P2002'
+  );
 }
 
 export async function fulfilPaidOrder(input: {
@@ -152,7 +163,81 @@ export async function fulfilPaidOrder(input: {
   const enrollmentIds: string[] = [];
   let invoiceNo = order.invoice?.invoiceNo;
 
+  /*
+   * Everything that only reads is done before the transaction opens.
+   *
+   * This used to sit inside it: for each item a product, a batch and a plan,
+   * then the tax config and an invoice count, each one a round trip to a
+   * database in another region. A dozen of those inside one interactive
+   * transaction is several seconds of wall clock, and Prisma closes an
+   * interactive transaction after five, at which point money has moved and
+   * nobody is enrolled. Reading first leaves the transaction holding writes
+   * only, which is what it is for.
+   */
+  const context = await Promise.all(
+    order.items.map(async (item) => {
+      const product = await db.product.findFirst({
+        where: { id: item.productId, organizationId: input.organizationId },
+        select: { course: { select: { id: true } } },
+      });
+
+      const [batch, plan] = await Promise.all([
+        product?.course
+          ? db.batch.findFirst({
+              where: {
+                organizationId: input.organizationId,
+                courseId: product.course.id,
+                status: { in: ['ACTIVE', 'UPCOMING'] },
+                deletedAt: null,
+              },
+              orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
+              select: { id: true },
+            })
+          : Promise.resolve(null),
+        item.pricingPlanId
+          ? db.pricingPlan.findUnique({
+              where: { id: item.pricingPlanId },
+              select: { validityDays: true },
+            })
+          : Promise.resolve(null),
+      ]);
+
+      return { item, batchId: batch?.id ?? null, validityDays: plan?.validityDays ?? null };
+    }),
+  );
+
+  const taxConfig = invoiceNo
+    ? null
+    : await db.taxConfig.findFirst({
+        where: { organizationId: input.organizationId },
+        select: { cgstPercent: true, sgstPercent: true, igstPercent: true, state: true },
+      });
+
+  /**
+   * The next invoice number for this academy.
+   *
+   * Counting rows and adding one is fine until a number is ever skipped or a
+   * row removed, after which the count keeps producing a number that already
+   * exists and every payment after it fails on the unique index. Reading the
+   * highest number actually issued cannot drift that way.
+   */
+  async function nextInvoiceNo(): Promise<string> {
+    const prefix = invoicePrefix(new Date().getFullYear());
+
+    const latest = await db.invoice.findFirst({
+      where: { invoiceNo: { startsWith: prefix }, order: { organizationId: input.organizationId } },
+      orderBy: { invoiceNo: 'desc' },
+      select: { invoiceNo: true },
+    });
+
+    return nextInvoiceNumber(latest?.invoiceNo ?? null, prefix);
+  }
+
   const runFulfilment = async () => {
+  // A second attempt starts from nothing, or it reports the enrolments of the
+  // attempt that failed as well as its own.
+  enrollmentIds.length = 0;
+
   await db.$transaction(async (tx) => {
     // 1. The payment. Unique on (organisation, gateway, reference), so a repeated
     //    delivery of the same event updates one row instead of creating a second.
@@ -194,36 +279,12 @@ export async function fulfilPaidOrder(input: {
     //    (user, product, batch) is what makes a second delivery harmless.
     const branchId = order.branchId;
 
-    for (const item of order.items) {
-      const product = await tx.product.findUnique({
-        where: { id: item.productId },
-        select: { course: { select: { id: true } } },
-      });
-
-      const batch = product?.course
-        ? await tx.batch.findFirst({
-            where: {
-              courseId: product.course.id,
-              status: { in: ['ACTIVE', 'UPCOMING'] },
-              deletedAt: null,
-            },
-            orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
-            select: { id: true },
-          })
-        : null;
-
-      const plan = item.pricingPlanId
-        ? await tx.pricingPlan.findUnique({
-            where: { id: item.pricingPlanId },
-            select: { validityDays: true },
-          })
-        : null;
-
+    for (const { item, batchId: itemBatchId, validityDays } of context) {
       const existing = await tx.enrollment.findFirst({
         where: {
           userId: order.userId,
           productId: item.productId,
-          batchId: batch?.id ?? null,
+          batchId: itemBatchId,
         },
         select: { id: true, status: true },
       });
@@ -238,9 +299,7 @@ export async function fulfilPaidOrder(input: {
               status: 'ENROLLED',
               orderItemId: item.id,
               startsAt: new Date(),
-              expiresAt: plan?.validityDays
-                ? new Date(Date.now() + plan.validityDays * 864e5)
-                : null,
+              expiresAt: validityDays ? new Date(Date.now() + validityDays * 864e5) : null,
             },
           });
         }
@@ -254,15 +313,13 @@ export async function fulfilPaidOrder(input: {
           branchId,
           userId: order.userId,
           productId: item.productId,
-          batchId: batch?.id ?? null,
+          batchId: itemBatchId,
           pricingPlanId: item.pricingPlanId,
           orderItemId: item.id,
           status: 'ENROLLED',
           source: 'SELF',
           startsAt: new Date(),
-          expiresAt: plan?.validityDays
-            ? new Date(Date.now() + plan.validityDays * 864e5)
-            : null,
+          expiresAt: validityDays ? new Date(Date.now() + validityDays * 864e5) : null,
         },
         select: { id: true },
       });
@@ -272,17 +329,8 @@ export async function fulfilPaidOrder(input: {
     // 4. The invoice. Numbered inside the transaction, and the global unique on
     //    invoiceNo is the backstop if two orders are paid in the same instant.
     if (!invoiceNo) {
-      const tax = await tx.taxConfig.findFirst({
-        where: { organizationId: input.organizationId },
-        select: { cgstPercent: true, sgstPercent: true, igstPercent: true, state: true },
-      });
-
-      const count = await tx.invoice.count({
-        where: { order: { organizationId: input.organizationId } },
-      });
-
-      const year = new Date().getFullYear();
-      invoiceNo = `INV-${year}-${String(count + 1).padStart(5, '0')}`;
+      const tax = taxConfig;
+      invoiceNo = await nextInvoiceNo();
 
       const interState = false; // no billing state is collected yet, so intra-state
       const taxableValue = order.subtotalPaise - order.discountPaise;
@@ -302,22 +350,57 @@ export async function fulfilPaidOrder(input: {
         },
       });
     }
+  },
+  {
+    /*
+     * Wider than Prisma's five second default, because this transaction is
+     * held open across a network to a database in another region, and the
+     * cost of it expiring is the worst state this system has: money taken,
+     * access not granted. Twenty seconds is still short enough that a genuine
+     * deadlock surfaces rather than hangs.
+     */
+    timeout: 20_000,
+    maxWait: 10_000,
   });
 
   };
 
   // An exception in here means money moved and access did not follow, so it is
   // written down rather than becoming an anonymous 500 nobody can trace.
-  try {
-    await runFulfilment();
-  } catch (err) {
+  //
+  // One failure is worth retrying rather than recording: two payments landing
+  // in the same second both read the same highest invoice number and one of
+  // them loses the unique index. Reading it again gives the next free one, so
+  // the loser tries once more instead of becoming a support ticket.
+  let attempt = 0;
+  let failure: unknown = null;
+
+  while (attempt < 3) {
+    attempt += 1;
+    try {
+      await runFulfilment();
+      failure = null;
+      break;
+    } catch (err) {
+      failure = err;
+      if (!isDuplicate(err)) break;
+      invoiceNo = order.invoice?.invoiceNo;
+    }
+  }
+
+  if (failure) {
+    const err = failure;
     const message = err instanceof Error ? err.message : String(err);
+    const code =
+      typeof err === 'object' && err !== null && 'code' in err
+        ? String((err as { code: unknown }).code)
+        : undefined;
     await recordRefusal({
       organizationId: input.organizationId,
       orderId: order.id,
       gatewayPaymentId: input.gatewayPaymentId,
       reason: 'FULFILMENT_THREW',
-      detail: { orderNo: order.orderNo, message },
+      detail: { orderNo: order.orderNo, message, code, attempts: attempt },
     });
     return {
       ok: false,
@@ -325,7 +408,7 @@ export async function fulfilPaidOrder(input: {
       orderId: order.id,
       enrollmentIds: [],
       reference: order.orderNo,
-      error: `FULFILMENT_THREW: ${message}`,
+      error: `FULFILMENT_THREW: ${code ? `${code} ` : ''}${message}`,
     };
   }
 
