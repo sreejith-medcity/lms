@@ -5,6 +5,7 @@ import { Card, PageHeader } from '@/components/ui';
 import { settingText } from '@/lib/settings/store';
 import { SocialForm, PolicyEditor } from './forms';
 import { HeroImageForm } from './hero-form';
+import { HeroTextForm } from './hero-text-form';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -33,7 +34,13 @@ export default async function WebsiteSettings() {
     }),
   ]);
 
-  const heroImage = await settingText(tenant.organizationId, 'website.heroImageAssetId');
+  const [heroImage, heroEyebrow, heroTitle, heroHighlight, heroBlurb] = await Promise.all([
+    settingText(tenant.organizationId, 'website.heroImageAssetId'),
+    settingText(tenant.organizationId, 'website.heroEyebrow'),
+    settingText(tenant.organizationId, 'website.heroTitle'),
+    settingText(tenant.organizationId, 'website.heroHighlight'),
+    settingText(tenant.organizationId, 'website.heroBlurb'),
+  ]);
   const social = (org.social ?? {}) as Record<string, string>;
   const byKind = new Map(policies.map((p) => [p.kind as string, p]));
 
@@ -43,6 +50,25 @@ export default async function WebsiteSettings() {
         title="Website"
         description="What the public side says about you, beyond the courses themselves."
       />
+
+      <Card>
+        <h2 className="t-heading">What the home page says</h2>
+        <p className="t-small muted mt-1 max-w-prose">
+          The hero at the top of the site. Your Google rating sits under it, and it is set on the
+          Preferences screen under &ldquo;The public site&rdquo;.
+        </p>
+        <div className="mt-4">
+          <HeroTextForm
+            canEdit={canEdit}
+            values={{
+              eyebrow: heroEyebrow,
+              title: heroTitle,
+              highlight: heroHighlight,
+              blurb: heroBlurb,
+            }}
+          />
+        </div>
+      </Card>
 
       <Card>
         <h2 className="t-heading">The home page photograph</h2>

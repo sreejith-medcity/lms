@@ -43,15 +43,15 @@ export default async function Home() {
     settingText(site.organizationId, 'website.googleReviewCount'),
   ]);
 
-  const [featured, all, samples, testimonials, published] = await Promise.all([
+  // The two counts that fed the hero's counter row are gone with it. They were
+  // a product count and a session count run on every home page view to print
+  // numbers that are now not printed.
+  const [featured, samples, testimonials] = await Promise.all([
     db.product.findMany({
       where: { organizationId: site.organizationId, type: 'COURSE', status: 'PUBLISHED', deletedAt: null },
       orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
       take: 6,
       select: courseCardSelect,
-    }),
-    db.product.count({
-      where: { organizationId: site.organizationId, type: 'COURSE', status: 'PUBLISHED', deletedAt: null },
     }),
     // The sample lesson button only appears if there is a real lesson behind it.
     db.material.findFirst({
@@ -66,13 +66,6 @@ export default async function Home() {
       orderBy: { createdAt: 'desc' },
       take: 3,
       select: { id: true, authorName: true, rating: true, comment: true },
-    }),
-    db.liveSession.count({
-      where: {
-        organizationId: site.organizationId,
-        startsAt: { gte: new Date() },
-        status: { not: 'CANCELLED' },
-      },
     }),
   ]);
 
@@ -95,10 +88,6 @@ export default async function Home() {
             : null
         }
         sampleId={samples?.id ?? null}
-        facts={[
-          { label: 'Courses published', value: String(all) },
-          { label: 'Classes scheduled ahead', value: String(published) },
-        ].filter((f) => f.value !== '0')}
       />
 
       <div className="mx-auto max-w-6xl px-4 sm:px-6">

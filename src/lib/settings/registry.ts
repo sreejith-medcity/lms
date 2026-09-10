@@ -355,10 +355,11 @@ export const SETTINGS: SettingDef[] = [
   {
     key: 'website.heroEyebrow',
     group: 'website',
-    label: 'The small pill above the headline',
-    help: 'A few words at the very top of the home page. Blank hides it.',
+    label: 'A short line above the headline',
+    help: 'For something time-bound: an intake opening, a launch. Blank hides it, which is the right answer most of the time.',
     kind: 'text',
-    default: 'Learn online, on a real schedule',
+    default: '',
+    placeholder: 'January intake now open',
     live: true,
   },
   {
