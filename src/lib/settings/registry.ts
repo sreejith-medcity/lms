@@ -46,6 +46,7 @@ export const SETTING_GROUPS = [
   { key: 'auth', label: 'Signing up and in', blurb: 'How people get an account and how they come back to it.' },
   { key: 'community', label: 'Community', blurb: 'What learners may post, and whether anybody reads it first.' },
   { key: 'commerce', label: 'Selling', blurb: 'Where you sell, and in what currency.' },
+  { key: 'loyalty', label: 'Loyalty', blurb: 'Who runs the points, and who does the arithmetic.' },
 ] as const;
 
 export type SettingGroupKey = (typeof SETTING_GROUPS)[number]['key'];
@@ -302,6 +303,27 @@ export const SETTINGS: SettingDef[] = [
     ],
     live: false,
     waitingOn: 'live exchange rates, which are a Phase 7 integration',
+  },
+  {
+    key: 'loyalty.engine',
+    group: 'loyalty',
+    label: 'Who runs the scheme',
+    help:
+      'Two engines must never both be crediting, or a learner earns twice for one purchase and the two ledgers disagree forever. Whichever is chosen, the separate platform is still told what happened through the outbound webhooks, so switching loses no history.',
+    kind: 'select',
+    default: 'built-in',
+    options: [
+      { value: 'built-in', label: 'The points and referrals built into this product' },
+      { value: 'external', label: 'A separate loyalty platform' },
+      { value: 'off', label: 'No scheme at all' },
+    ],
+    live: true,
+    effect: (value) =>
+      value === 'external'
+        ? 'This product awards nothing and reports everything. Connect the platform on the Integrations screen, or nothing is listening.'
+        : value === 'off'
+          ? 'Nobody awards anything. Existing balances are left alone rather than cleared.'
+          : 'The wallet in this product awards and redeems, which is what runs today.',
   },
 ];
 

@@ -120,6 +120,58 @@ export function auditPermissionKeys(root: string): Violation[] {
   return violations;
 }
 
+/**
+ * Every setting the code reads, checked against the registry.
+ *
+ * A setting read but never declared is a switch nobody can flip: no screen
+ * offers it, so it is stuck on its fallback forever and the feature behind it
+ * is unreachable. It shipped that way once already, with the loyalty engine
+ * switch, which was written, read on every earn, and absent from the settings
+ * screen.
+ *
+ * The reverse is checked by the settings screen itself, which renders every
+ * declared setting and says out loud when nothing reads one.
+ */
+export function auditSettingKeys(root: string): Violation[] {
+  const registry = readFileSync(join(root, 'src', 'lib', 'settings', 'registry.ts'), 'utf8');
+
+  const known = new Set<string>();
+  for (const [, key] of registry.matchAll(/^\s*key: '([\w.]+)',$/gm)) known.add(key);
+
+  if (known.size === 0) {
+    return [
+      {
+        rule: 'setting-key-exists',
+        file: 'src/lib/settings/registry.ts',
+        detail: 'No setting keys could be read from the registry, so this check is not working.',
+      },
+    ];
+  }
+
+  const violations: Violation[] = [];
+  const readers = /\b(?:setting|settingBool|settingNumber|settingText)\(\s*[\w.]+\s*,\s*'([\w.]+)'/g;
+
+  for (const file of walk(join(root, 'src'))) {
+    const relative = file.slice(root.length + 1);
+    if (relative.startsWith('src/lib/settings/')) continue;
+
+    const source = readFileSync(file, 'utf8');
+
+    for (const match of source.matchAll(readers)) {
+      const key = match[1];
+      if (!known.has(key)) {
+        violations.push({
+          rule: 'setting-key-exists',
+          file: relative,
+          detail: `reads the setting '${key}', which is not declared in the registry, so no screen offers it and it is stuck on its fallback`,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
 export function auditBuildSafety(root: string): Violation[] {
   const violations: Violation[] = [];
 
@@ -135,6 +187,7 @@ export function auditBuildSafety(root: string): Violation[] {
   }
 
   violations.push(...auditPermissionKeys(root));
+  violations.push(...auditSettingKeys(root));
 
   return violations;
 }

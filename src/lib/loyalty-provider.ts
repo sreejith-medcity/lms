@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { settingText } from '@/lib/settings/store';
 import { isEngine, type LoyaltyEngine } from '@/lib/loyalty-contract';
 
 /**
@@ -13,17 +13,16 @@ import { isEngine, type LoyaltyEngine } from '@/lib/loyalty-contract';
  * So it is one setting, read in one place, and every earn path asks here.
  */
 
-const SETTING = 'pref.loyalty.engine';
-
+/**
+ * Read through the settings store rather than the table, so the declared
+ * default in the registry is the single source of truth and the `pref.` prefix
+ * lives in one place instead of two.
+ */
 export async function loyaltyEngine(organizationId: string): Promise<LoyaltyEngine> {
-  const row = await db.orgSetting.findFirst({
-    where: { organizationId, key: SETTING },
-    select: { value: true },
-  });
+  const value = await settingText(organizationId, 'loyalty.engine');
 
-  const value = typeof row?.value === 'string' ? row.value : null;
-  // Anything unrecognised falls back to what is running today rather than
-  // silently switching an academy's scheme off.
+  // Anything unrecognised falls back to what runs today rather than silently
+  // switching an academy's scheme off.
   return isEngine(value) ? value : 'built-in';
 }
 

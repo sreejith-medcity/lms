@@ -47,11 +47,15 @@ would fail quietly rather than loudly.
   academy seeing another's learners, and it is invisible while there is only one
   academy in the database.
 
-- **`build-safety`** — the three mistakes that have actually broken this
-  project: a directive that drifted below an import and took a deploy down, a
+- **`build-safety`** — the mistakes that have actually broken this project: a directive that drifted below an import and took a deploy down, a
   non-async export from a `'use server'` file that published an array as an
-  endpoint, and a client component that could pull the key-unsealing module into
-  the browser bundle. None of these are things a type system can see.
+  endpoint, a client component that could pull the key-unsealing module into
+  the browser bundle, a Node builtin destructured out of a dynamic import
+  (undefined in production, fine in development, and it broke every upload), a
+  `requireStaff` key absent from the permission catalogue (FORBIDDEN for
+  everybody, including a super admin), and a setting read but never declared (a
+  switch nobody can flip). None of these are things a type system can see: they
+  are all strings.
 
 Both audits test their own detectors against deliberately broken input as well
 as against the codebase. An audit that reports nothing is either a clean
