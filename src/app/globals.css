@@ -41,7 +41,12 @@
 
   --ink: #322046;
   --ink-2: #6f6378;
-  --ink-3: #998fa3;
+  /* 4.65:1 at worst against the three light backgrounds, so it clears AA
+     everywhere it is used. It was #998fa3, which measured 2.72:1 on canvas:
+     legible to me on a good screen, and not legible to a learner on a phone
+     in daylight. The margin over 4.5 is deliberate, so a future tweak to a
+     surface does not quietly push it under. */
+  --ink-3: #736780;
 
   --ok: #0f7a55;
   --ok-soft: #e6f5ef;
