@@ -404,7 +404,7 @@ export const SETTINGS: SettingDef[] = [
     key: 'website.reviewBadgeHtml',
     group: 'website',
     label: 'Review badge embed, for the hero',
-    help: 'The small badge or button version of your reviews widget. It sits in the hero on the home page, where a full slider would not fit. Leave it blank to use the plain rating badge built from the two fields above, which costs no third-party script at all.',
+    help: 'The small badge or button version of your reviews widget. It sits in the hero on the home page, where a full slider would not fit, on a light chip so a badge that ships black text stays readable on the dark panel. Leave it blank to use the plain rating badge built from the two fields above, which costs no third-party script at all.',
     kind: 'text',
     multiline: true,
     default: '',

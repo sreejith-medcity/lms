@@ -117,7 +117,22 @@ export function HomeHero({
               argument with itself. */}
           {badgeHtml.trim() ? (
             <div className="mt-7 flex justify-center lg:justify-start">
-              <ReviewWidget html={badgeHtml} />
+              {/*
+                On a light chip, deliberately.
+
+                A provider's badge arrives with its own colours, and they are
+                chosen for a white page: this one paints its text pure black,
+                which measured 1.43:1 against the purple panel. Unreadable,
+                and not something we can fix from outside without fighting
+                their stylesheet every time they change it.
+
+                So the panel gives it the background it was designed for
+                rather than arguing with it. Any badge from any provider is
+                then readable here whatever colours it ships with.
+              */}
+              <span className="inline-flex max-w-full items-center rounded-full bg-[var(--surface)] px-3 py-1.5 shadow-sm">
+                <ReviewWidget html={badgeHtml} />
+              </span>
             </div>
           ) : (
             google && (
