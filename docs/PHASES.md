@@ -82,7 +82,7 @@ discussions. Loyalty points and the referral wallet with its credit ledger.
 Learner portal sidebar ordering. Learner export and impersonation. Instructor
 profiles.
 
-## Phase 5 — The analytics suite · BUILT, AWAITING PUSH
+## Phase 5 — The analytics suite · DONE, DEPLOYED
 
 Roughly thirty reports across eight categories: sales and enrolment, batch and
 progress, feedback and rating, marketing, trainer, notification logs, advanced,
@@ -94,7 +94,7 @@ Built as a catalogue rather than thirty pages: a report is a declaration with a
 run function, one page renders any of them and one route exports any of them.
 Thirty-one so far, and the thirty-second is a function rather than a screen.
 
-## Phase 6 — Settings depth · BUILT, AWAITING PUSH
+## Phase 6 — Settings depth · DONE, DEPLOYED
 
 Custom fields across eight entities, typed, independently visible on signup and
 on the offline form, with before-or-after timing and mandatory flags. This is
@@ -126,7 +126,7 @@ timeout. And the wallet charges before the provider is called and refunds on
 failure, rather than the other way round, because a timeout that actually
 delivered is worse unbilled than double counted.
 
-## Phase 7b — the sign-in flows · BUILT, AWAITING PUSH
+## Phase 7b — the sign-in flows · DONE, DEPLOYED
 
 The libraries Phase 7 left without callers now have them.
 
@@ -148,7 +148,7 @@ Gmail address may add themselves to.
 Not done: reCAPTCHA still has nothing verifying it, and its card says Phase 8
 rather than claiming otherwise.
 
-## Phase 8 — One system, and go-live · PART ONE BUILT, AWAITING PUSH
+## Phase 8 — One system, and go-live · PARTS ONE TO THREE DEPLOYED
 
 The strongest argument for this whole build, per the audit: collapsing two
 systems into one. Absorb the WooCommerce storefront, one cart and one identity,
@@ -181,6 +181,65 @@ in two reports and the refund webhook.
 while they run side by side, a landing page per course, Postgres row-level
 security as a second line behind this check, database-backed tests, an
 accessibility pass, and performance measurement.
+
+## What is actually next, in the order it unblocks things
+
+Kept here because the phase list says what was built, and this says what to do.
+
+### 1. Credentials, which only you can get
+
+Nothing in Phase 7 sends, charges or meets until these exist. The code is
+written and honest about being unconnected, which is not the same as working.
+
+- Razorpay live keys and the webhook secret. Until then checkout refuses
+  anything priced.
+- Zoom server-to-server: account id, client id, client secret, webhook secret.
+  Until then join links are pasted by hand and attendance is manual.
+- MSG91 with DLT registration, AiSensy with approved templates, and an SMTP
+  URL. Until then every reminder queues and none of them leave.
+- Meta Ads, Google Ads and the CRM, which you named as the priority. Each
+  card lists the plan and permissions it needs before you start.
+- S3 or R2. 281 GB of recordings do not belong on the application disk.
+- WooCommerce read keys, so the migration rehearsal can tell you how much of
+  the catalogue lines up by slug before it matters.
+
+### 2. Security debt, all small, all overdue
+
+- Rotate the Neon `neondb_owner` password. A connection URI went into a chat
+  and should be treated as burned.
+- Delete the old Ohio Neon project `wild-dew-63814576`.
+- Remove the three `SEED_*` variables and change the seeded admin password.
+- Set `STORAGE_DIR` deliberately. Uploads currently land in the home directory
+  by default, which survives deploys and is backed up by nothing.
+
+### 3. Things built but never exercised
+
+- Walk the money path with a test card, end to end, once. Nobody has.
+- The two stuck INR 8,260 orders, open since before Phase 1.
+- A deploy smoke test: a list of real URLs fetched after each deploy asserting
+  a 200. The redirects screen threw FORBIDDEN for every user and shipped that
+  way; a list of ten URLs would have caught it in a minute.
+
+### 4. Phase 8, part four
+
+- Move the course page's per-user bits into the browser, the way the header
+  moved, so course pages can be cached too. They are the pages that matter
+  most for search and the only public ones still uncacheable.
+- One cart and one identity while both systems run side by side.
+- A landing page per course.
+- Postgres row-level security, as a second line behind the isolation audit.
+- Database-backed tests: fulfilment idempotency, amount mismatch, refund,
+  promo cap. They need a throwaway Postgres, which is the whole blocker.
+- An accessibility pass, and performance measurement.
+
+### 5. Unparked by Phase 7
+
+Workflows were parked because an automation engine with nothing to act through
+is a table nobody reads. Phase 7 gave it providers, so it is buildable now.
+
+Still parked: pricing templates and miscellaneous fees, which need new models.
+Still missing and labelled so: reCAPTCHA has nothing verifying it, and
+secondary field validation at signup was never built.
 
 ## Phase 9 — Loyalty as a product of its own
 
