@@ -7,31 +7,50 @@ import { useEffect, useState } from 'react';
  *
  * A bar that is there from the first paint covers the top of the page while
  * somebody is still reading the headline, and it duplicates a button that is
- * already on screen. So it stays out of the way until the real purchase card
- * has scrolled past, and slides in once it has, which is the point at which a
- * reader who wants to buy has to scroll back up to do it.
+ * already on screen. So it stays out of the way until the purchase card has
+ * scrolled past, and slides in once it has, which is the point at which a
+ * reader who wants to buy would otherwise have to scroll back up.
  *
- * The observer watches an anchor the server rendered next to that card, so
- * there is no measuring and no scroll handler firing on every frame.
+ * This was an IntersectionObserver on the anchor, which was the obvious tool
+ * and the wrong one. An observer only fires when the intersection changes, and
+ * a fast flick back to the top of a long page can take the anchor from "above
+ * the viewport" straight to "below the viewport" without ever intersecting it.
+ * No callback, no update, and the bar stayed on screen at the top of the page.
+ * Found by scrolling a real hydrated page rather than by reading the code.
+ *
+ * A scroll listener does not have that failure: it answers the question from
+ * the position rather than from the crossing, so every reading is correct
+ * whatever route the page took to get there. Coalesced into a frame, and
+ * passive, so it never blocks the scroll it is watching.
  */
 export function EnrolBar({ children }: { children: React.ReactNode }) {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    const anchor = document.getElementById('enrol-anchor');
-    if (!anchor) {
-      // No anchor means no purchase card was rendered. Showing the bar is then
-      // the right answer, not the fallback.
-      setShown(true);
-      return;
-    }
+    let frame = 0;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => setShown(!entry.isIntersecting && entry.boundingClientRect.top < 0),
-      { threshold: 0 },
-    );
-    observer.observe(anchor);
-    return () => observer.disconnect();
+    const measure = () => {
+      frame = 0;
+      const anchor = document.getElementById('enrol-anchor');
+      // No anchor means no purchase card was rendered, and then the bar is
+      // the only way to buy rather than a duplicate of one.
+      setShown(anchor ? anchor.getBoundingClientRect().top < 0 : true);
+    };
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
   }, []);
 
   return (

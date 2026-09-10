@@ -21,33 +21,53 @@ export function SectionNav({
   const [current, setCurrent] = useState(items[0]?.id ?? '');
 
   useEffect(() => {
-    const nodes = items
-      .map((i) => document.getElementById(i.id))
-      .filter((n): n is HTMLElement => Boolean(n));
-    if (nodes.length === 0) return;
+    let frame = 0;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // The topmost section currently crossing the band under the header
-        // wins. Taking the last entry instead makes the highlight jump about
-        // when two short sections are on screen together.
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setCurrent(visible[0].target.id);
-      },
-      { rootMargin: '-96px 0px -60% 0px', threshold: 0 },
-    );
+    const measure = () => {
+      frame = 0;
 
-    for (const node of nodes) observer.observe(node);
-    return () => observer.disconnect();
+      // The section the reader is in is the last one whose heading has passed
+      // under the sticky nav. Before the first one has, it is the first.
+      //
+      // Deliberately computed from positions rather than watched with an
+      // IntersectionObserver. An observer only speaks when a section crosses
+      // the band, so a page with nothing in the band, which is exactly what
+      // you get at the very top and the very bottom, keeps whatever it said
+      // last. The bar at the bottom of a phone had the same bug, and this is
+      // the same fix: ask where things are, not when they moved.
+      const band = 100;
+      let active = items[0]?.id ?? '';
+
+      for (const item of items) {
+        const node = document.getElementById(item.id);
+        if (node && node.getBoundingClientRect().top <= band) active = item.id;
+      }
+
+      setCurrent(active);
+    };
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
   }, [items]);
 
   return (
     <nav
       aria-label="On this page"
-      className="sticky top-0 z-20 -mx-4 border-b px-4 backdrop-blur sm:mx-0 sm:px-0"
-      style={{ background: 'color-mix(in srgb, var(--surface) 92%, transparent)' }}
+      // Opaque rather than translucent. A heading sliding half-visible under
+      // a frosted bar reads as an overlap bug rather than as a design.
+      className="sticky top-0 z-20 -mx-4 border-b bg-[var(--surface)] px-4 sm:mx-0 sm:px-0" 
     >
       <div className="flex items-center gap-4 py-2">
         <div className="rail flex min-w-0 flex-1 gap-1">

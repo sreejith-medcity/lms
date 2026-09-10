@@ -374,8 +374,33 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       {/* Hero ------------------------------------------------------------- */}
-      <div className="border-b bg-[var(--surface-2)]">
-        <div className="mx-auto max-w-7xl px-4 pb-10 pt-6 sm:px-6 sm:pb-14">
+      {/*
+        One grid for the whole page, three cells.
+
+        The hero and the sections are the left column, the purchase card is the
+        right one and it spans both rows, which is what lets it stay with the
+        reader the whole way down. Sticky inside the hero band only worked
+        until the band ended, about a screen in.
+
+        The DOM order is hero, card, sections, so a phone stacks them in
+        exactly the order somebody wants them: read what it is, see what it
+        costs, then the curriculum. No ordering tricks, and nothing that
+        depends on a magic number of pixels.
+      */}
+      {/* The clip is out here, on the full-width wrapper, because a 100vw
+          bleed inside the constrained container would be clipped by the
+          container itself and the band would stop at the text. */}
+      <div className="overflow-x-clip">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-12">
+          <section className="relative isolate pb-10 pt-6 sm:pb-14 lg:col-start-1 lg:row-start-1">
+            {/* The tinted band, bled to the window edges from inside a
+                constrained container, so it passes behind the card. */}
+            <span
+              aria-hidden
+              className="absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 border-b bg-[var(--surface-2)]"
+            />
+
           <nav aria-label="Breadcrumb" className="t-small faint">
             <Link href="/courses" className="hover:underline">
               Courses
@@ -390,7 +415,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             )}
           </nav>
 
-          <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="mt-6">
             <div>
               {category && (
                 <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
@@ -450,45 +475,33 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
               </ul>
             </div>
 
-            {/* Purchase card. Sticky on desktop; on a phone it sits below the
-                hero copy, and the bar at the bottom takes over once it goes. */}
-            <aside id="enrol" aria-label="Enrol in this course" className="lg:pt-1">
-              <div className="lg:sticky lg:top-6">
-                <div className="overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--surface)] shadow-[var(--shadow)]">
-                  <div className="hidden lg:block">
-                    <CourseMedia title={product.title} assetId={course.thumbnailAssetId} priority />
-                  </div>
-                  <div className="p-5 sm:p-6">{purchase}</div>
-                </div>
-              </div>
-              <span id="enrol-anchor" aria-hidden className="block h-px" />
-            </aside>
           </div>
-        </div>
-      </div>
+          </section>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
-        <SectionNav
-          items={navItems}
-          trailing={
-            <>
-              <PriceBlock plan={plan} isFree={isFree} saving={saving} compact />
-              <CourseCta
-                productId={product.id}
-                isPaid={!isFree}
-                pricingPlanId={plan?.id}
-                pricePaise={plan?.pricePaise ?? 0}
-                currency={plan?.currency ?? 'INR'}
-                learnHref={`/learn/${product.id}`}
-                continueLabel="Continue"
-              />
-            </>
-          }
-        />
-      </div>
+          <aside
+            id="enrol"
+            aria-label="Enrol in this course"
+            className="relative z-10 -mt-4 pb-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0 lg:pt-6"
+          >
+            {/* The height cap is the guard for a short laptop screen: a card
+                taller than the window would pin its top and put the buy
+                button permanently out of reach. */}
+            <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:overscroll-contain">
+              <div className="overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--surface)] shadow-[var(--shadow)]">
+                <div className="hidden lg:block">
+                  <CourseMedia title={product.title} assetId={course.thumbnailAssetId} priority />
+                </div>
+                <div className="p-5 sm:p-6">{purchase}</div>
+              </div>
+            </div>
+            {/* What the bar at the bottom of a phone watches for. */}
+            <span id="enrol-anchor" aria-hidden className="block h-px" />
+          </aside>
 
-      <div className="mx-auto max-w-7xl px-4 py-10 pb-28 sm:px-6 lg:pb-16">
-        <div className="space-y-12">
+          <div className="pb-28 lg:col-start-1 lg:row-start-2 lg:pb-16">
+            <SectionNav items={navItems} />
+
+            <div className="space-y-12 pt-8">
           {/* Overview ----------------------------------------------------- */}
           <Section id="overview" eyebrow="Course overview" title="What this course is">
             <div className="grid gap-6 sm:grid-cols-[minmax(0,40rem)_minmax(0,17rem)] sm:justify-start">
@@ -822,7 +835,10 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
               </Link>
             </div>
           </section>
+            </div>
+          </div>
         </div>
+      </div>
       </div>
 
       <EnrolBar>
