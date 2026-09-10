@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Caveat, Plus_Jakarta_Sans } from 'next/font/google';
+import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { getTenantContext } from '@/lib/tenant';
 
@@ -7,19 +7,6 @@ const sans = Plus_Jakarta_Sans({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-sans',
-});
-
-/**
- * One handwriting face, for the phrase beside the hero photograph and
- * nothing else. It is loaded here rather than linked from a stylesheet so it
- * is self-hosted with the rest: a Google Fonts link on every page is a third
- * party watching every visitor arrive.
- */
-const script = Caveat({
-  subsets: ['latin'],
-  weight: ['600'],
-  display: 'swap',
-  variable: '--font-script',
 });
 
 /**
@@ -53,7 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     : undefined;
 
   return (
-    <html lang="en" className={`${sans.variable} ${script.variable}`}>
+    <html lang="en" className={sans.variable}>
       {tenant?.faviconUrl && (
         <head>
           <link rel="icon" href={tenant.faviconUrl} />
