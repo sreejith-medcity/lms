@@ -200,3 +200,28 @@ test('the line on the dark panel is visible without being a border of its own', 
   assert.ok(ratio > 1.2, `--shell-line on --shell is ${ratio.toFixed(2)}:1, which is invisible`);
   assert.ok(ratio < 4, `--shell-line on --shell is ${ratio.toFixed(2)}:1, which is a stripe`);
 });
+
+test('the accent used as text clears large-text AA on the pages it appears on', () => {
+  // The hero's second line is set in --accent-strong rather than --accent,
+  // because the amber itself is a surface colour: 1.61:1 on the canvas. The
+  // threshold here is the large-text one, which is what a 40px headline is
+  // judged against, and the light theme clears it with room to spare.
+  const LARGE = 3;
+
+  for (const [name, block] of [
+    ['light', themes.light],
+    ['dark', themes.dark],
+  ] as const) {
+    const tokens = tokensIn(block);
+    if (!tokens['accent-strong']) continue;
+
+    for (const bg of ['canvas', 'surface'] as const) {
+      if (!tokens[bg]) continue;
+      const ratio = ratioOf(tokens['accent-strong'], tokens[bg]);
+      assert.ok(
+        ratio >= LARGE,
+        `${name}: --accent-strong (${tokens['accent-strong']}) on --${bg} is ${ratio.toFixed(2)}:1`,
+      );
+    }
+  }
+});

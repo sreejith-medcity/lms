@@ -23,6 +23,11 @@
   --accent: #fdb85b;
   --accent-ink: #322046;
   --accent-soft: #fff4e2;
+  /* The accent as text on a light page. The amber itself is a surface
+     colour: measured against the canvas it is 1.61:1, which is invisible to
+     anybody who needs contrast and borderline for everybody else. This is
+     the same hue taken down until a headline set in it is readable. */
+  --accent-strong: #b26a00;
 
   /* App chrome: the dark frame the product lives in. */
   --shell: #322046;
@@ -78,6 +83,7 @@
     --brand-soft: color-mix(in srgb, #a98bd0 22%, #191024);
     --brand-line: color-mix(in srgb, #a98bd0 38%, #191024);
     --accent-soft: #3a2a12;
+    --accent-strong: #fdb85b;
 
     --ok-soft: #08301f;
     --warn-soft: #2e1e05;
@@ -100,6 +106,7 @@
   --brand-soft: color-mix(in srgb, #a98bd0 22%, #191024);
   --brand-line: color-mix(in srgb, #a98bd0 38%, #191024);
   --accent-soft: #3a2a12;
+  --accent-strong: #fdb85b;
   --ok-soft: #08301f;
   --warn-soft: #2e1e05;
   --bad-soft: #34101a;
@@ -288,4 +295,12 @@ body {
       #000 100%
     );
   }
+}
+
+/* The one handwritten phrase on the site, beside the hero photograph. It is
+   decoration, so it is aria-hidden where it is used and never carries
+   information that is not also in the words beside it. */
+.script {
+  font-family: var(--font-script), ui-rounded, cursive;
+  font-weight: 600;
 }

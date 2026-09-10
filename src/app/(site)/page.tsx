@@ -8,6 +8,7 @@ import { SetupNotice, NoTenantNotice } from '@/components/tenant-notices';
 import { settingText } from '@/lib/settings/store';
 import { SubjectCard } from '@/components/subject-card';
 import { HomeHero } from './home-hero';
+import { parseCaption, parseHighlights } from '@/lib/hero-content';
 import { Banners } from '@/components/banners';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,10 @@ export default async function Home() {
     settingText(site.organizationId, 'website.heroHighlight'),
     settingText(site.organizationId, 'website.heroBlurb'),
     settingText(site.organizationId, 'website.heroImageAssetId'),
+    settingText(site.organizationId, 'website.heroKicker'),
+    settingText(site.organizationId, 'website.heroScript'),
+    settingText(site.organizationId, 'website.heroCaption'),
+    settingText(site.organizationId, 'website.heroHighlights'),
     settingText(site.organizationId, 'website.googleRating'),
     settingText(site.organizationId, 'website.googleReviewCount'),
     settingText(site.organizationId, 'website.reviewBadgeHtml'),
@@ -96,6 +101,10 @@ export default async function Home() {
     heroHighlight,
     heroBlurb,
     heroImage,
+    heroKicker,
+    heroScript,
+    heroCaption,
+    heroHighlights,
     googleRating,
     googleCount,
     reviewBadgeHtml,
@@ -110,9 +119,13 @@ export default async function Home() {
     <>
       <HomeHero
         eyebrow={heroEyebrow.trim() || org.name}
+        kicker={heroKicker.trim()}
         title={heroTitle.trim()}
         highlight={heroHighlight.trim()}
         blurb={heroBlurb.trim()}
+        script={heroScript.trim()}
+        caption={parseCaption(heroCaption)}
+        highlights={parseHighlights(heroHighlights)}
         imageAssetId={heroImage.trim() || null}
         google={google ?? null}
         badgeHtml={reviewBadgeHtml}
