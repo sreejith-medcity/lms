@@ -11,6 +11,7 @@ import { LEARNER_NAV_ITEMS, LEARNER_NAV_SETTING } from '@/lib/learner-nav';
 import { settingByKey } from '@/lib/settings/registry';
 import { ALL_EVENTS } from '@/lib/notification-events';
 import type { Prisma } from '@prisma/client';
+import { checkEmbed } from '@/lib/embed-check';
 
 async function guard(permission: string, action: 'view' | 'edit' | 'delete' = 'edit') {
   const [tenant, user] = await Promise.all([requireTenant(), requireStaff(permission, action)]);
@@ -394,6 +395,15 @@ export async function saveSetting(key: string, raw: string): Promise<ActionState
       // Silently, because a truncated snippet still saves and still looks
       // right in the box.
       value = raw.trim().slice(0, def.multiline ? 8000 : 500);
+
+      // An embed that arrived through a chat app may have been turned into a
+      // markdown link on the way, which leaves a bracket in the URL and gets
+      // the provider blaming the widget id. Better to refuse it here than to
+      // save it and let somebody hunt for a typo that is not in their account.
+      if (def.multiline && typeof value === 'string' && value.includes('<')) {
+        const problem = checkEmbed(value);
+        if (problem) return { error: `${problem.problem} ${problem.detail}` };
+      }
     }
 
     const storageKey = `pref.${def.key}`;
