@@ -240,7 +240,8 @@ export function PublishingForm({
         />
         <Checkbox
           name="isFeatured"
-          label="Feature on the home page"
+          label="Show as a popular course"
+          hint="Popular courses fill the first section of the home page, ahead of the subjects. With none marked, the newest stand in so the page is never empty."
           defaultChecked={values.isFeatured}
           disabled={!canEdit}
         />

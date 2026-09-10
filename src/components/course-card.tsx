@@ -49,7 +49,7 @@ export function CourseCard({
 
   return (
     <article
-      className="lift group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border
+      className="lift group flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] border
         bg-[var(--surface)] shadow-sm"
     >
       <Link href={href} tabIndex={-1} aria-hidden className="block">
@@ -73,7 +73,7 @@ export function CourseCard({
           )}
         </div>
 
-        <h3 className="t-card-title">
+        <h3 className="t-card-title line-clamp-2">
           <Link href={href} className="transition group-hover:text-[var(--brand)]">
             {card.title}
           </Link>

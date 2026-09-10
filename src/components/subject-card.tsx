@@ -40,8 +40,8 @@ export function SubjectCard({
 
   return (
     <article
-      className={`flex flex-col overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--surface)] shadow-sm
-        ${subject.comingSoon ? '' : 'lift'}`}
+      className={`flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] border
+        bg-[var(--surface)] shadow-sm ${subject.comingSoon ? '' : 'lift'}`}
     >
       {subject.comingSoon ? (
         <CourseMedia
@@ -63,7 +63,7 @@ export function SubjectCard({
       )}
 
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="t-card-title">
+        <h3 className="t-card-title line-clamp-2 min-h-[2.7em]">
           {subject.comingSoon ? (
             subject.name
           ) : (
@@ -74,7 +74,7 @@ export function SubjectCard({
         </h3>
 
         {subject.tagline && (
-          <p className="t-small muted mt-2 leading-relaxed">{subject.tagline}</p>
+          <p className="t-small muted mt-2 line-clamp-3 leading-relaxed">{subject.tagline}</p>
         )}
 
         {google && (
@@ -86,10 +86,21 @@ export function SubjectCard({
           />
         )}
 
+        {!subject.comingSoon && count > 0 && (
+          <p className="t-small faint mt-2 tabular-nums">
+            {count} course{count === 1 ? '' : 's'}
+          </p>
+        )}
+
+        {/* The button is the last thing in the card, always. It used to have
+            the course count underneath it, which meant a card with courses
+            put its button thirty pixels higher than a coming-soon card beside
+            it, and a row of five read as a staircase. */}
         <div className="mt-auto pt-5">
           {subject.comingSoon ? (
             <span
-              className="t-eyebrow inline-flex h-11 w-full items-center justify-center rounded-[var(--radius-sm)] border border-dashed"
+              className="t-eyebrow inline-flex min-h-[3.25rem] w-full items-center justify-center
+                rounded-[var(--radius-sm)] border border-dashed px-3 py-2 text-center"
               style={{ color: 'var(--ink-2)' }}
             >
               Coming soon
@@ -97,21 +108,23 @@ export function SubjectCard({
           ) : (
             <Link
               href={href}
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[var(--radius-sm)]
-                px-4 text-sm font-semibold text-[var(--brand-ink)] transition hover:brightness-110"
+              // A fixed minimum rather than a fixed height, so a label that
+              // needs two lines gets them and still occupies the same box as
+              // a one-line label beside it. Truncating was worse than
+              // wrapping: "Browse German ..." tells a reader nothing.
+              className="inline-flex min-h-[3.25rem] w-full items-center justify-center gap-2
+                rounded-[var(--radius-sm)] px-3 py-2 text-center text-[0.8125rem] font-semibold
+                leading-tight text-[var(--brand-ink)] transition hover:brightness-110"
               style={{ background: 'var(--brand)' }}
             >
-              {subject.ctaLabel?.trim() || `Browse ${subject.name}`}
-              <span aria-hidden>→</span>
+              <span>{subject.ctaLabel?.trim() || `Browse ${subject.name}`}</span>
+              <span aria-hidden className="shrink-0">
+                →
+              </span>
             </Link>
           )}
         </div>
 
-        {!subject.comingSoon && count > 0 && (
-          <p className="t-small faint mt-2.5 text-center tabular-nums">
-            {count} course{count === 1 ? '' : 's'}
-          </p>
-        )}
       </div>
     </article>
   );

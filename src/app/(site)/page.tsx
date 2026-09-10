@@ -48,11 +48,27 @@ export default async function Home() {
   // The two counts that fed the hero's counter row are gone with it. They were
   // a product count and a session count run on every home page view to print
   // numbers that are now not printed.
-  const [featured, samples, testimonials] = await Promise.all([
+  const [popular, recent, samples, testimonials] = await Promise.all([
+    // Marked courses first, and only marked courses once there are any. An
+    // academy that has chosen eight to push should not have a ninth appear
+    // underneath them just because the row had space; before anything is
+    // marked, the newest stand in so the page is never empty.
+    db.product.findMany({
+      where: {
+        organizationId: site.organizationId,
+        type: 'COURSE',
+        status: 'PUBLISHED',
+        deletedAt: null,
+        isFeatured: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: courseCardSelect,
+    }),
     db.product.findMany({
       where: { organizationId: site.organizationId, type: 'COURSE', status: 'PUBLISHED', deletedAt: null },
-      orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
-      take: 6,
+      orderBy: { createdAt: 'desc' },
+      take: 8,
       select: courseCardSelect,
     }),
     // The sample lesson button only appears if there is a real lesson behind it.
@@ -71,7 +87,8 @@ export default async function Home() {
     }),
   ]);
 
-  const cards = featured as unknown as Card[];
+  const popularOnly = popular.length > 0;
+  const cards = (popularOnly ? popular : recent) as unknown as Card[];
 
   const [
     heroEyebrow,
@@ -106,6 +123,34 @@ export default async function Home() {
         <Banners organizationId={site.organizationId} placement="SITE_HOME" className="mb-2" />
       </div>
 
+      {/* The courses come first. Somebody arriving on a storefront wants to
+          see what is actually for sale before they are asked to pick a
+          subject, and a marked course is a deliberate recommendation. */}
+      <Section
+        title="Popular courses"
+        description={
+          popularOnly
+            ? 'The courses we are pointing people at right now. Prices are before applicable taxes.'
+            : 'Prices are what you pay before applicable taxes. Batch dates come from the live schedule.'
+        }
+        action={{ href: '/courses', label: 'All courses' }}
+      >
+        {cards.length === 0 ? (
+          <div className="rounded-[var(--radius)] border border-dashed bg-[var(--surface)] p-10 text-center">
+            <p className="t-heading">No courses published yet</p>
+            <p className="t-small muted mx-auto mt-1 max-w-sm">
+              Courses appear here the moment they are published from the admin.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {cards.map((c, i) => (
+              <CourseCard key={c.id} card={c} google={google} priority={i < 4} />
+            ))}
+          </div>
+        )}
+      </Section>
+
       {site.homeCategories.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
           <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
@@ -125,34 +170,13 @@ export default async function Home() {
               sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-5"
           >
             {site.homeCategories.map((c, i) => (
-              <div key={c.slug} className="w-[min(20rem,78vw)] shrink-0 snap-start sm:w-auto">
+              <div key={c.slug} className="flex w-[min(20rem,78vw)] shrink-0 snap-start sm:w-auto">
                 <SubjectCard subject={c} google={google} priority={i < 5} />
               </div>
             ))}
           </div>
         </section>
       )}
-
-      <Section
-        title="Courses"
-        description="Prices are what you pay before applicable taxes. Batch dates come from the live schedule."
-        action={{ href: '/courses', label: 'All courses' }}
-      >
-        {cards.length === 0 ? (
-          <div className="rounded-[var(--radius)] border border-dashed bg-[var(--surface)] p-10 text-center">
-            <p className="t-heading">No courses published yet</p>
-            <p className="t-small muted mx-auto mt-1 max-w-sm">
-              Courses appear here the moment they are published from the admin.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {cards.map((c) => (
-              <CourseCard key={c.id} card={c} />
-            ))}
-          </div>
-        )}
-      </Section>
 
       <Formats />
 
