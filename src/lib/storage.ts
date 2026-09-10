@@ -2,7 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto
 import { createReadStream, createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { $Enums } from '@prisma/client';
@@ -345,6 +345,38 @@ export async function finishLocalUpload(key: string): Promise<number> {
   await rename(partPath, finalPath);
   const info = await stat(finalPath);
   return info.size;
+}
+
+/**
+ * Write bytes we already hold, rather than handing a browser a signed URL.
+ *
+ * Every other upload path in this product deliberately keeps the bytes out of
+ * this process: the browser PUTs straight at the bucket, which is what stops
+ * a two gigabyte recording from going through shared hosting. This is the one
+ * case that cannot work that way. Importing a catalogue means fetching each
+ * picture from the old store, and there is no browser in that loop to hand a
+ * signed URL to.
+ *
+ * Only ever called with something small enough to hold, which is why the
+ * importer caps what it will fetch before it gets here.
+ */
+export async function putObject(key: string, body: Uint8Array, mimeType: string): Promise<void> {
+  if (storageDriver() === 'local') {
+    const path = localPathFor(key);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, body);
+    return;
+  }
+
+  const response = await fetch(presign('PUT', key, 300), {
+    method: 'PUT',
+    body: body as unknown as BodyInit,
+    headers: { 'content-type': mimeType },
+  });
+
+  if (!response.ok) {
+    throw new Error(`STORAGE_PUT_FAILED: ${response.status}`);
+  }
 }
 
 export function localReadStream(key: string, start?: number, end?: number) {

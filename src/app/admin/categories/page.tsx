@@ -3,6 +3,7 @@ import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { CategoryList, NewCategoryForm } from './editors';
+import { SubjectImportForm } from './import-form';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -65,6 +66,7 @@ export default async function CategoriesPage() {
           )}
         </div>
 
+        <div className="space-y-6">
         <Card>
           <h2 className="t-heading">New category</h2>
           <p className="t-small muted mt-1">
@@ -77,6 +79,9 @@ export default async function CategoriesPage() {
             />
           </div>
         </Card>
+
+        <SubjectImportForm />
+        </div>
       </div>
     </div>
   );

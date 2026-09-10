@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { CourseMedia } from '@/components/course-media';
+import { GoogleBadge } from '@/components/review-badge';
 
 export interface Subject {
   name: string;
@@ -24,7 +25,16 @@ export interface Subject {
  * link. A card that leads to an empty page is worse than one that says it is
  * not ready.
  */
-export function SubjectCard({ subject, priority = false }: { subject: Subject; priority?: boolean }) {
+export function SubjectCard({
+  subject,
+  google,
+  priority = false,
+}: {
+  subject: Subject;
+  /** The academy's own Google rating, read once for the whole grid. */
+  google?: { rating: string; reviewCount: string };
+  priority?: boolean;
+}) {
   const href = `/courses/${subject.slug}`;
   const count = subject._count.courses;
 
@@ -37,16 +47,16 @@ export function SubjectCard({ subject, priority = false }: { subject: Subject; p
         <CourseMedia
           title={subject.name}
           assetId={subject.imageAssetId}
-          ratio="aspect-[4/3]"
+          ratio="aspect-[16/9]"
           priority={priority}
-          className="opacity-70"
+          className="[&>img]:saturate-[0.78] [&>img]:contrast-[0.94]"
         />
       ) : (
         <Link href={href} tabIndex={-1} aria-hidden className="block">
           <CourseMedia
             title={subject.name}
             assetId={subject.imageAssetId}
-            ratio="aspect-[4/3]"
+            ratio="aspect-[16/9]"
             priority={priority}
           />
         </Link>
@@ -65,6 +75,15 @@ export function SubjectCard({ subject, priority = false }: { subject: Subject; p
 
         {subject.tagline && (
           <p className="t-small muted mt-2 leading-relaxed">{subject.tagline}</p>
+        )}
+
+        {google && (
+          <GoogleBadge
+            rating={google.rating}
+            reviewCount={google.reviewCount}
+            compact
+            className="mt-3"
+          />
         )}
 
         <div className="mt-auto pt-5">

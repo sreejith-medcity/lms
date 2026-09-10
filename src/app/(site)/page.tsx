@@ -84,6 +84,11 @@ export default async function Home() {
     reviewBadgeHtml,
   ] = await hero;
 
+  const google =
+    googleRating.trim() && googleCount.trim()
+      ? { rating: googleRating.trim(), reviewCount: googleCount.trim() }
+      : undefined;
+
   return (
     <>
       <HomeHero
@@ -92,11 +97,7 @@ export default async function Home() {
         highlight={heroHighlight.trim()}
         blurb={heroBlurb.trim()}
         imageAssetId={heroImage.trim() || null}
-        google={
-          googleRating.trim() && googleCount.trim()
-            ? { rating: googleRating.trim(), reviewCount: googleCount.trim() }
-            : null
-        }
+        google={google ?? null}
         badgeHtml={reviewBadgeHtml}
         sampleId={samples?.id ?? null}
       />
@@ -116,9 +117,17 @@ export default async function Home() {
             and curriculum.
           </p>
 
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {/* A wrapping grid on a wide screen; a snapping rail on a phone,
+              because ten cards stacked is a very long scroll past the thing
+              somebody actually came for. The storefront does the same. */}
+          <div
+            className="rail mt-7 -mx-4 flex snap-x gap-4 px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2
+              sm:overflow-visible sm:px-0 lg:grid-cols-3 xl:grid-cols-5"
+          >
             {site.homeCategories.map((c, i) => (
-              <SubjectCard key={c.slug} subject={c} priority={i < 5} />
+              <div key={c.slug} className="w-[min(20rem,78vw)] shrink-0 snap-start sm:w-auto">
+                <SubjectCard subject={c} google={google} priority={i < 5} />
+              </div>
             ))}
           </div>
         </section>
