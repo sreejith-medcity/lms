@@ -3,7 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { ratioOf, parseHex, contrastRatio, tokensIn, splitThemes, AA_TEXT } from '../src/lib/contrast';
+import {
+  ratioOf,
+  parseHex,
+  contrastRatio,
+  tokensIn,
+  rawTokensIn,
+  resolveColor,
+  splitThemes,
+  AA_TEXT,
+} from '../src/lib/contrast';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const css = readFileSync(join(root, 'src', 'app', 'globals.css'), 'utf8');
@@ -89,4 +98,60 @@ test('order does not change the ratio', () => {
   const a = parseHex('#322046')!;
   const b = parseHex('#fdb85b')!;
   assert.equal(contrastRatio(a, b), contrastRatio(b, a));
+});
+
+/**
+ * The tinted panels.
+ *
+ * The three surfaces above are not the only backgrounds text sits on: the
+ * product also has soft brand and amber panels, and those are `color-mix`
+ * values the plain token reader skips. A note on one of them measured 4.36:1
+ * and nothing caught it, because the check could not see the background. It
+ * can now.
+ */
+for (const [name, block] of [
+  ['light', themes.light],
+  ['dark', themes.dark],
+] as const) {
+  test(`${name} theme: text on the tinted panels clears AA`, () => {
+    const raw = rawTokensIn(block);
+    const failures: string[] = [];
+
+    for (const bgName of ['brand-soft', 'accent-soft', 'ok-soft', 'warn-soft', 'bad-soft']) {
+      const bg = resolveColor(raw[bgName], raw);
+      if (!bg) continue;
+
+      // ink-3 is deliberately absent: it is the faintest grey in the product
+      // and it is not for tinted panels. Anything written on one of these uses
+      // ink or ink-2, and this is what holds that line.
+      for (const fgName of ['ink', 'ink-2']) {
+        const fg = resolveColor(raw[fgName], raw);
+        if (!fg) continue;
+        const ratio = contrastRatio(fg, bg);
+        if (ratio < AA_TEXT) {
+          failures.push(`--${fgName} on --${bgName} is ${ratio.toFixed(2)}:1, needs ${AA_TEXT}`);
+        }
+      }
+    }
+
+    assert.deepEqual(failures, [], `\n${failures.join('\n')}\n`);
+  });
+}
+
+test('the accent panel can carry the warning ink, which is what the badges use', () => {
+  const raw = rawTokensIn(themes.light);
+  const bg = resolveColor(raw['accent-soft'], raw);
+  const fg = resolveColor(raw.warn, raw);
+  assert.ok(bg && fg);
+  const ratio = contrastRatio(fg!, bg!);
+  assert.ok(ratio >= AA_TEXT, `--warn on --accent-soft is ${ratio.toFixed(2)}:1`);
+});
+
+test('resolveColor follows a var and a color-mix, and gives up rather than guessing', () => {
+  const tokens = { brand: '#322046', soft: 'color-mix(in srgb, var(--brand) 10%, white)' };
+  assert.deepEqual(resolveColor('var(--brand)', tokens), [0x32, 0x20, 0x46]);
+  // 10% of #322046 over white, channel by channel.
+  assert.deepEqual(resolveColor(tokens.soft, tokens), [235, 233, 237]);
+  assert.equal(resolveColor('oklch(0.6 0.1 200)', tokens), null);
+  assert.equal(resolveColor('var(--nope)', tokens), null);
 });

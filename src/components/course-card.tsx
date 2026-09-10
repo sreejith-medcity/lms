@@ -1,72 +1,169 @@
-import { languageName } from '@/lib/language';
 import Link from 'next/link';
 import { formatMoney } from '@/lib/money';
-import { learningFormat, materialCount, type CourseCard as Card } from '@/lib/site';
-import { Badge } from '@/components/ui';
+import {
+  courseHighlights,
+  materialCount,
+  metaLine,
+  savingPercent,
+  type CourseCard as Card,
+} from '@/lib/site';
+import { CourseMedia } from '@/components/course-media';
+import { Rating } from '@/components/rating';
 
-/** One card, used by the homepage, the catalogue and the category pages. */
-export function CourseCard({ card }: { card: Card }) {
+/**
+ * One course, as a card.
+ *
+ * Two deliberate departures from the card this replaces. The whole card is no
+ * longer one big link: a buyer browsing a catalogue wants two different things
+ * from a card, to read more or to enrol, and a single link forces the second
+ * through the first. And artwork now leads, because a wall of text cards is
+ * how a catalogue of sixty courses becomes unreadable.
+ *
+ * Everything on it is read from the course. There is no field here an
+ * institute can fill in with a claim the course does not support.
+ */
+export function CourseCard({
+  card,
+  rating,
+  priority = false,
+}: {
+  card: Card;
+  rating?: { average: number; count: number };
+  priority?: boolean;
+}) {
   const plan = card.pricingPlans[0];
   const batch = card.course?.batches[0];
-  const lessons = materialCount(card);
-  const format = learningFormat(card);
   const category = card.course?.categories[0]?.category;
+  const saving = savingPercent(plan);
+  const highlights = courseHighlights(card);
+  const href = `/course/${card.slug}`;
+  const lessons = materialCount(card);
 
   return (
-    <Link
-      href={`/course/${card.slug}`}
-      className="group flex flex-col rounded-[var(--radius)] border bg-[var(--surface)] p-5 shadow-sm
-        transition hover:-translate-y-0.5 hover:border-[var(--brand)] hover:shadow-md
-        focus-visible:border-[var(--brand)] motion-reduce:hover:translate-y-0"
+    <article
+      className="lift group flex flex-col overflow-hidden rounded-[var(--radius-lg)] border
+        bg-[var(--surface)] shadow-sm"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        {category && <Badge tone="brand">{category.name}</Badge>}
-        <Badge tone="neutral">{format}</Badge>
-        {card.course?.level && <Badge tone="neutral">{card.course.level}</Badge>}
-      </div>
+      <Link href={href} tabIndex={-1} aria-hidden className="block">
+        <CourseMedia title={card.title} assetId={card.course?.thumbnailAssetId} priority={priority} />
+      </Link>
 
-      <h3 className="mt-3 text-base font-semibold leading-snug group-hover:text-[var(--brand)]">
-        {card.title}
-      </h3>
-
-      {card.course?.description && (
-        <p className="t-small muted mt-1.5 line-clamp-2">{card.course.description}</p>
-      )}
-
-      <p className="t-small faint mt-3">
-        {lessons > 0 ? `${lessons} lesson${lessons === 1 ? '' : 's'}` : 'Curriculum in preparation'}
-        {languageName(card.course?.language) ? ` · ${languageName(card.course?.language)}` : ''}
-        {plan?.validityDays ? ` · ${plan.validityDays} days access` : ''}
-      </p>
-
-      <div className="mt-4 flex items-end justify-between gap-3 border-t pt-4">
-        <div>
-          {plan ? (
-            <>
-              <span className="text-lg font-semibold tabular-nums">
-                {formatMoney(plan.pricePaise, plan.currency)}
-              </span>
-              {plan.mrpPaise && plan.mrpPaise > plan.pricePaise && (
-                <span className="t-small faint ml-2 line-through tabular-nums">
-                  {formatMoney(plan.mrpPaise, plan.currency)}
-                </span>
-              )}
-              <span className="t-micro faint block">plus applicable taxes</span>
-            </>
-          ) : (
-            <span className="t-small faint">Price on enquiry</span>
+      <div className="flex flex-1 flex-col gap-2.5 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {category && (
+            <span className="t-eyebrow" style={{ color: 'var(--brand)' }}>
+              {category.name}
+            </span>
+          )}
+          {card.isFeatured && (
+            <span
+              className="t-eyebrow rounded-full px-2 py-0.5"
+              style={{ background: 'var(--accent-soft)', color: 'var(--warn)' }}
+            >
+              Popular
+            </span>
           )}
         </div>
 
-        {batch?.startDate && (
-          <span className="t-small faint shrink-0 text-right">
-            Next batch
-            <span className="block font-medium text-[var(--ink-2)]">
-              {batch.startDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-            </span>
-          </span>
+        <h3 className="t-card-title">
+          <Link href={href} className="transition group-hover:text-[var(--brand)]">
+            {card.title}
+          </Link>
+        </h3>
+
+        <p className="t-small faint">{metaLine(card)}</p>
+
+        {rating && <Rating average={rating.average} count={rating.count} />}
+
+        {card.course?.description && (
+          <p className="t-small muted line-clamp-2 leading-relaxed">{card.course.description}</p>
         )}
+
+        <ul className="mt-0.5 space-y-1.5">
+          {highlights.map((h) => (
+            <li key={h} className="t-small flex items-start gap-2">
+              <Check />
+              <span className="muted">{h}</span>
+            </li>
+          ))}
+        </ul>
+
+        {/* Everything above this line grows. Price and buttons sit on the
+            baseline of every card in the row, whatever the title wrapped to. */}
+        <div className="mt-auto pt-3">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            {plan ? (
+              <>
+                <span className="text-lg font-bold tabular-nums">
+                  {formatMoney(plan.pricePaise, plan.currency)}
+                </span>
+                {plan.mrpPaise && plan.mrpPaise > plan.pricePaise && (
+                  <span className="t-small faint line-through tabular-nums">
+                    {formatMoney(plan.mrpPaise, plan.currency)}
+                  </span>
+                )}
+                {saving && (
+                  <span
+                    className="t-small rounded-full px-1.5 py-0.5 font-semibold"
+                    style={{ background: 'var(--ok-soft)', color: 'var(--ok)' }}
+                  >
+                    {saving}% off
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-lg font-bold">Price on enquiry</span>
+            )}
+          </div>
+
+          <p className="t-small faint mt-0.5">
+            {plan ? 'plus applicable taxes' : 'Talk to us about this course'}
+            {batch?.startDate
+              ? ` · next batch ${batch.startDate.toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                })}`
+              : lessons > 0
+                ? ' · start today'
+                : ''}
+          </p>
+
+          <div className="mt-3.5 grid grid-cols-2 gap-2">
+            <Link
+              href={href}
+              className="inline-flex h-10 items-center justify-center rounded-[var(--radius-sm)] border
+                bg-[var(--surface)] px-3 text-sm font-medium transition
+                hover:border-[var(--brand)] hover:text-[var(--brand)]"
+            >
+              Details
+            </Link>
+            <Link
+              href={`${href}#enrol`}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[var(--radius-sm)]
+                px-3 text-sm font-semibold transition hover:brightness-105"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+            >
+              Enrol now
+              <span aria-hidden>→</span>
+            </Link>
+          </div>
+        </div>
       </div>
-    </Link>
+    </article>
+  );
+}
+
+function Check() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className="mt-[0.2rem] h-3.5 w-3.5 shrink-0">
+      <path
+        d="M2 8.6l4 4L14 4"
+        fill="none"
+        stroke="var(--brand)"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

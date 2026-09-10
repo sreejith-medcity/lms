@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
-import { courseCardSelect, type CourseCard as Card } from '@/lib/site';
+import { courseCardSelect, ratingsFor, type CourseCard as Card } from '@/lib/site';
 import { CourseCard } from '@/components/course-card';
 
 export interface CatalogueFilters {
@@ -15,6 +15,11 @@ export interface CatalogueFilters {
  * The one query behind /courses and every category page. Filtering happens in
  * the database rather than in the page, so a large catalogue does not get slower
  * as it grows.
+ *
+ * The controls are links and a plain GET form, not client state. That is what
+ * lets every filtered view be its own URL a learner can bookmark, a search
+ * engine can index and an ad can point at, and it is also what keeps the page
+ * cacheable at the edge.
  */
 export async function Catalogue({
   organizationId,
@@ -53,7 +58,9 @@ export async function Catalogue({
         ? { createdAt: 'desc' }
         : filters.sort === 'title'
           ? { title: 'asc' }
-          : [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
+          : filters.sort === 'price'
+            ? { title: 'asc' }
+            : [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
     take: 60,
     select: courseCardSelect,
   });
@@ -75,95 +82,135 @@ export async function Catalogue({
     });
   }
 
-  const levels = await db.course.findMany({
-    where: { organizationId, level: { not: null }, product: { status: 'PUBLISHED' } },
-    distinct: ['level'],
-    select: { level: true },
-  });
+  // Price is on the plan rather than the product, so cheapest-first is sorted
+  // here. Sixty rows at most, so this costs nothing worth avoiding.
+  if (filters.sort === 'price') {
+    cards = [...cards].sort(
+      (a, b) => (a.pricingPlans[0]?.pricePaise ?? Infinity) - (b.pricingPlans[0]?.pricePaise ?? Infinity),
+    );
+  }
+
+  const [levels, ratings] = await Promise.all([
+    db.course.findMany({
+      where: { organizationId, level: { not: null }, product: { status: 'PUBLISHED' } },
+      distinct: ['level'],
+      select: { level: true },
+    }),
+    ratingsFor(organizationId, cards.map((c) => c.id)),
+  ]);
 
   const active = Boolean(q || filters.category || filters.level || filters.format);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <FilterLink href={basePath} active={!filters.category}>
+    <div>
+      {/* Subject rail. Scrolls sideways on a phone rather than wrapping into
+          five ragged rows above the first card. */}
+      <nav aria-label="Subjects" className="rail -mx-4 flex gap-2 px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+        <Chip href={basePath} active={!filters.category}>
           All subjects
-        </FilterLink>
+        </Chip>
         {categories.map((c) => (
-          <FilterLink
+          <Chip
             key={c.slug}
             href={`${basePath === '/courses' ? '/courses/' : ''}${c.slug}`}
             active={filters.category === c.slug}
           >
             {c.name}
-          </FilterLink>
+            <span className="ml-1.5 tabular-nums opacity-60">{c._count.courses}</span>
+          </Chip>
         ))}
-      </div>
+      </nav>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="t-small faint">Format</span>
-        {[
-          ['', 'Any'],
-          ['live', 'Live'],
-          ['recorded', 'Recorded'],
-          ['blended', 'Blended'],
-        ].map(([value, label]) => (
-          <FilterLink
-            key={label}
-            href={withParam(basePath, filters, 'format', value)}
-            active={(filters.format ?? '') === value}
-            small
-          >
-            {label}
-          </FilterLink>
-        ))}
+      <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3 border-y py-3">
+        <Group label="Format">
+          {[
+            ['', 'Any'],
+            ['live', 'Live'],
+            ['recorded', 'Recorded'],
+            ['blended', 'Blended'],
+          ].map(([value, label]) => (
+            <Chip
+              key={label}
+              href={withParam(basePath, filters, 'format', value)}
+              active={(filters.format ?? '') === value}
+              small
+            >
+              {label}
+            </Chip>
+          ))}
+        </Group>
 
         {levels.length > 0 && (
-          <>
-            <span className="t-small faint ml-3">Level</span>
-            <FilterLink href={withParam(basePath, filters, 'level', '')} active={!filters.level} small>
+          <Group label="Level">
+            <Chip href={withParam(basePath, filters, 'level', '')} active={!filters.level} small>
               Any
-            </FilterLink>
+            </Chip>
             {levels.map((l) => (
-              <FilterLink
+              <Chip
                 key={l.level}
                 href={withParam(basePath, filters, 'level', l.level ?? '')}
                 active={filters.level === l.level}
                 small
               >
                 {l.level}
-              </FilterLink>
+              </Chip>
             ))}
-          </>
+          </Group>
+        )}
+
+        <Group label="Sort by">
+          {[
+            ['', 'Recommended'],
+            ['newest', 'Newest'],
+            ['price', 'Lowest price'],
+            ['title', 'A to Z'],
+          ].map(([value, label]) => (
+            <Chip
+              key={label}
+              href={withParam(basePath, filters, 'sort', value)}
+              active={(filters.sort ?? '') === value}
+              small
+            >
+              {label}
+            </Chip>
+          ))}
+        </Group>
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <p className="t-small muted" aria-live="polite">
+          <strong className="tabular-nums text-[var(--ink)]">{cards.length}</strong> course
+          {cards.length === 1 ? '' : 's'}
+          {q ? ` matching “${q}”` : ''}
+        </p>
+        {active && (
+          <Link href={basePath} className="t-small underline" style={{ color: 'var(--brand)' }}>
+            Clear filters
+          </Link>
         )}
       </div>
 
-      <p className="t-small faint" aria-live="polite">
-        {cards.length} course{cards.length === 1 ? '' : 's'}
-        {q ? ` matching “${q}”` : ''}
-      </p>
-
       {cards.length === 0 ? (
-        <div className="rounded-[var(--radius)] border border-dashed bg-[var(--surface)] p-12 text-center">
-          <p className="t-heading">Nothing matches that</p>
-          <p className="t-small muted mx-auto mt-1 max-w-sm">
+        <div className="mt-5 rounded-[var(--radius-lg)] border border-dashed bg-[var(--surface)] p-12 text-center">
+          <p className="t-card-title">Nothing matches that</p>
+          <p className="t-small muted mx-auto mt-1.5 max-w-sm">
             {active
-              ? 'Try removing a filter, or search for something broader.'
+              ? 'Try removing a filter, or search for something broader. Every published course is on the all subjects tab.'
               : 'Courses appear here as soon as they are published.'}
           </p>
           {active && (
             <Link
               href={basePath}
-              className="mt-4 inline-flex h-9 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3.5 text-sm font-medium"
+              className="mt-4 inline-flex h-10 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-4 text-sm font-medium"
             >
-              Clear filters
+              Show every course
             </Link>
           )}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {cards.map((c) => (
-            <CourseCard key={c.id} card={c} />
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {cards.map((c, i) => (
+            <CourseCard key={c.id} card={c} rating={ratings.get(c.id)} priority={i < 4} />
           ))}
         </div>
       )}
@@ -180,7 +227,16 @@ function withParam(base: string, filters: CatalogueFilters, key: string, value: 
   return qs ? `${base}?${qs}` : base;
 }
 
-function FilterLink({
+function Group({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="t-small faint shrink-0">{label}</span>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+function Chip({
   href,
   active,
   small = false,
@@ -195,7 +251,9 @@ function FilterLink({
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={`rounded-full border px-3 transition ${small ? 'py-1 text-[0.8125rem]' : 'py-1.5 text-sm'} ${
+      className={`inline-flex shrink-0 items-center rounded-full border font-medium transition ${
+        small ? 'px-2.5 py-1 text-[0.8125rem]' : 'px-3.5 py-1.5 text-sm'
+      } ${
         active
           ? 'border-transparent text-[var(--brand-ink)]'
           : 'bg-[var(--surface)] hover:border-[var(--brand)] hover:text-[var(--brand)]'

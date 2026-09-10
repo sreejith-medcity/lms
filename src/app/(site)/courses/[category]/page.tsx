@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { getSiteContext } from '@/lib/site';
 import { NoTenantNotice } from '@/components/tenant-notices';
 import { Catalogue } from '../catalogue';
+import { CatalogueHero } from '../hero';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,28 +48,33 @@ export default async function CategoryPage({
 
   const sp = await searchParams;
   const one = (k: string) => (Array.isArray(sp[k]) ? sp[k][0] : sp[k]) as string | undefined;
+  const filters = {
+    q: one('q'),
+    category: slug,
+    level: one('level'),
+    format: one('format'),
+    sort: one('sort'),
+  };
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-      <h1 className="text-2xl font-semibold tracking-tight">{found.category.name}</h1>
-      <p className="t-small muted mt-1">
-        Every published {found.category.name.toLowerCase()} course at {site.organization.name}.
-      </p>
+    <>
+      <CatalogueHero
+        eyebrow={`${site.organization.name} courses`}
+        title={`${found.category.name} courses`}
+        blurb={`Every published ${found.category.name.toLowerCase()} course, with its format, level, batch dates and price.`}
+        action={`/courses/${slug}`}
+        hidden={{ level: filters.level, format: filters.format, sort: filters.sort }}
+        q={filters.q}
+      />
 
-      <div className="mt-8">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
         <Catalogue
           organizationId={site.organizationId}
           categories={site.categories}
           basePath={`/courses/${slug}`}
-          filters={{
-            q: one('q'),
-            category: slug,
-            level: one('level'),
-            format: one('format'),
-            sort: one('sort'),
-          }}
+          filters={filters}
         />
       </div>
-    </div>
+    </>
   );
 }

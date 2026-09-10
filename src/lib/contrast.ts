@@ -77,3 +77,65 @@ export function splitThemes(css: string): { light: string; dark: string } {
   const at = css.search(/@media \(prefers-color-scheme: dark\)|\[data-theme=["']dark["']\]/);
   return at < 0 ? { light: css, dark: '' } : { light: css.slice(0, at), dark: css.slice(at) };
 }
+
+/** Two colours mixed in sRGB, the way `color-mix(in srgb, a p%, b)` does it. */
+export function mix(a: Rgb, b: Rgb, percentA: number): Rgb {
+  const w = Math.max(0, Math.min(100, percentA)) / 100;
+  return [
+    Math.round(a[0] * w + b[0] * (1 - w)),
+    Math.round(a[1] * w + b[1] * (1 - w)),
+    Math.round(a[2] * w + b[2] * (1 - w)),
+  ];
+}
+
+const NAMED: Record<string, Rgb> = {
+  white: [255, 255, 255],
+  black: [0, 0, 0],
+  transparent: [255, 255, 255],
+};
+
+/**
+ * Resolve one token value to a colour, following `var()` and `color-mix()`.
+ *
+ * The tinted panels in this product are all `color-mix` over another token,
+ * which the plain reader skips. That is how a panel background escaped the
+ * contrast test long enough for text on it to measure 4.36:1: the check only
+ * knew about the colours it could parse. Anything still unresolvable comes
+ * back null, and a caller that gets null should skip rather than assume.
+ */
+export function resolveColor(
+  value: string | undefined,
+  tokens: Record<string, string>,
+  depth = 0,
+): Rgb | null {
+  if (!value || depth > 4) return null;
+  const v = value.trim();
+
+  const named = NAMED[v.toLowerCase()];
+  if (named) return named;
+
+  const direct = parseHex(v);
+  if (direct) return direct;
+
+  const varMatch = v.match(/^var\(\s*--([\w-]+)\s*\)$/);
+  if (varMatch) return resolveColor(tokens[varMatch[1]], tokens, depth + 1);
+
+  const mixMatch = v.match(/^color-mix\(\s*in srgb\s*,\s*(.+?)\s+(\d+)%\s*,\s*(.+?)\s*\)$/);
+  if (mixMatch) {
+    const a = resolveColor(mixMatch[1], tokens, depth + 1);
+    const b = resolveColor(mixMatch[3], tokens, depth + 1);
+    if (!a || !b) return null;
+    return mix(a, b, Number(mixMatch[2]));
+  }
+
+  return null;
+}
+
+/** Every custom property in a block, hex or not, for resolveColor to chew on. */
+export function rawTokensIn(css: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [, name, value] of css.matchAll(/--([\w-]+):\s*([^;]+);/g)) {
+    out[name] = value.trim();
+  }
+  return out;
+}

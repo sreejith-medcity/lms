@@ -124,6 +124,94 @@ body {
 .t-small   { font-size: 0.8125rem; line-height: 1.25rem; }
 .t-micro   { font-size: 0.6875rem; line-height: 1rem; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
 
+/*
+ * Marketing type scale.
+ *
+ * The scale above is for the dense screens behind a login, where one size at
+ * every width is the right answer. The pages a stranger lands on are the
+ * opposite: a headline that reads well on a laptop is shouting on a phone, so
+ * these steps carry a mobile size and a desktop size. The pairs are the ones
+ * already proven on the WordPress storefront, so the two look like one company
+ * while both are live.
+ */
+.t-eyebrow {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.t-hero {
+  font-size: 2rem;
+  line-height: 1.15;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+}
+.t-section {
+  font-size: 1.5rem;
+  line-height: 1.22;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+}
+.t-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.t-card-title {
+  font-size: 1rem;
+  line-height: 1.35;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+.t-price {
+  font-size: 1.625rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.t-price-sticky {
+  font-size: 1.25rem;
+  line-height: 1.2;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 768px) {
+  .t-hero { font-size: clamp(2rem, 3vw, 2.75rem); }
+  .t-section { font-size: 1.75rem; }
+  .t-lead { font-size: 1rem; }
+  .t-card-title { font-size: 1.0625rem; }
+  .t-price { font-size: 1.75rem; }
+}
+
+/* A horizontal strip of tabs on a phone should scroll, not wrap into four
+   ragged rows, and it should do it without a scrollbar sitting across the
+   bottom of the words. */
+.rail {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.rail::-webkit-scrollbar { display: none; }
+.rail > * { scroll-snap-align: start; }
+
+/* The lift a card gets under a real pointer. Left alone on touch, where there
+   is no hover and the transform only ever fires as a flicker after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  .lift { transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+  .lift:hover {
+    transform: translateY(-4px);
+    border-color: var(--brand-line);
+    box-shadow: 0 16px 34px -12px color-mix(in srgb, var(--brand) 30%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lift:hover { transform: none; }
+}
+
 .muted { color: var(--ink-2); }
 .faint { color: var(--ink-3); }
 

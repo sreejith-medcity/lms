@@ -25,6 +25,28 @@ export interface CourseState {
   pointsWorthPaise: number;
 }
 
+/**
+ * A course page now renders this button three times: in the purchase card, in
+ * the sticky bar on a desktop and in the bar at the bottom of a phone. They
+ * all want the same answer, so they share one request rather than each firing
+ * their own. Keyed by product, so navigating to another course still asks.
+ */
+const inFlight = new Map<string, Promise<CourseState | null>>();
+
+function courseState(productId: string): Promise<CourseState | null> {
+  const existing = inFlight.get(productId);
+  if (existing) return existing;
+
+  const request = fetch(`/api/course-state?productId=${encodeURIComponent(productId)}`, {
+    cache: 'no-store',
+  })
+    .then((response) => (response.ok ? (response.json() as Promise<CourseState>) : null))
+    .catch(() => null);
+
+  inFlight.set(productId, request);
+  return request;
+}
+
 export function CourseCta({
   productId,
   isPaid,
@@ -53,17 +75,12 @@ export function CourseCta({
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`/api/course-state?productId=${encodeURIComponent(productId)}`, {
-      cache: 'no-store',
-    })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: CourseState | null) => {
-        if (!cancelled && data) setState(data);
-      })
-      .catch(() => {
-        // The anonymous call to action is already on screen and works. A
-        // failure here should never take the buy button away from somebody.
-      });
+    // The anonymous call to action is already on screen and works. A failure
+    // here should never take the buy button away from somebody, so a null
+    // answer simply leaves it as it is.
+    courseState(productId).then((data) => {
+      if (!cancelled && data) setState(data);
+    });
 
     return () => {
       cancelled = true;

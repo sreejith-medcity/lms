@@ -58,11 +58,25 @@ export async function GET(
     select: { id: true },
   });
 
+  // Course artwork is public for the same reason. It is the picture on the
+  // catalogue card and at the top of the sales page, both of which are pages
+  // we want a search engine and a stranger to see. Only the thumbnail of a
+  // published, undeleted course qualifies: this does not open the library.
+  const artwork = await db.course.findFirst({
+    where: {
+      organizationId: tenant.organizationId,
+      thumbnailAssetId: asset.id,
+      product: { status: 'PUBLISHED', deletedAt: null },
+    },
+    select: { id: true },
+  });
+
   const user = await getSessionUser();
   const sameOrg = user?.organizationId === tenant.organizationId;
 
   // Staff see everything in their own organisation.
-  let allowed = Boolean(branding) || Boolean(user && sameOrg && user.kind === 'STAFF');
+  let allowed =
+    Boolean(branding) || Boolean(artwork) || Boolean(user && sameOrg && user.kind === 'STAFF');
 
   // Anyone, signed in or not, may see a material marked as a free preview.
   const freePreview = asset.materials.some((m) => m.isFreePreview);
@@ -175,8 +189,20 @@ export async function GET(
 
   // The redirect itself is never cached, because it is the answer to "may this
   // person see this file". Only its destination is cacheable.
+  //
+  // Public course artwork is the exception, and it has to be: a catalogue of
+  // sixty cards would otherwise be sixty permission checks against the database
+  // on every single page view. The answer there does not depend on who is
+  // asking, so it can be held at the edge. Two minutes is comfortably inside
+  // the five-minute life of the link it points at.
+  const publicArtwork = Boolean(artwork) && !streaming;
+
   return NextResponse.redirect(new URL(url, request.url), {
     status: 302,
-    headers: { 'Cache-Control': 'private, no-store' },
+    headers: {
+      'Cache-Control': publicArtwork
+        ? 'public, max-age=60, s-maxage=120'
+        : 'private, no-store',
+    },
   });
 }
