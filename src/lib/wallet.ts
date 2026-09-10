@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { mayAwardInternally } from '@/lib/loyalty-provider';
 import type { Prisma } from '@prisma/client';
 
 /**
@@ -166,6 +167,11 @@ export async function creditOnSignup(input: {
   referralCode?: string | null;
 }): Promise<void> {
   try {
+    // Silent when loyalty has moved to the separate platform. It is told what
+    // happened through the ordinary webhooks and does its own arithmetic; two
+    // engines both crediting is how a learner earns twice for one purchase.
+    if (!(await mayAwardInternally(input.organizationId))) return;
+
     const config = await loyaltyConfig(input.organizationId);
     if (!config.enabled) return;
 
@@ -238,6 +244,11 @@ export async function creditOnPurchase(input: {
   orderId: string;
 }): Promise<void> {
   try {
+    // Silent when loyalty has moved to the separate platform. It is told what
+    // happened through the ordinary webhooks and does its own arithmetic; two
+    // engines both crediting is how a learner earns twice for one purchase.
+    if (!(await mayAwardInternally(input.organizationId))) return;
+
     const config = await loyaltyConfig(input.organizationId);
     if (!config.enabled || config.referralPurchaseCredit <= 0) return;
 

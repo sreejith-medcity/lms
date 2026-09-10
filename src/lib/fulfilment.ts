@@ -5,6 +5,7 @@ import { markCartConverted } from '@/lib/cart';
 import { credit, creditOnPurchase } from '@/lib/wallet';
 import { reportConversion } from '@/lib/analytics-server';
 import { emit } from '@/lib/webhooks';
+import { memberRef } from '@/lib/loyalty-provider';
 import { queueNotifications } from '@/lib/notify';
 
 /**
@@ -515,12 +516,19 @@ async function tellTheWorld(input: {
     phone: buyer?.phone ?? null,
   });
 
+  // The member travels with the event. A loyalty platform on the other end
+  // matches on email and needs a name to greet somebody by; sending only a
+  // user id would make it useless without a second call back into here.
+  const member = buyer ? memberRef(buyer) : null;
+
   await emit(input.organizationId, 'payment.captured', {
     orderId: input.orderId,
     orderNo: input.orderNo,
     amountPaise: input.amountPaise,
     invoiceNo: input.invoiceNo ?? null,
     userId: input.userId,
+    member,
+    items: items.map((row) => row.titleSnapshot),
   });
 
   if (input.enrollmentIds.length) {
@@ -528,6 +536,8 @@ async function tellTheWorld(input: {
       orderNo: input.orderNo,
       userId: input.userId,
       enrollmentIds: input.enrollmentIds,
+      member,
+      items: items.map((row) => row.titleSnapshot),
     });
   }
 }

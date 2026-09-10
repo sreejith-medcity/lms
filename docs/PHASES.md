@@ -241,45 +241,59 @@ Still parked: pricing templates and miscellaneous fees, which need new models.
 Still missing and labelled so: reCAPTCHA has nothing verifying it, and
 secondary field validation at signup was never built.
 
-## Phase 9 — Loyalty as a product of its own
+## Phase 9 — Loyalty, as a separate platform
 
-Modelled on Reward Loyalty (rewardloyalty.co/docs/5.x), a self-hosted loyalty
-platform, and scoped to the parts that make sense for an institute rather than a
-coffee shop. Phase 4 already built the half that an LMS needs on its own: a
-points ledger, referral codes, and redemption capped at checkout. This is the
-rest of it, and it is the first phase that is not about catching Edmingle.
+**Changed direction.** Reward Loyalty 4.x is licensed already, so the scheme is
+not being rebuilt here. It runs as its own platform and this product's job is
+to be a good citizen of it: report what a learner did, and get out of the way
+of the arithmetic.
 
-**Stamp cards.** Attend eight classes, get the ninth free. Closer to how a
-coaching institute actually rewards regulars than a points balance is, because
-it is legible without arithmetic.
+That is a better split than the original plan. Stamp cards, vouchers, prepaid
+passes, member cards and wallet passes are a product in their own right, and
+building a second-rate version of something already bought would have been the
+wrong use of the time.
 
-**Vouchers.** Batch-generated codes with QR claiming, distinct from promo codes:
-a promo code is a price rule anybody may use, a voucher is an instrument issued
-to one person and spent once. Both exist in mature systems and conflating them
-is why refunds get argued about.
+### What this side needs, and what is built
 
-**Prepaid passes.** A ten-class pass sold at the counter and drawn down by
-attendance, with an expiry. Medcity sells this shape already; it currently lives
-in a register.
+**One engine at a time.** Phase 4 put points and referrals inside this product,
+and they are still running. Two engines both crediting means a learner earns
+twice for one purchase and the ledgers disagree forever, so there is a single
+setting with three values, read in one place:
 
-**Achievements.** Finished a module, sat every class in a month, passed at the
-first attempt. Optional credit attached. Worth building only after Phase 5,
-because an achievement nobody can measure is a badge nobody trusts.
+- `built-in` — the wallet here awards and redeems. The default, because it is
+  what runs today and switching an academy's scheme off by accident is worse
+  than a stale default.
+- `external` — this product awards nothing and reports everything.
+- `off` — for an academy with no scheme, as distinct from one that has not
+  configured it yet.
 
-**Member cards.** One identity a learner can present at the counter: QR,
-barcode, NFC, or a plain number for the branch that has no scanner. This is the
-piece that makes the front desk faster rather than the app prettier.
+Every earn path asks before crediting. Anything unrecognised in that setting
+falls back to `built-in` rather than silently stopping the scheme.
 
-**Wallet passes.** Apple and Google Wallet, which needs an Apple developer
-certificate and a Google service account before a line of it is worth writing.
+**The events, on the wire it already has.** Signed outbound webhooks exist, so
+the rewards platform subscribes to them rather than waiting for a bespoke API:
+`enrolment.created`, `payment.captured`, `attendance.recorded`,
+`course.completed`, `payment.refunded`. The names are declared in one place
+because the other side subscribes to them and a typo is a scheme that quietly
+never awards for one kind of event.
 
-**A QR studio** to make the codes look like Medcity's rather than like a
-default, and **POS or counter mode** for staff issuing and redeeming at a branch.
+**The member travels with the event.** Email, phone, name and this product's
+own user id. Email is the join key because it is the only thing both systems
+reliably have; the internal id goes too, so a learner who changes their email
+keeps their balance instead of becoming a second member.
 
-Sequencing: this needs new models for every noun above, so it belongs after
-Phase 8's migration rather than in the middle of it. Two pieces could be pulled
-forward if the front desk wants them sooner, and both are self-contained: member
-cards, and prepaid passes.
+**A connector card**, with the mappings an install needs and a `requires` note
+saying plainly that the endpoint names must be confirmed against the version
+actually purchased. What is written here is what this product sends, not what
+any particular release expects to receive.
+
+### Not built, and deliberately
+
+Redemption at checkout. Quoting what a member may spend and burning it against
+an order is the money path, needs idempotency against a system nobody here has
+seen, and wants the real API in front of it. The seam is ready; the burn is not
+written, and a card that claimed otherwise would be the worst kind of lie in
+this codebase.
 
 ---
 

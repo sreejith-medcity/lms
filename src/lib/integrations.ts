@@ -107,6 +107,7 @@ export const INTEGRATION_CATEGORIES = [
   { key: 'forms', group: 'Communication and support', label: 'Forms and surveys', blurb: 'Where an enquiry is first typed.' },
 
   { key: 'payments', group: 'Sales, teaching and operations', label: 'Payments and billing', blurb: 'Course fees, and the institute’s own subscription. Not the same thing.' },
+  { key: 'loyalty', group: 'Sales, teaching and operations', label: 'Loyalty and rewards', blurb: 'Points, stamps and passes, run by a platform of its own.' },
   { key: 'subscription', group: 'Sales, teaching and operations', label: 'Institute subscription billing', blurb: 'What the institute pays us. Kept apart from what students pay the institute, on purpose.' },
   { key: 'accounting', group: 'Sales, teaching and operations', label: 'Accounting', blurb: 'Getting invoices to whoever keeps the books.' },
   { key: 'meeting', group: 'Sales, teaching and operations', label: 'Live classes and calendars', blurb: 'Where a class happens, and who is expected at it.' },
@@ -1242,6 +1243,33 @@ export const INTEGRATIONS: IntegrationDef[] = [
     alternativeTo: 'google_forms',
     requires: 'A Zoho OAuth client with ZohoForms.form.READ, on the correct datacentre.',
     fields: [TEXT('formLinkName', 'Form link name'), TEXT('clientId', 'Client ID'), KEY('clientSecret', 'Client secret'), KEY('refreshToken', 'Refresh token')],
+  },
+
+  /* Loyalty ---------------------------------------------------------------- */
+  {
+    id: 'reward_loyalty',
+    name: 'Reward Loyalty',
+    category: 'loyalty',
+    priority: 2,
+    purpose:
+      'Points, stamp cards, vouchers and prepaid passes, run as a platform of its own rather than as a corner of this one. This product reports what a learner did; the scheme decides what it is worth.',
+    status: 'planned',
+    landsIn: 'Phase 9',
+    requires:
+      'A Reward Loyalty install with API access, its base URL and an API key, and the program identifier. Confirm the endpoint names against your own version before connecting: the payloads below are what this product sends, not what any particular release expects to receive.',
+    fallback:
+      'The points and referral wallet built into this product keep running, which is the default and is fine until the scheme needs stamps, vouchers or passes.',
+    fields: [
+      URLF('baseUrl', 'API base URL', 'https://rewards.example.com/api'),
+      KEY('apiKey', 'API key'),
+      TEXT('programId', 'Program ID', undefined, 'Optional where the install runs one program.'),
+    ],
+    mappings: [
+      { key: 'memberEmail', label: 'Member email field', help: 'What the scheme calls the address it matches a member on.', suggested: 'email' },
+      { key: 'memberPhone', label: 'Member phone field', suggested: 'mobile' },
+      { key: 'externalId', label: 'External member id field', help: 'Where it stores this product\'s user id, so a member survives an email change.', suggested: 'external_id' },
+      { key: 'earnEvent', label: 'Earn event name', help: 'What it calls the event that awards on a purchase.', suggested: 'purchase' },
+    ],
   },
 
   /* Institute subscription billing ----------------------------------------- */
