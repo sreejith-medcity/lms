@@ -84,3 +84,21 @@ test('reports every problem in a file, not just the first', () => {
   assert.ok(found.includes('directive-first'));
   assert.ok(found.includes('no-server-module-in-client'));
 });
+
+test('catches a node builtin destructured out of a dynamic import', () => {
+  // The real one: this shape works in development and is undefined in the
+  // production bundle, so every upload failed only once deployed.
+  const bad = "const { Readable } = await import('node:stream');";
+  assert.ok(rules(bad).includes('no-destructured-node-import'));
+});
+
+test('a top level import of the same builtin is fine', () => {
+  const good = "import { Readable } from 'node:stream';\nexport const x = Readable;";
+  assert.deepEqual(rules(good), []);
+});
+
+test('a dynamic import of an application module is left alone', () => {
+  // These break circular imports on purpose and are resolved by the bundler.
+  const good = "const { verifyPassword } = await import('@/lib/password');";
+  assert.deepEqual(rules(good), []);
+});

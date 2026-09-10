@@ -1,5 +1,7 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
@@ -305,11 +307,16 @@ export async function deleteObject(key: string): Promise<boolean> {
 
 /* Local chunked writes ---------------------------------------------------- */
 
-/** Appends one chunk to <key>.part, and reports the size so far. */
+/**
+ * Appends one chunk to <key>.part, and reports the size so far.
+ *
+ * `Readable` and `pipeline` are imported at the top of this file rather than
+ * dynamically inside here, which is not a style choice. `const { Readable } =
+ * await import('node:stream')` works in development and yields undefined in
+ * the production bundle, so uploads failed only once deployed, with a message
+ * about a chunk that could not be written and a cause nowhere near it.
+ */
 export async function appendLocalChunk(key: string, body: ReadableStream<Uint8Array>): Promise<number> {
-  const { Readable } = await import('node:stream');
-  const { pipeline } = await import('node:stream/promises');
-
   const partPath = localPathFor(`${key}.part`);
   await mkdir(dirname(partPath), { recursive: true });
 

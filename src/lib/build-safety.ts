@@ -124,7 +124,14 @@ export function auditBuildSafety(root: string): Violation[] {
   const violations: Violation[] = [];
 
   for (const file of walk(join(root, 'src'))) {
-    violations.push(...checkSource(file.slice(root.length + 1), readFileSync(file, 'utf8')));
+    const relative = file.slice(root.length + 1);
+
+    // This file necessarily contains examples of every pattern it looks for,
+    // in the comments explaining why each one is a mistake. Checking itself
+    // would report those examples as the mistakes they describe.
+    if (relative === 'src/lib/build-safety.ts') continue;
+
+    violations.push(...checkSource(relative, readFileSync(file, 'utf8')));
   }
 
   violations.push(...auditPermissionKeys(root));
@@ -186,7 +193,29 @@ export function checkSource(relative: string, source: string): Violation[] {
   }
 
   /**
-   * Rule three. A client component that imports a server module drags it into
+   * Rule three.
+   *
+   * Destructuring a Node builtin out of a dynamic import gives undefined in
+   * the production bundle while working perfectly in development. This cost a
+   * live feature: `const { Readable } = await import('node:stream')` in the
+   * upload path meant every file upload failed once deployed, reporting a
+   * chunk that could not be written, with the cause nowhere near the message.
+   *
+   * Node builtins belong at the top of the file. There is no bundle size
+   * argument for deferring them; they are already in the runtime.
+   */
+  for (const match of source.matchAll(
+    /const\s*\{[^}]*\}\s*=\s*await\s+import\(\s*['"]node:([\w/]+)['"]/g,
+  )) {
+    violations.push({
+      rule: 'no-destructured-node-import',
+      file: relative,
+      detail: `destructures from a dynamic import of node:${match[1]}, which is undefined in the production bundle even though it works in development; import it at the top of the file instead`,
+    });
+  }
+
+  /**
+   * Rule four. A client component that imports a server module drags it into
    * the browser bundle. For most of these that is a build error; for a few it
    * would be worse than an error, because `secrets.ts` holds the code that
    * unseals gateway keys and `integration-store.ts` reads them.

@@ -19,7 +19,16 @@ function emailSender(provider: string, send: Sender['send']): Sender {
 export function smtpSender(values: Credentials): Sender {
   return emailSender('smtp', async (message: OutboundMessage) => {
     try {
-      const nodemailer = await import('nodemailer');
+      // nodemailer is CommonJS, so under ESM interop its exports may arrive on
+      // the namespace or under `default` depending on how the bundler resolved
+      // it. Checking both is three characters and avoids the failure that took
+      // uploads down: a module that works in development and is undefined in
+      // the production build.
+      const imported = await import('nodemailer');
+      const nodemailer =
+        'createTransport' in imported
+          ? imported
+          : (imported as unknown as { default: typeof imported }).default;
 
       // One connection URL rather than five fields, because that is the shape
       // every host hands out and the shape SMTP_URL already has in hPanel.
