@@ -17,14 +17,16 @@ import { HOST_HEADER } from '@/lib/http-headers';
  * into the browser: one server-rendered "Admin" link made every public page
  * per-user, and a page that differs per user cannot be cached for anybody.
  *
- * `/course/<slug>` is deliberately absent. Its purchase panel shows whether
- * you are already enrolled and how many loyalty points you could spend, so it
- * is genuinely different for each person. Moving that into the browser is a
- * change to the money path and wants doing on its own.
+ * `/course/<slug>` is on the list now. Its purchase panel used to show whether
+ * you were enrolled and what your points were worth, which made the most
+ * search-valuable page in the product the only public one that could not be
+ * cached. That corner is fetched by the browser after the page arrives, so the
+ * page itself is the same for everybody.
  */
 const CACHEABLE = [
   /^\/$/,
   /^\/courses(\/[\w-]+)?$/,
+  /^\/course\/[\w-]+$/,
   /^\/about$/,
   /^\/contact$/,
   /^\/help$/,

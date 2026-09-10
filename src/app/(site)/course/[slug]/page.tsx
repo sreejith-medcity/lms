@@ -3,15 +3,13 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
-import { getSessionUser } from '@/lib/auth';
 import { getSiteContext } from '@/lib/site';
 import { formatMoney } from '@/lib/money';
 import { MATERIAL_LABELS, formatDuration } from '@/lib/progress';
 import { Badge, LinkButton } from '@/components/ui';
 import { NoTenantNotice } from '@/components/tenant-notices';
-import { EnrolButton } from './enrol-button';
+import { CourseCta } from './course-cta';
 import { Curriculum } from './curriculum';
-import { loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,39 +136,14 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   }
 
   const { site, product, course } = found;
-  const user = await getSessionUser();
-
   const plan = product.pricingPlans[0];
   const isFree = !plan || plan.pricePaise === 0;
 
-  // What this learner's points could take off, worked out here so the button can
-  // offer a figure rather than an abstraction.
-  const loyalty = await loyaltyConfig(site.organizationId);
-  const walletBalance =
-    user && loyalty.enabled && plan
-      ? (
-          await db.walletAccount.findUnique({
-            where: { userId: user.id },
-            select: { balancePoints: true },
-          })
-        )?.balancePoints ?? 0
-      : 0;
-  const pointsWorthPaise = plan
-    ? pointsToPaise(redeemablePoints(walletBalance, plan.pricePaise, loyalty), loyalty)
-    : 0;
-
-  const [enrollment, instructors] = await Promise.all([
-    user
-      ? db.enrollment.findFirst({
-          where: {
-          organizationId: site.organizationId,
-          userId: user.id,
-          productId: product.id,
-          status: { notIn: ['CANCELLED', 'ARCHIVED'] },
-        },
-          select: { id: true },
-        })
-      : Promise.resolve(null),
+  // Nothing on this page depends on who is looking any more. Whether they are
+  // enrolled, whether they are signed in and what their points are worth are
+  // all fetched by the call to action after the page has arrived, which is
+  // what lets a cache hold the page at all.
+  const [instructors] = await Promise.all([
     // Named only where a trainer is actually assigned to a running batch.
     db.user.findMany({
       where: {
@@ -451,22 +424,15 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             <PriceBlock plan={plan} isFree={isFree} />
 
             <div className="mt-5">
-              {enrollment ? (
-                <LinkButton href={`/learn/${product.id}`} className="w-full justify-center" size="lg">
-                  Continue learning
-                </LinkButton>
-              ) : (
-                <EnrolButton
-                  productId={product.id}
-                  signedIn={Boolean(user)}
-                  isPaid={!isFree}
-                  pricingPlanId={plan?.id}
-                  pricePaise={plan?.pricePaise ?? 0}
-                  currency={plan?.currency ?? 'INR'}
-                  pointsWorthPaise={pointsWorthPaise}
-                  fullWidth
-                />
-              )}
+              <CourseCta
+                productId={product.id}
+                isPaid={!isFree}
+                pricingPlanId={plan?.id}
+                pricePaise={plan?.pricePaise ?? 0}
+                currency={plan?.currency ?? 'INR'}
+                learnHref={`/learn/${product.id}`}
+                fullWidth
+              />
             </div>
 
             {preview && (
@@ -496,19 +462,15 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           <div className="min-w-0">
             <PriceBlock plan={plan} isFree={isFree} compact />
           </div>
-          {enrollment ? (
-            <LinkButton href={`/learn/${product.id}`}>Continue</LinkButton>
-          ) : (
-            <EnrolButton
-              productId={product.id}
-              signedIn={Boolean(user)}
-              isPaid={!isFree}
-              pricingPlanId={plan?.id}
-              pricePaise={plan?.pricePaise ?? 0}
-              currency={plan?.currency ?? 'INR'}
-              pointsWorthPaise={pointsWorthPaise}
-            />
-          )}
+          <CourseCta
+            productId={product.id}
+            isPaid={!isFree}
+            pricingPlanId={plan?.id}
+            pricePaise={plan?.pricePaise ?? 0}
+            currency={plan?.currency ?? 'INR'}
+            learnHref={`/learn/${product.id}`}
+            continueLabel="Continue"
+          />
         </div>
       </div>
     </>
