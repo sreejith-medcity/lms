@@ -1,15 +1,24 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { resolveIntegration } from '@/lib/integration-store';
+import { currentRefreshToken, storeRefreshToken } from '@/lib/zoom-connect';
 
 /**
- * Zoom, server to server.
+ * Zoom, two ways in.
  *
- * Server-to-server OAuth rather than the old JWT apps, which Zoom retired, and
- * rather than a user-authorised app, which would tie every class to one person's
- * login and break the week they leave.
+ * A server to server app is the better one: it belongs to the academy rather
+ * than to a person, nothing expires, and it keeps working the week whoever
+ * set it up leaves. It needs an admin on the Zoom account to create it, which
+ * is exactly the wall an academy hits when the Zoom account is somebody
+ * else's.
  *
- * The token lasts an hour and is cached in the process. Asking Zoom for a fresh
- * token on every call is a rate limit waiting to happen on a morning when forty
+ * So there is also the ordinary sign-in: press Connect, log in to Zoom,
+ * approve, and meetings are created as that account. Zoom rotates the refresh
+ * token on every use, so each refresh writes the new one back; missing that
+ * is how this kind of integration works for sixty days and then stops.
+ *
+ * Whichever is configured, the rest of the app sees one client. Access tokens
+ * last an hour and are cached per academy, because asking for a fresh one on
+ * every call is a rate limit waiting to happen on a morning when forty
  * classes are created at once.
  */
 
@@ -39,9 +48,17 @@ export class ZoomError extends Error {
 
 export async function zoomFor(organizationId: string): Promise<ZoomClient | null> {
   const resolved = await resolveIntegration(organizationId, 'zoom');
-  if (!resolved?.complete) return null;
+  if (!resolved) return null;
 
-  const { accountId, clientId, clientSecret } = resolved.values;
+  const { accountId, clientId, clientSecret, refreshToken } = resolved.values;
+  if (!clientId || !clientSecret) return null;
+
+  const mode: 'account' | 'login' | null = accountId
+    ? 'account'
+    : refreshToken
+      ? 'login'
+      : null;
+  if (!mode) return null;
 
   async function token(): Promise<string> {
     const cached = tokens.get(organizationId);
@@ -50,21 +67,43 @@ export async function zoomFor(organizationId: string): Promise<ZoomClient | null
     if (cached && cached.expiresAt > Date.now() + 60_000) return cached.value;
 
     const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const response = await fetch(
-      `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${encodeURIComponent(accountId)}`,
-      { method: 'POST', headers: { authorization: `Basic ${auth}` }, cache: 'no-store' },
-    );
+
+    const url =
+      mode === 'account'
+        ? `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${encodeURIComponent(accountId)}`
+        : `https://zoom.us/oauth/token?grant_type=refresh_token&refresh_token=${encodeURIComponent(
+            await currentRefreshToken(organizationId, refreshToken),
+          )}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { authorization: `Basic ${auth}` },
+      cache: 'no-store',
+    });
 
     const text = await response.text();
     if (!response.ok) {
       throw new ZoomError(
-        `Zoom refused the credentials (${response.status}). ${text.slice(0, 160)}`,
+        mode === 'login'
+          ? `Zoom would not renew the connection (${response.status}). Press Connect on the Zoom card to sign in again. ${text.slice(0, 120)}`
+          : `Zoom refused the credentials (${response.status}). ${text.slice(0, 160)}`,
         response.status,
         response.status === 400 || response.status === 401,
       );
     }
 
-    const parsed = JSON.parse(text) as { access_token: string; expires_in: number };
+    const parsed = JSON.parse(text) as {
+      access_token: string;
+      expires_in: number;
+      refresh_token?: string;
+    };
+
+    // Zoom hands back a new refresh token every time and retires the old one.
+    // Not writing it back is how this works for weeks and then stops.
+    if (mode === 'login' && parsed.refresh_token) {
+      await storeRefreshToken(organizationId, parsed.refresh_token);
+    }
+
     tokens.set(organizationId, {
       value: parsed.access_token,
       expiresAt: Date.now() + parsed.expires_in * 1000,
@@ -73,7 +112,7 @@ export async function zoomFor(organizationId: string): Promise<ZoomClient | null
   }
 
   return {
-    accountId,
+    accountId: accountId || 'login',
     async request<T>(path: string, init: RequestInit = {}): Promise<T> {
       const access = await token();
       const response = await fetch(`https://api.zoom.us/v2${path}`, {

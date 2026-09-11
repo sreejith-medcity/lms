@@ -392,10 +392,17 @@ export const INTEGRATIONS: IntegrationDef[] = [
     fallback: 'Join links are pasted in by hand and recordings uploaded manually.',
     docsUrl: 'https://marketplace.zoom.us/develop/create',
     fields: [
-      TEXT('accountId', 'Account ID', 'ZOOM_ACCOUNT_ID'),
+      TEXT('accountId', 'Account ID', 'ZOOM_ACCOUNT_ID', 'Only for a server to server app. Not needed if you connect with a Zoom login.'),
       TEXT('clientId', 'Client ID', 'ZOOM_CLIENT_ID'),
       KEY('clientSecret', 'Client secret', 'ZOOM_CLIENT_SECRET'),
       KEY('webhookSecret', 'Webhook secret token'),
+      /*
+       * Filled in by pressing Connect rather than typed. It is here so it is
+       * sealed and resolved like every other secret, and so the card can see
+       * whether this academy signed in instead of using an account app.
+       */
+      KEY('refreshToken', 'Zoom login', undefined, 'Only filled in by pressing Connect. Leave this blank.'),
+      TEXT('connectedAs', 'Connected as', undefined, 'Only filled in by pressing Connect. Leave this blank.'),
     ],
   },
   {

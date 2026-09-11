@@ -8,6 +8,7 @@ import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { seal } from '@/lib/secrets';
 import { integrationById } from '@/lib/integrations';
+import { zoomFor } from '@/lib/zoom';
 import { recordIntegrationEvent } from '@/lib/integration-events';
 import { resolveIntegration } from '@/lib/integration-store';
 import type { ActionState } from '@/server/courses';
@@ -198,7 +199,62 @@ export async function testIntegration(provider: string): Promise<ActionState> {
 
     const resolved = await resolveIntegration(tenant.organizationId, provider);
     if (!resolved) return { error: 'No such integration.' };
-    if (!resolved.complete) return { error: 'Something required is still blank.' };
+
+    /*
+     * Zoom is complete two ways: a server to server app, or somebody having
+     * signed in. Judging it by the field list alone would refuse to test a
+     * working connection because the account id box is empty.
+     */
+    const zoomReady =
+      provider === 'zoom' &&
+      Boolean(resolved.values.clientId && resolved.values.clientSecret) &&
+      Boolean(resolved.values.accountId || resolved.values.refreshToken);
+
+    if (!resolved.complete && !zoomReady) {
+      return { error: 'Something required is still blank.' };
+    }
+
+    if (provider === 'zoom') {
+      const client = await zoomFor(tenant.organizationId);
+      if (!client) {
+        return {
+          error:
+            'Zoom needs either an account id with a server to server app, or a sign in through Connect.',
+        };
+      }
+
+      try {
+        const me = await client.request<{ email?: string; type?: number }>('/users/me');
+        await recordIntegrationEvent({
+          organizationId: tenant.organizationId,
+          provider,
+          direction: 'CHECK',
+          action: 'Credential check',
+          ok: true,
+          detail: `Zoom answered as ${me.email ?? 'an account'}.`,
+        });
+
+        // Type 1 is a basic seat, which caps meetings at forty minutes.
+        const basic = me.type === 1;
+        return {
+          ok: true,
+          message: `Zoom is connected as ${me.email ?? 'this account'}.${
+            basic ? ' It is a basic seat, so classes will cut out at forty minutes.' : ''
+          }`,
+        };
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        await recordIntegrationEvent({
+          organizationId: tenant.organizationId,
+          provider,
+          direction: 'CHECK',
+          action: 'Credential check',
+          ok: false,
+          detail,
+        });
+        return { error: detail };
+      }
+    }
 
     if (provider === 'razorpay') {
       const auth = Buffer.from(
