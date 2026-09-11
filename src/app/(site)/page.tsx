@@ -2,8 +2,9 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { db } from '@/lib/db';
 import { getTenantState } from '@/lib/tenant';
-import { getSiteContext, courseCardSelect, type CourseCard as Card } from '@/lib/site';
+import { getSiteContext, courseCardSelect, ratingsFor, type CourseCard as Card } from '@/lib/site';
 import { CourseCard } from '@/components/course-card';
+import { Rail } from '@/components/course-rail';
 import { SetupNotice, NoTenantNotice } from '@/components/tenant-notices';
 import { settingBool, settingText } from '@/lib/settings/store';
 import { SubjectCard } from '@/components/subject-card';
@@ -91,6 +92,33 @@ export default async function Home() {
   const popularOnly = popular.length > 0;
   const cards = (popularOnly ? popular : recent) as unknown as Card[];
 
+  // A rail per subject, for the subjects with enough behind them to fill
+  // one. Three at most on the home page; the catalogue has the rest.
+  const railSubjects = site.homeCategories.filter((c) => c._count.courses >= 3).slice(0, 3);
+  const subjectRails = await Promise.all(
+    railSubjects.map(async (c) => ({
+      category: c,
+      cards: (await db.product.findMany({
+        where: {
+          organizationId: site.organizationId,
+          type: 'COURSE',
+          status: 'PUBLISHED',
+          deletedAt: null,
+          isAddonOnly: false,
+          course: { categories: { some: { category: { slug: c.slug } } } },
+        },
+        orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
+        take: 10,
+        select: courseCardSelect,
+      })) as unknown as Card[],
+    })),
+  );
+
+  const ratings = await ratingsFor(site.organizationId, [
+    ...cards.map((c) => c.id),
+    ...subjectRails.flatMap((r) => r.cards.map((c) => c.id)),
+  ]);
+
   const [
     heroEyebrow,
     heroTitle,
@@ -122,20 +150,33 @@ export default async function Home() {
         sampleId={samples?.id ?? null}
       />
 
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+      <div className="mx-auto max-w-[80rem] px-4 sm:px-6">
         <Banners organizationId={site.organizationId} placement="SITE_HOME" className="mb-2" />
       </div>
 
+      {/* The subjects as a row of chips, right under the hero, so the first
+          thing after "what is this place" is "where do I go". */}
+      {site.homeCategories.length > 0 && (
+        <nav aria-label="Subjects" className="mx-auto max-w-[80rem] px-4 pt-8 sm:px-6">
+          <div className="rail -mx-4 flex gap-2 px-4 sm:mx-0 sm:flex-wrap sm:px-0">
+            {site.homeCategories.map((c) => (
+              <Link
+                key={c.slug}
+                href={`/courses/${c.slug}`}
+                className="whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition hover:border-[var(--brand)] hover:text-[var(--brand)]"
+              >
+                {c.name}
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
+
       {/* The courses come first. Somebody arriving on a storefront wants to
-          see what is actually for sale before they are asked to pick a
-          subject, and a marked course is a deliberate recommendation. */}
-      <Section
-        title="Popular courses"
-        description={
-          popularOnly
-            ? 'The courses we are pointing people at right now. Prices are before applicable taxes.'
-            : 'Prices are what you pay before applicable taxes. Batch dates come from the live schedule.'
-        }
+          see what is actually for sale before anything else. */}
+      <RailSection
+        title={popularOnly ? 'Popular courses' : 'Newest courses'}
+        description="Prices are before applicable taxes. Batch dates come from the live schedule."
         action={{ href: '/courses', label: 'All courses' }}
       >
         {cards.length === 0 ? (
@@ -146,34 +187,37 @@ export default async function Home() {
             </p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <Rail ariaLabel="Popular courses">
             {cards.map((c, i) => (
-              <CourseCard key={c.id} card={c} google={google} priority={i < 4} />
+              <CourseCard key={c.id} card={c} rating={ratings.get(c.id)} google={google} priority={i < 4} compact />
             ))}
-          </div>
+          </Rail>
         )}
-      </Section>
+      </RailSection>
+
+      {subjectRails.map((rail) => (
+        <RailSection
+          key={rail.category.slug}
+          title={`${rail.category.name} courses`}
+          description={rail.category.tagline ?? undefined}
+          action={{ href: `/courses/${rail.category.slug}`, label: `All ${rail.category.name}` }}
+        >
+          <Rail ariaLabel={`${rail.category.name} courses`}>
+            {rail.cards.map((c) => (
+              <CourseCard key={c.id} card={c} rating={ratings.get(c.id)} google={google} compact />
+            ))}
+          </Rail>
+        </RailSection>
+      ))}
 
       {site.homeCategories.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
-          <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
-            What we teach
-          </p>
-          <h2 className="t-section mt-1.5">Our courses</h2>
+        <section className="mx-auto max-w-[80rem] px-4 py-10 sm:px-6 sm:py-14">
+          <h2 className="t-section">Top subjects</h2>
           <p className="t-lead muted mt-2 max-w-2xl">
             Pick the subject you are here for. Every course inside it has its own dates, price
             and curriculum.
           </p>
-
-          {/* Two compact tiles to a row on a phone, filling out into full
-              cards from the small breakpoint up. It was a sideways rail,
-              which put six of the ten subjects behind a swipe nobody was
-              told about; stacking all ten instead would have been a very
-              long scroll past the thing somebody actually came for. */}
-          <div
-            className="mt-6 grid grid-cols-2 gap-3 sm:mt-7 sm:gap-4 lg:grid-cols-3
-              xl:grid-cols-5"
-          >
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-7 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
             {site.homeCategories.map((c, i) => (
               <SubjectCard key={c.slug} subject={c} google={google} priority={i < 5} />
             ))}
@@ -223,11 +267,61 @@ export default async function Home() {
       )}
 
       <Faq supportEmail={org.supportEmail} />
+
+      <section className="mx-auto max-w-[80rem] px-4 pb-4 sm:px-6">
+        <div
+          className="flex flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] px-6 py-8 text-[var(--shell-ink)] sm:px-10"
+          style={{ background: 'var(--shell)' }}
+        >
+          <div>
+            <h2 className="text-xl font-bold sm:text-2xl">Not sure which course is right for you?</h2>
+            <p className="mt-1 text-sm text-[var(--shell-muted)]">
+              A counsellor will call you back, look at where you are, and say plainly what to do next.
+            </p>
+          </div>
+          <Link
+            href="/contact"
+            className="inline-flex h-11 items-center rounded-[var(--radius-sm)] px-5 text-sm font-semibold"
+            style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+          >
+            Talk to a counsellor
+          </Link>
+        </div>
+      </section>
     </>
   );
 }
 
 /* Sections ---------------------------------------------------------------- */
+
+function RailSection({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description?: string;
+  action?: { href: string; label: string };
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mx-auto max-w-[80rem] px-4 py-8 sm:px-6 sm:py-10">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
+          {description && <p className="t-small muted mt-1 max-w-prose">{description}</p>}
+        </div>
+        {action && (
+          <Link href={action.href} className="t-small font-semibold hover:underline" style={{ color: 'var(--brand)' }}>
+            {action.label} →
+          </Link>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 function Section({
   title,

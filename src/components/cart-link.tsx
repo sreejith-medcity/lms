@@ -40,10 +40,10 @@ export function CartLink() {
     <Link
       href="/cart"
       aria-label={count ? `Cart, ${count} item${count === 1 ? '' : 's'}` : 'Cart'}
-      className="relative inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)]
-        border bg-[var(--surface)] transition hover:bg-[var(--surface-2)]"
+      className="relative inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-sm)]
+        transition hover:bg-[var(--surface-2)]"
     >
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden>
         <path
           d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h6.9a2 2 0 0 0 2-1.5L20 8H6"
           stroke="currentColor"

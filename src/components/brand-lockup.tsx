@@ -47,5 +47,5 @@ export function BrandLockup({
     );
   }
 
-  return <span className={`text-base font-semibold tracking-tight ${className}`}>{name}</span>;
+  return <span className={`inline-block text-base font-semibold tracking-tight ${className}`}>{name}</span>;
 }

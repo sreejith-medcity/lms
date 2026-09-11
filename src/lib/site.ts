@@ -225,3 +225,39 @@ export async function ratingsFor(
   }
   return out;
 }
+
+/** What the Explore menu lists: each subject with a handful of its courses. */
+export interface ExploreCategory {
+  name: string;
+  slug: string;
+  count: number;
+  courses: { title: string; slug: string }[];
+}
+
+export const exploreMenu = cache(async (organizationId: string): Promise<ExploreCategory[]> => {
+  const categories = await db.category.findMany({
+    where: { organizationId, isActive: true, courses: { some: { course: { product: { status: 'PUBLISHED', deletedAt: null } } } } },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    select: {
+      name: true,
+      slug: true,
+      _count: { select: { courses: true } },
+      courses: {
+        take: 7,
+        where: { course: { product: { status: 'PUBLISHED', deletedAt: null, isAddonOnly: false } } },
+        select: { course: { select: { product: { select: { title: true, slug: true, isFeatured: true } } } } },
+      },
+    },
+  });
+
+  return categories.map((c) => ({
+    name: c.name,
+    slug: c.slug,
+    count: c._count.courses,
+    courses: c.courses
+      .map((row) => row.course.product)
+      .sort((a, b) => Number(b.isFeatured) - Number(a.isFeatured))
+      .slice(0, 6)
+      .map((p) => ({ title: p.title, slug: p.slug })),
+  }));
+});

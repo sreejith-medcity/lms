@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { getSiteContext } from '@/lib/site';
 import { NoTenantNotice } from '@/components/tenant-notices';
 import { Catalogue } from '../catalogue';
-import { CatalogueHero } from '../hero';
+import { CatalogueHeading } from '../hero';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ async function category(slug: string) {
   if (!site) return null;
   const found = await db.category.findFirst({
     where: { organizationId: site.organizationId, slug, isActive: true },
-    select: { name: true, slug: true },
+    select: { name: true, slug: true, tagline: true },
   });
   return found ? { site, category: found } : null;
 }
@@ -53,28 +53,26 @@ export default async function CategoryPage({
     category: slug,
     level: one('level'),
     format: one('format'),
+    language: one('language'),
+    price: one('price'),
     sort: one('sort'),
+    page: one('page'),
   };
 
   return (
-    <>
-      <CatalogueHero
-        eyebrow={`${site.organization.name} courses`}
+    <div className="mx-auto max-w-[80rem] px-4 py-8 sm:px-6 sm:py-10">
+      <CatalogueHeading
+        crumb={{ href: '/courses', label: 'All courses' }}
         title={`${found.category.name} courses`}
-        blurb={`Every published ${found.category.name.toLowerCase()} course, with its format, level, batch dates and price.`}
-        action={`/courses/${slug}`}
-        hidden={{ level: filters.level, format: filters.format, sort: filters.sort }}
+        blurb={found.category.tagline ?? `Every published ${found.category.name.toLowerCase()} course, with its format, level, batch dates and price.`}
         q={filters.q}
       />
-
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-        <Catalogue
-          organizationId={site.organizationId}
-          categories={site.categories}
-          basePath={`/courses/${slug}`}
-          filters={filters}
-        />
-      </div>
-    </>
+      <Catalogue
+        organizationId={site.organizationId}
+        categories={site.categories}
+        basePath={`/courses/${slug}`}
+        filters={filters}
+      />
+    </div>
   );
 }
