@@ -140,7 +140,9 @@ export default async function MyLearning() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="t-body font-medium">{s.title}</p>
-                      <p className="t-small faint truncate">{s.batch.name}</p>
+                      <p className="t-small faint truncate">
+                        {s.batch?.name ?? 'One to one class'}
+                      </p>
                     </div>
                     {live && <Badge tone="ok">live now</Badge>}
                     {soon && <Badge>upcoming</Badge>}

@@ -118,8 +118,8 @@ export default async function RecordingsPage({
               : null,
             sessionId: r.session.id,
             sessionTitle: r.session.title,
-            batchName: r.session.batch.name,
-            roster: r.session.batch._count.enrollments,
+            batchName: r.session.batch?.name ?? 'One to one',
+            roster: r.session.batch?._count.enrollments ?? 1,
             when: `${formatDayLabel(dayKey(r.session.startsAt, tz), tz)}, ${formatTime(r.session.startsAt, tz)}`,
           }))}
         />

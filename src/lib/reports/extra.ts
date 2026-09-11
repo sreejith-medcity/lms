@@ -233,9 +233,13 @@ export const extraReports: ReportDef[] = [
       const byBatch = new Map<string, number[]>();
       for (const r of responses) {
         if (!r.session || r.rating == null) continue;
-        const list = byBatch.get(r.session.batchId) ?? [];
+        // This report is feedback per batch. A one-to-one class has none,
+        // and its feedback belongs to the trainer's own figures below.
+        const batchId = r.session.batchId;
+        if (!batchId) continue;
+        const list = byBatch.get(batchId) ?? [];
         list.push(r.rating);
-        byBatch.set(r.session.batchId, list);
+        byBatch.set(batchId, list);
       }
 
       const byTrainer = new Map<string, number[]>();

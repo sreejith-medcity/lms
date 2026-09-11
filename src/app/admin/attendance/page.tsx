@@ -44,11 +44,14 @@ export default async function AttendancePage({
       startsAt: true,
       batchId: true,
       batch: { select: { name: true } },
+      learner: { select: { name: true } },
       attendances: { select: { userId: true, status: true } },
     },
   });
 
-  const batchIds = [...new Set(sessions.map((s) => s.batchId))];
+  // A one-to-one class has no batch, so it has no roster to measure against.
+  // Those sessions are counted on the learner's own page rather than here.
+  const batchIds = [...new Set(sessions.map((s) => s.batchId).filter((id): id is string => Boolean(id)))];
 
   const roster = await db.enrollment.findMany({
     where: {
@@ -96,7 +99,13 @@ export default async function AttendancePage({
     .filter((l) => l.expected > 0)
     .sort((a, b) => (a.percent ?? 100) - (b.percent ?? 100));
 
-  const expectedTotal = sessions.reduce((n, s) => n + (sizeOf.get(s.batchId) ?? 0), 0);
+  // A one-to-one class expects exactly one person, which is the honest
+  // denominator for it: counting it as a batch of nobody would drag the
+  // academy's attendance rate down every time a trainer takes one.
+  const rosterSize = (s: { batchId: string | null }) =>
+    s.batchId ? (sizeOf.get(s.batchId) ?? 0) : 1;
+
+  const expectedTotal = sessions.reduce((n, s) => n + rosterSize(s), 0);
   const presentTotal = sessions.reduce(
     (n, s) => n + s.attendances.filter((a) => a.status === 'PRESENT' || a.status === 'LATE').length,
     0,
@@ -184,7 +193,7 @@ export default async function AttendancePage({
               <Card padded={false}>
                 <ul className="divide-y">
                   {sessions.slice(0, 20).map((s) => {
-                    const size = sizeOf.get(s.batchId) ?? 0;
+                    const size = rosterSize(s);
                     const came = s.attendances.filter(
                       (a) => a.status === 'PRESENT' || a.status === 'LATE',
                     ).length;
@@ -199,7 +208,7 @@ export default async function AttendancePage({
                           <span className="min-w-0">
                             <span className="block truncate text-sm font-medium">{s.title}</span>
                             <span className="t-small faint block">
-                              {s.batch.name} ·{' '}
+                              {s.batch?.name ?? `One to one${s.learner ? ` · ${s.learner.name}` : ''}`} ·{' '}
                               {s.startsAt.toLocaleDateString('en-IN', {
                                 day: 'numeric',
                                 month: 'short',

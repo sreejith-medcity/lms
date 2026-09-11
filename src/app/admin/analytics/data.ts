@@ -235,7 +235,10 @@ export async function attendanceData(organizationId: string, since: Date, days: 
     };
   }
 
-  const batchIds = [...new Set(sessions.map((s) => s.batchId))];
+  // One-to-one classes have no batch and no roster. They are counted in the
+  // totals, where one person is expected, and left out of the per-batch
+  // table, which is a table of batches.
+  const batchIds = [...new Set(sessions.map((s) => s.batchId).filter((id): id is string => Boolean(id)))];
 
   const [rosters, attendances] = await Promise.all([
     db.enrollment.groupBy({
@@ -249,8 +252,15 @@ export async function attendanceData(organizationId: string, since: Date, days: 
     }),
   ]);
 
-  const sizeOf = new Map(rosters.map((r) => [r.batchId, r._count._all]));
-  const expected = sessions.reduce((n, s) => n + (sizeOf.get(s.batchId) ?? 0), 0);
+  const sizeOf = new Map(
+    rosters
+      .filter((r): r is typeof r & { batchId: string } => Boolean(r.batchId))
+      .map((r) => [r.batchId, r._count?._all ?? 0] as const),
+  );
+  const rosterSize = (s: { batchId: string | null }) =>
+    s.batchId ? (sizeOf.get(s.batchId) ?? 0) : 1;
+
+  const expected = sessions.reduce((n, s) => n + rosterSize(s), 0);
 
   const present = attendances.filter((a) => a.status === 'PRESENT' || a.status === 'LATE').length;
   const late = attendances.filter((a) => a.status === 'LATE').length;
@@ -264,6 +274,8 @@ export async function attendanceData(organizationId: string, since: Date, days: 
 
   const byBatchMap = new Map<string, { name: string; expected: number; present: number; sessions: number }>();
   for (const s of sessions) {
+    if (!s.batchId || !s.batch) continue;
+
     const entry = byBatchMap.get(s.batchId) ?? {
       name: s.batch.name,
       expected: 0,

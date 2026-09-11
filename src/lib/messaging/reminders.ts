@@ -37,6 +37,7 @@ export async function queueUpcomingReminders(organizationId: string): Promise<Re
       title: true,
       startsAt: true,
       joinUrl: true,
+      learner: { select: { id: true, name: true, email: true, phone: true } },
       batch: {
         select: {
           enrollments: {
@@ -59,7 +60,13 @@ export async function queueUpcomingReminders(organizationId: string): Promise<Re
   let queued = 0;
 
   for (const session of upcoming) {
-    const people = session.batch.enrollments.map((row) => row.user);
+    // A one-to-one class has no roster, so the person to remind is the
+    // learner it was booked for.
+    const people = session.batch
+      ? session.batch.enrollments.map((row) => row.user)
+      : session.learner
+        ? [session.learner]
+        : [];
     if (!people.length) continue;
 
     const result = await queueNotifications({

@@ -294,7 +294,7 @@ export default async function AdminHome() {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">{s.title}</span>
-                          <span className="t-small faint block truncate">{s.batch.name}</span>
+                          <span className="t-small faint block truncate">{s.batch?.name ?? 'One to one'}</span>
                         </span>
                         {s.status === 'CANCELLED' ? (
                           <Badge tone="bad">cancelled</Badge>

@@ -94,7 +94,7 @@ export async function attendanceRate(
     return { expected: 0, present: 0, sessions: 0, percent: 0 };
   }
 
-  const batchIds = [...new Set(sessions.map((s) => s.batchId))];
+  const batchIds = [...new Set(sessions.map((s) => s.batchId).filter((id): id is string => Boolean(id)))];
 
   const [rosters, present] = await Promise.all([
     db.enrollment.groupBy({
@@ -107,8 +107,16 @@ export async function attendanceRate(
     }),
   ]);
 
-  const sizeOf = new Map(rosters.map((r) => [r.batchId, r._count._all]));
-  const expected = sessions.reduce((n, s) => n + (sizeOf.get(s.batchId) ?? 0), 0);
+  const sizeOf = new Map(
+    rosters
+      .filter((r): r is typeof r & { batchId: string } => Boolean(r.batchId))
+      .map((r) => [r.batchId, r._count?._all ?? 0] as const),
+  );
+  // One expected head in a one-to-one class, which is what it is.
+  const expected = sessions.reduce(
+    (n, s) => n + (s.batchId ? (sizeOf.get(s.batchId) ?? 0) : 1),
+    0,
+  );
 
   return {
     expected,

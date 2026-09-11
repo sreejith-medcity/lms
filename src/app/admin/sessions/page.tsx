@@ -49,7 +49,8 @@ export default async function SessionsPage() {
   const scheduled = todayStats.find((s) => s.status === 'SCHEDULED')?._count ?? 0;
   const cancelled = todayStats.find((s) => s.status === 'CANCELLED')?._count ?? 0;
   const signIns = today.reduce((n, s) => n + s._count.attendances, 0);
-  const expected = today.reduce((n, s) => n + s.batch._count.enrollments, 0);
+  // A one-to-one class expects its one learner.
+  const expected = today.reduce((n, s) => n + (s.batch?._count.enrollments ?? 1), 0);
 
   return (
     <div className="space-y-7">
@@ -94,12 +95,12 @@ export default async function SessionsPage() {
                       <Link href={`/admin/sessions/${s.id}`} className="t-body font-medium hover:underline">
                         {s.title}
                       </Link>
-                      <p className="t-small faint truncate">{s.batch.name}</p>
+                      <p className="t-small faint truncate">{s.batch?.name ?? 'One to one'}</p>
                     </div>
                     {live && <Badge tone="ok">live now</Badge>}
                     {s.status === 'CANCELLED' && <Badge tone="bad">cancelled</Badge>}
                     <span className="t-small faint w-28 shrink-0 text-right tabular-nums">
-                      {s._count.attendances} / {s.batch._count.enrollments} in
+                      {s._count.attendances} / {s.batch?._count.enrollments ?? 1} in
                     </span>
                   </li>
                 );
@@ -125,7 +126,7 @@ export default async function SessionsPage() {
                       {s.startsAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     <span className="t-small min-w-0 flex-1 truncate">{s.title}</span>
-                    <span className="t-small faint hidden shrink-0 truncate sm:block">{s.batch.name}</span>
+                    <span className="t-small faint hidden shrink-0 truncate sm:block">{s.batch?.name ?? 'One to one'}</span>
                   </li>
                 ))}
               </ul>

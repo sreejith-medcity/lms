@@ -109,7 +109,7 @@ export const feedbackReports: ReportDef[] = [
         if (!r.session) continue;
         const entry = bySession.get(r.session.id) ?? {
           title: r.session.title,
-          batch: r.session.batch.name,
+          batch: r.session.batch?.name ?? 'One to one',
           when: r.session.startsAt,
           ratings: [],
           came: r.session.attendances.filter(

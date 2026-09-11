@@ -28,6 +28,7 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
           },
         },
       },
+      learner: { select: { id: true, name: true, email: true } },
       attendances: true,
       recordings: {
         orderBy: { createdAt: 'desc' },
@@ -38,9 +39,20 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
   if (!session) notFound();
 
   const byUser = new Map(session.attendances.map((a) => [a.userId, a]));
-  const roster = session.batch.enrollments.map((e) => ({
-    user: e.user,
-    attendance: byUser.get(e.user.id) ?? null,
+
+  // A one-to-one class has a roster of one: the learner it was booked for.
+  // Everything below this line then works unchanged, which is the whole
+  // reason a one-to-one class is a session without a batch rather than a
+  // second kind of thing.
+  const rosterUsers = session.batch
+    ? session.batch.enrollments.map((e) => e.user)
+    : session.learner
+      ? [session.learner]
+      : [];
+
+  const roster = rosterUsers.map((user) => ({
+    user,
+    attendance: byUser.get(user.id) ?? null,
   }));
 
   const present = roster.filter((r) => r.attendance?.status === 'PRESENT').length;
@@ -64,7 +76,9 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
               hour: '2-digit', minute: '2-digit',
             })}
             {' · '}
-            {session.batch.name} · {session.batch.course.product.title}
+            {session.batch
+              ? `${session.batch.name} · ${session.batch.course.product.title}`
+              : `One to one${session.learner ? ` · ${session.learner.name}` : ''}`}
           </p>
           {session.topics && <p className="t-small muted mt-2 max-w-prose">{session.topics}</p>}
         </div>

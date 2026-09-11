@@ -85,6 +85,7 @@ export default async function CalendarPage({
         endsAt: true,
         status: true,
         isHoliday: true,
+        learner: { select: { name: true } },
         batch: {
           select: {
             id: true,
@@ -133,16 +134,17 @@ export default async function CalendarPage({
     day: dayKey(s.startsAt, tz),
     status: s.status,
     isHoliday: s.isHoliday,
-    batchName: s.batch.name,
+    // A one-to-one class has no batch, so it says whose class it is instead.
+    batchName: s.batch?.name ?? (s.learner ? `1:1 · ${s.learner.name}` : 'One to one'),
     trainer:
       staffNames.get(
-        s.batch.staff.find((x) => x.userId === trainerId)?.userId ??
-          s.batch.staff.find((x) => x.role === 'PRIMARY_TUTOR')?.userId ??
-          s.batch.staff[0]?.userId ??
+        s.batch?.staff.find((x) => x.userId === trainerId)?.userId ??
+          s.batch?.staff.find((x) => x.role === 'PRIMARY_TUTOR')?.userId ??
+          s.batch?.staff[0]?.userId ??
           '',
       ) ?? null,
     signedIn: s._count.attendances,
-    roster: s.batch._count.enrollments,
+    roster: s.batch?._count.enrollments ?? 1,
   }));
 
   const label =

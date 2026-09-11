@@ -551,6 +551,7 @@ async function rosterOf(sessionId: string, organizationId: string) {
       startsAt: true,
       endsAt: true,
       status: true,
+      learner: { select: { id: true, email: true, phone: true } },
       batch: {
         select: {
           id: true,
@@ -564,6 +565,20 @@ async function rosterOf(sessionId: string, organizationId: string) {
       attendances: { select: { userId: true, status: true } },
     },
   });
+}
+
+/**
+ * Who is in a class, whether it is a batch or a one-to-one.
+ *
+ * Every message about a class asks the same question, and asking it in one
+ * place is what stops a one-to-one being the class where the reminder,
+ * the absentee note or the cancellation quietly goes to nobody.
+ */
+type RosterSession = NonNullable<Awaited<ReturnType<typeof rosterOf>>>;
+
+function peopleIn(session: RosterSession): { id: string; email: string | null; phone: string | null }[] {
+  if (session.batch) return session.batch.enrollments.map((e) => e.user);
+  return session.learner ? [session.learner] : [];
 }
 
 /**
@@ -589,8 +604,7 @@ export async function notifyAbsentees(sessionId: string): Promise<ActionState> {
         .map((a) => a.userId),
     );
 
-    const absentees = session.batch.enrollments
-      .map((e) => e.user)
+    const absentees = peopleIn(session)
       .filter((u) => !came.has(u.id))
       .map((u) => ({ userId: u.id, email: u.email, phone: u.phone }));
 
@@ -622,12 +636,12 @@ export async function remindRoster(sessionId: string): Promise<ActionState> {
       return { error: 'That class has already started. A reminder now would only confuse people.' };
     }
 
-    const roster = session.batch.enrollments.map((e) => ({
-      userId: e.user.id,
-      email: e.user.email,
-      phone: e.user.phone,
+    const roster = peopleIn(session).map((u) => ({
+      userId: u.id,
+      email: u.email,
+      phone: u.phone,
     }));
-    if (roster.length === 0) return { error: 'Nobody is enrolled in this batch yet.' };
+    if (roster.length === 0) return { error: 'Nobody is enrolled in this class yet.' };
 
     const result = await queueNotifications({
       organizationId: tenant.organizationId,
@@ -659,7 +673,7 @@ async function tellTheRoll(
   const session = await rosterOf(sessionId, organizationId);
   if (!session) return '';
 
-  const people = session.batch.enrollments.map((row) => row.user);
+  const people = peopleIn(session);
   if (!people.length) return 'Nobody is enrolled, so there was nobody to tell.';
 
   const names = await db.user.findMany({

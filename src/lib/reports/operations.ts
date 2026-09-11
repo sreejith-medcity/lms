@@ -59,7 +59,7 @@ export const trainerReports: ReportDef[] = [
 
       const rows = [...batchesOf.entries()]
         .map(([userId, batchIds]) => {
-          const theirs = sessions.filter((s) => batchIds.has(s.batchId));
+          const theirs = sessions.filter((s) => s.batchId != null && batchIds.has(s.batchId));
           const minutes = theirs.reduce(
             (n, s) => n + Math.round((s.endsAt.getTime() - s.startsAt.getTime()) / 60_000),
             0,
@@ -69,7 +69,7 @@ export const trainerReports: ReportDef[] = [
               n + s.attendances.filter((a) => a.status === 'PRESENT' || a.status === 'LATE').length,
             0,
           );
-          const expected = theirs.reduce((n, s) => n + s.batch._count.enrollments, 0);
+          const expected = theirs.reduce((n, s) => n + (s.batch?._count.enrollments ?? 1), 0);
 
           return {
             held: theirs.length,
@@ -526,9 +526,9 @@ export const operationsReports: ReportDef[] = [
           dayKey(s.startsAt, ctx.timeZone),
           formatTime(s.startsAt, ctx.timeZone),
           s.title,
-          s.batch.name,
-          s.batch.branch.name,
-          s.batch._count.enrollments,
+          s.batch?.name ?? 'One to one',
+          s.batch?.branch.name ?? '—',
+          s.batch?._count.enrollments ?? 1,
           s.joinUrl ? 'set' : 'missing',
         ]),
         note: 'A missing join link on a class starting tomorrow is the most common avoidable failure here.',
