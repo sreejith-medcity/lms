@@ -325,7 +325,13 @@ function IntegrationCard({
                   <Input
                     name={field.key}
                     type={field.kind === 'secret' ? 'password' : 'text'}
-                    autoComplete="off"
+                    // Chrome treats any password field plus the text field
+                    // before it as a login form and fills both with the
+                    // admin's own credentials. "new-password" is the one
+                    // value it honours.
+                    autoComplete={field.kind === 'secret' ? 'new-password' : 'off'}
+                    data-1p-ignore
+                    data-lpignore="true"
                     disabled={field.fromEnv}
                     placeholder={
                       field.fromEnv
