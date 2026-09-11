@@ -192,6 +192,7 @@ model User {
   enrollments       Enrollment[]
   attendances       Attendance[]
   attempts          Attempt[]
+  partnerResults    PartnerResult[]
   recordingShares   RecordingShare[]
   assessmentGrants  AssessmentGrant[]
   poolGrants        AssessmentPoolGrant[]
@@ -1461,6 +1462,37 @@ model AssessmentCourse {
 
   @@id([assessmentId, courseId])
   @@map("assessment_courses")
+}
+
+/// A result earned on a partner system the learner reached from here with
+/// one login: the telc mock test today, anything else tomorrow. Posted back
+/// by the partner and kept as its own kind of record, because a partner's
+/// exam is not one of our assessments and should not pretend to be.
+model PartnerResult {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  /// telc, and later others.
+  provider       String
+  /// The partner's own id for the attempt, so a repeated post updates one row.
+  externalId     String
+  title          String
+  /// A1, B1, and so on, where the partner has levels.
+  level          String?
+  scorePercent   Float?
+  passed         Boolean?
+  /// Per-module marks and anything else the partner sent, as sent.
+  detail         Json?
+  certificateUrl String?
+  takenAt        DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([organizationId, userId, takenAt])
+  @@map("partner_results")
 }
 
 model Attempt {
