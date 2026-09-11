@@ -37,6 +37,7 @@ export const ADMIN_NAV: NavGroup[] = [
     children: [
       { label: 'Batches', href: '/admin/batches' },
       { label: 'Sessions', href: '/admin/sessions' },
+      { label: 'One to one', href: '/admin/one-to-one' },
       { label: 'Calendar', href: '/admin/calendar' },
       { label: 'Recordings', href: '/admin/recordings' },
       { label: 'Media library', href: '/admin/library' },

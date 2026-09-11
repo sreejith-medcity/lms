@@ -212,7 +212,14 @@ export async function fulfilPaidOrder(input: {
     order.items.map(async (item) => {
       const product = await db.product.findFirst({
         where: { id: item.productId, organizationId: input.organizationId },
-        select: { course: { select: { id: true } } },
+        select: {
+          course: { select: { id: true } },
+          // A one-to-one product does not grant a curriculum: it grants a
+          // number of sessions with a trainer, which the learner then books.
+          mentorship: {
+            select: { sessionsIncluded: true, durationMinutes: true, validityDays: true },
+          },
+        },
       });
 
       const [batch, plan] = await Promise.all([
@@ -236,7 +243,12 @@ export async function fulfilPaidOrder(input: {
           : Promise.resolve(null),
       ]);
 
-      return { item, batchId: batch?.id ?? null, validityDays: plan?.validityDays ?? null };
+      return {
+        item,
+        batchId: batch?.id ?? null,
+        validityDays: plan?.validityDays ?? null,
+        mentorship: product?.mentorship ?? null,
+      };
     }),
   );
 
@@ -313,7 +325,35 @@ export async function fulfilPaidOrder(input: {
     //    (user, product, batch) is what makes a second delivery harmless.
     const branchId = order.branchId;
 
-    for (const { item, batchId: itemBatchId, validityDays } of context) {
+    for (const { item, batchId: itemBatchId, validityDays, mentorship } of context) {
+      /*
+       * A one-to-one purchase becomes sessions to book rather than a course
+       * to open. Keyed on the order item, so a repeated webhook delivery
+       * finds it already there instead of doubling somebody's sessions.
+       */
+      if (mentorship) {
+        const already = await tx.oneToOneCredit.findFirst({
+          where: { orderItemId: item.id },
+          select: { id: true },
+        });
+
+        if (!already) {
+          await tx.oneToOneCredit.create({
+            data: {
+              organizationId: input.organizationId,
+              userId: order.userId,
+              productId: item.productId,
+              orderItemId: item.id,
+              sessionsTotal: Math.max(1, mentorship.sessionsIncluded),
+              minutesPerSession: Math.max(15, mentorship.durationMinutes),
+              expiresAt: mentorship.validityDays
+                ? new Date(Date.now() + mentorship.validityDays * 864e5)
+                : null,
+            },
+          });
+        }
+      }
+
       const existing = await tx.enrollment.findFirst({
         where: {
           userId: order.userId,

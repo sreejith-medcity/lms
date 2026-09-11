@@ -14,6 +14,7 @@ export const LEARNER_NAV_ITEMS = [
   { key: 'learning', label: 'My learning', href: '/learn' },
   { key: 'community', label: 'Community', href: '/learn/community' },
   { key: 'wallet', label: 'Credit', href: '/learn/wallet' },
+  { key: 'one-to-one', label: 'One to one', href: '/learn/book' },
   { key: 'purchases', label: 'Purchases', href: '/learn/purchases' },
   { key: 'explore', label: 'Explore', href: '/' },
 ] as const;
