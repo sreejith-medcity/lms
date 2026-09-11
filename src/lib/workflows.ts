@@ -400,7 +400,7 @@ async function sendMessage(scope: StepScope, config: ReturnType<typeof parseStep
     },
   });
   if (result.unreachable > 0 && result.queued === 0) return { note: `No ${channel.toLowerCase()} address on file; nothing sent.` };
-  return { note: `Queued a ${channel.toLowerCase()}.` };
+  return { note: channel === 'EMAIL' ? 'Queued an email.' : channel === 'SMS' ? 'Queued an SMS.' : 'Queued a WhatsApp message.' };
 }
 
 /* Scheduled triggers -------------------------------------------------------- */

@@ -7,12 +7,12 @@ import { DOMAIN_EVENTS, eventDef } from '@/lib/events';
 import { ACTION_TYPES, parseTriggerFilters } from '@/lib/workflow-rules';
 import { recipeFor } from '@/lib/workflow-recipes';
 import { Badge, Card } from '@/components/ui';
+import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { ActiveToggle, TestRun, WorkflowEditor, type EditorStep } from './editor';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
 
-const when = (d: Date) => d.toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
 export default async function WorkflowPage({
   params,
@@ -26,6 +26,8 @@ export default async function WorkflowPage({
   const me = await requireStaff('marketing.workflows', 'view');
   const canEdit = me.permissions['marketing.workflows']?.edit ?? false;
   const isNew = id === 'new';
+  const tz = tenant.timezone;
+  const when = (d: Date) => `${formatDayLabel(dayKey(d, tz), tz)}, ${formatTime(d, tz)}`;
 
   const [workflow, products, batches, templates, learners] = await Promise.all([
     isNew
