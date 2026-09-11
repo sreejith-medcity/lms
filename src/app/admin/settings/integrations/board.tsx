@@ -374,15 +374,20 @@ function IntegrationCard({
                 belongs to somebody who cannot make a server to server app.
                 Sign in instead, and meetings are created as that account.
               */}
-              {item.id === 'zoom' && (
-                <a
-                  href="/api/integrations/zoom/connect"
-                  className="t-small underline"
-                  style={{ color: 'var(--brand)' }}
-                >
-                  Connect with a Zoom login
-                </a>
-              )}
+              {item.id === 'zoom' &&
+                (item.fields.some((f) => f.key === 'accountId' && f.filled) ? (
+                  <span className="t-small faint">
+                    Server to server app: no login step needed.
+                  </span>
+                ) : (
+                  <a
+                    href="/api/integrations/zoom/connect"
+                    className="t-small underline"
+                    style={{ color: 'var(--brand)' }}
+                  >
+                    Connect with a Zoom login
+                  </a>
+                ))}
 
               {anythingStored && canDelete && (
                 <button
