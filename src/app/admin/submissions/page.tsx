@@ -96,7 +96,7 @@ export default async function SubmissionsPage() {
                   <Badge tone="warn">waiting</Badge>
                 ) : (
                   <>
-                    <Badge tone="ok">marked</Badge>
+                    {s.status === 'AI_DRAFTED' ? <Badge tone="brand">AI marked</Badge> : <Badge tone="ok">marked</Badge>}
                     {s.attempt.scorePercent != null && (
                       <span className="t-small faint ml-2 tabular-nums">
                         {s.attempt.scorePercent}%
@@ -110,7 +110,7 @@ export default async function SubmissionsPage() {
                   href={`/admin/submissions/${s.attempt.id}`}
                   className="t-small font-medium underline"
                 >
-                  {s.status === 'NOT_EVALUATED' ? 'Mark' : 'Review'}
+                  {s.status === 'NOT_EVALUATED' ? 'Mark' : s.status === 'AI_DRAFTED' ? 'Check' : 'Review'}
                 </Link>
               </Cell>
             </Row>

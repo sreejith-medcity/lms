@@ -52,6 +52,7 @@ export const SETTING_GROUPS = [
   { key: 'commerce', label: 'Selling', blurb: 'Where you sell, and in what currency.' },
   { key: 'loyalty', label: 'Loyalty', blurb: 'Who runs the points, and who does the arithmetic.' },
   { key: 'website', label: 'The public site', blurb: 'What a stranger sees before they have an account.' },
+  { key: 'ai', label: 'The AI examiner', blurb: 'What learners may practise with it, and how much.' },
 ] as const;
 
 export type SettingGroupKey = (typeof SETTING_GROUPS)[number]['key'];
@@ -357,6 +358,49 @@ export const SETTINGS: SettingDef[] = [
           ? 'Nobody awards anything. Existing balances are left alone rather than cleared.'
           : 'The wallet in this product awards and redeems, which is what runs today.',
   },
+  /* The AI examiner ---------------------------------------------------------- */
+  {
+    key: 'ai.practiceEnabled',
+    group: 'ai',
+    label: 'Learners can practise writing and speaking with the AI examiner',
+    help: 'Adds Practice to the learner portal, with tasks generated on demand and marked to the exam criteria. Needs the Anthropic key under Integrations; without it the page explains itself rather than failing.',
+    kind: 'boolean',
+    default: true,
+    live: true,
+    effect: (v) => (v ? 'Practice is on the learner portal.' : 'Practice is hidden.'),
+  },
+  {
+    key: 'ai.practicePerDay',
+    group: 'ai',
+    label: 'Practice attempts per learner per day',
+    help: 'Each attempt is a paid model call. A cap keeps one enthusiastic learner from spending the month\u2019s budget in an afternoon.',
+    kind: 'number',
+    default: 5,
+    min: 1,
+    max: 50,
+    live: true,
+    effect: (v) => `A learner can submit ${v} pieces a day.`,
+  },
+  {
+    key: 'ai.autoMarkWriting',
+    group: 'ai',
+    label: 'Mark written answers on assessments automatically',
+    help: 'Only on assessments with AI evaluation switched on. The mark counts as the result and the trainer can change it on the submissions page; the examiner\u2019s notes are kept beside it.',
+    kind: 'boolean',
+    default: true,
+    live: true,
+    effect: (v) => (v ? 'Written answers are marked within a minute of submission.' : 'Written answers wait for a trainer.'),
+  },
+  {
+    key: 'ai.model',
+    group: 'ai',
+    label: 'Model',
+    help: 'The Anthropic model name. Sonnet is the sensible default: fast, and more than accurate enough to apply a rubric. Change it only when Anthropic retires the name.',
+    kind: 'text',
+    default: 'claude-sonnet-4-5',
+    live: true,
+  },
+
   /* The public site -------------------------------------------------------- */
   {
     key: 'website.googleRating',

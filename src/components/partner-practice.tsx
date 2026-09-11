@@ -1,10 +1,14 @@
+import Link from 'next/link';
 import { db } from '@/lib/db';
 import { telcConfig } from '@/lib/telc';
+import { anthropicReady } from '@/lib/anthropic';
+import { settingBool } from '@/lib/settings/store';
 import { Badge, Card, Section } from '@/components/ui';
 
 /**
- * The partner practice exams on the learner's home: one button to get in,
- * and the results that came back, newest first.
+ * Practice on the learner's home: the AI examiner for writing and
+ * speaking, the partner mock exams with one button to get in, and the
+ * results that came back, newest first.
  */
 export async function PartnerPractice({
   organizationId,
@@ -16,8 +20,9 @@ export async function PartnerPractice({
   /** The learner just came back from a handoff that could not be made. */
   unavailable?: boolean;
 }) {
-  const [telc, results] = await Promise.all([
+  const [telc, examiner, results] = await Promise.all([
     telcConfig(organizationId),
+    settingBool(organizationId, 'ai.practiceEnabled').then(async (on) => on && (await anthropicReady(organizationId))),
     db.partnerResult.findMany({
       where: { organizationId, userId },
       orderBy: { takenAt: 'desc' },
@@ -26,11 +31,33 @@ export async function PartnerPractice({
     }),
   ]);
 
-  if (!telc && results.length === 0) return null;
+  if (!telc && !examiner && results.length === 0) return null;
 
   return (
-    <Section title="Practice exams">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+    <Section title="Practice">
+      <div className={`grid gap-4 ${telc && examiner ? 'lg:grid-cols-3' : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]'}`}>
+        {examiner && (
+          <Card className="flex flex-col">
+            <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
+              Writing and speaking
+            </p>
+            <p className="mt-1 text-base font-bold">AI examiner</p>
+            <p className="t-small muted mt-1.5 leading-relaxed">
+              IELTS, OET, PTE and German tasks in the exam&rsquo;s own style, marked to the official criteria
+              within a minute, with your own sentences corrected. Speak or write, as many times as you like
+              within the daily allowance.
+            </p>
+            <div className="mt-auto pt-4">
+              <Link
+                href="/learn/practice"
+                className="inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold text-[var(--brand-ink)]"
+                style={{ background: 'var(--brand)' }}
+              >
+                Practise now
+              </Link>
+            </div>
+          </Card>
+        )}
         {telc && (
           <Card className="flex flex-col">
             <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>

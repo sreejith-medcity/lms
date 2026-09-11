@@ -4,6 +4,8 @@ import { useActionState, useState } from 'react';
 import { markSubmission } from '@/server/attempts';
 import type { ActionState } from '@/server/courses';
 import { Badge, Button, Card, Field, FormError, FormSuccess, Input, Textarea } from '@/components/ui';
+import { EvaluationReport } from '@/components/evaluation-report';
+import type { Evaluation } from '@/lib/ai-evaluation';
 
 const initial: ActionState = {};
 
@@ -15,6 +17,7 @@ interface Item {
   marksAwarded: number | null;
   isCorrect: boolean | null;
   response: unknown;
+  ai: { evaluation: Evaluation; scale: { min: number; max: number; name: string }; label: string; scoreLabel: string } | null;
   options: { id: string; label: string; isCorrect: boolean }[];
 }
 
@@ -22,11 +25,14 @@ export function MarkForm({
   attemptId,
   items,
   feedback,
+  aiDraft = '',
   done,
 }: {
   attemptId: string;
   items: Item[];
   feedback: string;
+  /** The examiner's summary, offered as the starting point for the trainer's feedback. */
+  aiDraft?: string;
   done: boolean;
 }) {
   const [state, action, pending] = useActionState(markSubmission, initial);
@@ -94,6 +100,17 @@ export function MarkForm({
                 )}
               </div>
 
+              {item.ai && (
+                <details className="mt-3 rounded-[var(--radius-sm)] border border-[var(--brand-line)] bg-[var(--brand-soft)] p-3" open={!done}>
+                  <summary className="cursor-pointer text-sm font-medium">
+                    AI examiner: {item.ai.scoreLabel} <span className="faint">({item.ai.label})</span>
+                  </summary>
+                  <div className="mt-3">
+                    <EvaluationReport evaluation={item.ai.evaluation} scale={item.ai.scale} scoreLabel={item.ai.scoreLabel} compact />
+                  </div>
+                </details>
+              )}
+
               <div className="mt-3 w-40">
                 <Field label={`Marks out of ${item.maxMarks}`}>
                   <Input
@@ -116,8 +133,11 @@ export function MarkForm({
       ))}
 
       <Card>
-        <Field label="Feedback for the learner" hint="They see this with their score.">
-          <Textarea name="feedback" rows={4} defaultValue={feedback} maxLength={4000} disabled={done} />
+        <Field
+          label="Feedback for the learner"
+          hint={aiDraft && !feedback ? 'Started from the examiner\u2019s summary; edit it as you like.' : 'They see this with their score.'}
+        >
+          <Textarea name="feedback" rows={4} defaultValue={feedback || aiDraft} maxLength={4000} disabled={done} />
         </Field>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
@@ -134,7 +154,7 @@ export function MarkForm({
 
           {!done && (
             <Button type="submit" disabled={pending || written.length === 0}>
-              {pending ? 'Saving...' : 'Publish the mark'}
+              {pending ? 'Saving...' : aiDraft ? 'Confirm the mark' : 'Publish the mark'}
             </Button>
           )}
         </div>

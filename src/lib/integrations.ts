@@ -651,10 +651,11 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     requires:
       'An Anthropic API key on a workspace with a spend limit set. Usage is billed per token, so set the limit before this goes near learners.',
-    purpose: 'The course companion, written feedback and speaking assessment.',
-    status: 'planned',
-    landsIn: 'after go-live',
-    fallback: 'None of the AI features are built yet either, so nothing is missing today.',
+    purpose:
+      'The AI examiner: writing and speaking practice for learners at IELTS, OET, PTE and German B1 and B2, marked to the official criteria with corrections and next steps, and automatic marking of written answers on any assessment with AI evaluation switched on. Every mark is kept with what the examiner said, so a trainer can see it and overrule it.',
+    status: 'wired',
+    fallback: 'Practice is hidden from learners and written answers wait for a trainer to mark them.',
+    docsUrl: 'https://console.anthropic.com/settings/keys',
     fields: [KEY('apiKey', 'API key', 'ANTHROPIC_API_KEY')],
   },
   {

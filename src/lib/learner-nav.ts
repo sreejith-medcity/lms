@@ -17,6 +17,7 @@ export const LEARNER_NAV_ITEMS = [
   { key: 'one-to-one', label: 'One to one', href: '/learn/book' },
   { key: 'purchases', label: 'Purchases', href: '/learn/purchases' },
   { key: 'fees', label: 'Fees', href: '/learn/fees' },
+  { key: 'practice', label: 'Practice', href: '/learn/practice' },
   { key: 'explore', label: 'Explore', href: '/' },
 ] as const;
 
@@ -27,7 +28,7 @@ export const LEARNER_NAV_SETTING = 'learner.nav';
 /** My learning is not optional: a portal with no way back to the courses is a bug. */
 const REQUIRED: LearnerNavKey = 'learning';
 
-export const DEFAULT_LEARNER_NAV: LearnerNavKey[] = ['learning', 'purchases', 'explore'];
+export const DEFAULT_LEARNER_NAV: LearnerNavKey[] = ['learning', 'practice', 'purchases', 'explore'];
 
 export interface LearnerNavItem {
   key: string;

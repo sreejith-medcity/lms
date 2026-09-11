@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
+import { evaluateAttemptWriting } from '@/lib/ai-marking';
 import { assessmentAccess } from '@/lib/assessment-access';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
@@ -298,6 +299,15 @@ export async function submitAttempt(
           ]
         : []),
     ]);
+
+    // The AI examiner marks the written half now, where the academy has
+    // switched it on. Not awaited: the learner sees "submitted" at once and
+    // the mark lands a minute later; a model outage costs nothing but that.
+    if (needsMarking) {
+      evaluateAttemptWriting(attemptId).catch((err: unknown) =>
+        console.error('[attempts] AI marking failed', err instanceof Error ? err.message : err),
+      );
+    }
 
     revalidatePath('/admin/submissions');
     return {

@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { Badge } from '@/components/ui';
+import { evaluationFromJson } from '@/components/evaluation-report';
+import { presetFor } from '@/lib/ai-evaluation';
 import { MarkForm } from './mark-form';
 
 export const dynamic = 'force-dynamic';
@@ -46,9 +48,9 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
         },
       },
       answers: {
-        select: { questionId: true, response: true, isCorrect: true, marksAwarded: true },
+        select: { questionId: true, response: true, isCorrect: true, marksAwarded: true, aiFeedback: true, evaluatedById: true },
       },
-      submission: { select: { status: true, feedback: true } },
+      submission: { select: { status: true, feedback: true, aiDraftFeedback: true } },
     },
   });
   if (!attempt) notFound();
@@ -65,6 +67,7 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
       marksAwarded: a?.marksAwarded ?? null,
       isCorrect: a?.isCorrect ?? null,
       response: (a?.response ?? null) as unknown,
+      ai: aiReport(a?.aiFeedback),
       options: item.question.options.map((o) => ({
         id: o.id,
         label: o.label,
@@ -72,6 +75,10 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
       })),
     };
   });
+
+  const aiDrafted = attempt.submission?.status === 'AI_DRAFTED';
+  // An AI draft is a mark the trainer may still change; a published one is not.
+  const done = attempt.status === 'EVALUATED' && !aiDrafted;
 
   const objectiveAwarded = items
     .filter((i) => i.options.length > 0)
@@ -85,7 +92,7 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
         </Link>
         <h1 className="t-title mt-1 flex flex-wrap items-center gap-2">
           {attempt.user.name}
-          {attempt.status === 'EVALUATED' && <Badge tone="ok">marked</Badge>}
+          {aiDrafted ? <Badge tone="brand">marked by the AI examiner</Badge> : attempt.status === 'EVALUATED' && <Badge tone="ok">marked</Badge>}
           {attempt.status === 'SUBMITTED' && <Badge tone="warn">waiting</Badge>}
         </h1>
         <p className="t-small faint mt-1">
@@ -106,8 +113,25 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
         attemptId={attempt.id}
         items={items}
         feedback={attempt.submission?.feedback ?? ''}
-        done={attempt.status === 'EVALUATED'}
+        aiDraft={aiDrafted ? (attempt.submission?.aiDraftFeedback ?? '') : ''}
+        done={done}
       />
     </div>
   );
+}
+
+/** The examiner's stored report on one answer, with the scale it was marked on. */
+function aiReport(value: unknown) {
+  const evaluation = evaluationFromJson(value);
+  if (!evaluation) return null;
+  const presetKey = String((value as { preset?: string }).preset ?? '');
+  const preset = presetFor(presetKey);
+  const scale = preset?.scale ?? { min: 0, max: 100, step: 1, name: 'Percent' };
+  const n = Number.isInteger(evaluation.overall) ? String(evaluation.overall) : evaluation.overall.toFixed(1);
+  return {
+    evaluation,
+    scale,
+    label: preset ? preset.label : 'Written answer',
+    scoreLabel: scale.name === 'Band' ? `Band ${n}` : `${n} of ${scale.max}`,
+  };
 }
