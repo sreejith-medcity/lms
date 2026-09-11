@@ -9,6 +9,7 @@ import { settingBool, settingText } from '@/lib/settings/store';
 import { Card } from '@/components/ui';
 import { Rail, type RailModule } from './rail';
 import { Stage } from './stage';
+import { PlayerShell } from './shell';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export default async function MaterialPage({
       id: true,
       batchId: true,
       createdAt: true,
-      product: { select: { title: true, course: { select: { id: true } } } },
+      product: { select: { title: true, course: { select: { id: true, description: true } } } },
     },
   });
   if (!enrollment?.product.course) notFound();
@@ -121,7 +122,7 @@ export default async function MaterialPage({
   const prev = ordered.slice(0, index).reverse().find((m) => !gate.lockOf(m.id, m.sectionId)) ?? null;
   const next = ordered.slice(index + 1).find((m) => !gate.lockOf(m.id, m.sectionId)) ?? null;
 
-  const [progressRows, notes] = await Promise.all([
+  const [progressRows, notes, announcements] = await Promise.all([
     db.materialProgress.findMany({
       where: { userId: user.id, materialId: { in: ordered.map((m) => m.id) } },
       select: {
@@ -135,6 +136,24 @@ export default async function MaterialPage({
       where: { userId: user.id, materialId },
       orderBy: [{ atSeconds: 'asc' }, { createdAt: 'asc' }],
       select: { id: true, body: true, atSeconds: true, createdAt: true },
+    }),
+    // What the trainer has said to this batch or this course, newest first.
+    db.announcement.findMany({
+      where: {
+        organizationId: tenant.organizationId,
+        publishAt: { lte: new Date() },
+        targets: {
+          some: {
+            OR: [
+              { courseId: enrollment.product.course.id },
+              ...(enrollment.batchId ? [{ batchId: enrollment.batchId }] : []),
+            ],
+          },
+        },
+      },
+      orderBy: { publishAt: 'desc' },
+      take: 10,
+      select: { id: true, title: true, bodyHtml: true, urgency: true, publishAt: true },
     }),
   ]);
 
@@ -164,18 +183,18 @@ export default async function MaterialPage({
 
   const completed = ordered.filter((m) => byMaterial.get(m.id)?.completedAt).length;
 
-  return (
-    <div className="-mx-5 -my-6 flex flex-col lg:flex-row">
-      <Rail
-        productId={productId}
-        courseTitle={enrollment.product.title}
-        currentId={materialId}
-        modules={railModules}
-        completed={completed}
-        total={ordered.length}
-      />
+  // Downloads in the current section, for the Resources tab.
+  const section = modules.flatMap((cm) => cm.module.sections).find((s) => s.id === material.sectionId);
+  const resources = (section?.materials ?? [])
+    .filter((m) => m.assetId && m.isDownloadable && !blockDownload && !gate.lockOf(m.id, section!.id))
+    .map((m) => ({
+      id: m.id,
+      title: m.title,
+      typeLabel: MATERIAL_LABELS[m.type] ?? m.type,
+      href: `/api/assets/${m.assetId}?download=1`,
+    }));
 
-      {lock ? (
+  const stage = lock ? (
         <div className="flex flex-1 items-center justify-center p-8">
           <Card className="max-w-md text-center">
             <p className="text-3xl" aria-hidden>
@@ -205,6 +224,18 @@ export default async function MaterialPage({
         </div>
       ) : (
       <Stage
+        courseTitle={enrollment.product.title}
+        courseDescription={enrollment.product.course.description}
+        sectionTitle={section?.title ?? null}
+        discussionHref={`/learn/${productId}/discussion`}
+        announcements={announcements.map((a) => ({
+          id: a.id,
+          title: a.title,
+          bodyHtml: a.bodyHtml,
+          urgent: a.urgency === 'HIGH',
+          publishedAt: a.publishAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+        }))}
+        resources={resources}
         productId={productId}
         material={{
           id: material.id,
@@ -233,7 +264,16 @@ export default async function MaterialPage({
           createdAt: n.createdAt.toISOString(),
         }))}
       />
-      )}
-    </div>
+      );
+
+  return (
+    <PlayerShell
+      productId={productId}
+      courseTitle={enrollment.product.title}
+      completed={completed}
+      total={ordered.length}
+      stage={stage}
+      rail={<Rail productId={productId} currentId={materialId} modules={railModules} />}
+    />
   );
 }

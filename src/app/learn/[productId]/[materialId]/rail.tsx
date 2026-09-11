@@ -21,145 +21,105 @@ export interface RailModule {
 }
 
 /**
- * The curriculum, always in view.
- *
- * A learner should never have to go back to a contents page to see where they
- * are in a course. The rail stays open on desktop and collapses to a sheet on a
- * phone, and the module holding the current lesson is the one that starts open.
+ * The curriculum, as an accordion of sections with the current one open.
+ * Each section header carries how many of its lessons are done and how long
+ * the whole section runs, which is what a learner uses to decide whether to
+ * start it tonight.
  */
 export function Rail({
   productId,
-  courseTitle,
   currentId,
   modules,
-  completed,
-  total,
 }: {
   productId: string;
-  courseTitle: string;
   currentId: string;
   modules: RailModule[];
-  completed: number;
-  total: number;
 }) {
   const currentModule = modules.find((m) =>
     m.sections.some((s) => s.materials.some((mat) => mat.id === currentId)),
   );
-
   const [open, setOpen] = useState<Record<string, boolean>>(
-    currentModule ? { [currentModule.id]: true } : {},
+    currentModule ? { [currentModule.id]: true } : modules[0] ? { [modules[0].id]: true } : {},
   );
-  const [sheet, setSheet] = useState(false);
 
-  const percent = total ? Math.round((completed / total) * 100) : 0;
+  return (
+    <nav className="flex-1 overflow-y-auto" aria-label="Course contents">
+      <p className="border-b px-4 py-3 text-sm font-bold">Course content</p>
+      {modules.map((m, index) => {
+        const items = m.sections.flatMap((s) => s.materials);
+        const doneCount = items.filter((i) => i.done).length;
+        const isOpen = Boolean(open[m.id]);
 
-  const body = (
-    <>
-      <div className="border-b p-4">
-        <Link href={`/learn/${productId}`} className="t-small faint hover:underline">
-          {courseTitle}
-        </Link>
-        <div className="mt-2 flex items-center gap-3">
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--surface-2)]">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${percent}%`, background: 'var(--brand)' }}
-            />
-          </div>
-          <span className="t-small faint shrink-0 tabular-nums">
-            {completed}/{total}
-          </span>
-        </div>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto p-2" aria-label="Course contents">
-        {modules.map((m) => {
-          const items = m.sections.flatMap((s) => s.materials);
-          const doneCount = items.filter((i) => i.done).length;
-          const isOpen = Boolean(open[m.id]);
-
-          return (
-            <div key={m.id} className="mb-1">
-              <button
-                type="button"
-                aria-expanded={isOpen}
-                onClick={() => setOpen((o) => ({ ...o, [m.id]: !o[m.id] }))}
-                className="flex w-full items-center justify-between gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left hover:bg-[var(--surface-2)]"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{m.name}</span>
-                  <span className="t-micro faint tabular-nums">
-                    {doneCount} of {items.length} done
-                  </span>
+        return (
+          <div key={m.id} className="border-b">
+            <button
+              type="button"
+              aria-expanded={isOpen}
+              onClick={() => setOpen((o) => ({ ...o, [m.id]: !o[m.id] }))}
+              className="flex w-full items-start justify-between gap-2 bg-[var(--canvas)] px-4 py-3 text-left hover:bg-[var(--surface-2)]"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold leading-snug">
+                  Section {index + 1}: {m.name}
                 </span>
-                <span aria-hidden className={`faint shrink-0 transition ${isOpen ? 'rotate-180' : ''}`}>
-                  ⌄
+                <span className="t-micro faint tabular-nums">
+                  {doneCount} / {items.length} · {items.length} lesson{items.length === 1 ? '' : 's'}
                 </span>
-              </button>
+              </span>
+              <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`mt-1 shrink-0 transition ${isOpen ? 'rotate-180' : ''}`}>
+                <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
 
-              {isOpen &&
-                m.sections.map((s) => (
-                  <div key={s.id} className="mt-1">
-                    <p className="t-micro faint px-3 py-1 font-semibold uppercase tracking-wide">
-                      {s.title}
-                    </p>
+            {isOpen && (
+              <ul className="py-1">
+                {m.sections.map((s) => (
+                  <li key={s.id}>
+                    {m.sections.length > 1 && (
+                      <p className="t-micro faint px-4 pb-1 pt-2 font-semibold uppercase tracking-wide">{s.title}</p>
+                    )}
                     <ul>
-                      {s.materials.map((mat) => {
+                      {s.materials.map((mat, i) => {
                         const current = mat.id === currentId;
                         const locked = Boolean(mat.lockedLabel);
-
                         const inner = (
                           <>
                             <span
                               aria-hidden
-                              className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[9px] ${
-                                mat.done ? 'border-transparent text-white' : 'text-transparent'
+                              className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-[3px] border text-[10px] ${
+                                mat.done ? 'border-transparent text-white' : 'border-[var(--line-strong)] text-transparent'
                               }`}
                               style={mat.done ? { background: 'var(--brand)' } : undefined}
                             >
                               ✓
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className={`block leading-snug ${locked ? 'faint' : ''}`}>
-                                {mat.title}
+                              <span className={`block text-sm leading-snug ${locked ? 'faint' : ''}`}>
+                                {i + 1}. {mat.title}
                               </span>
-                              <span className="t-micro faint">
-                                {locked
-                                  ? mat.lockedLabel
-                                  : `${mat.typeLabel}${mat.duration ? ` · ${mat.duration}` : ''}`}
+                              <span className="t-micro faint flex items-center gap-1">
+                                <TypeIcon label={mat.typeLabel} />
+                                {locked ? mat.lockedLabel : `${mat.typeLabel}${mat.duration ? ` · ${mat.duration}` : ''}`}
                               </span>
                             </span>
-                            {locked && (
-                              <span aria-hidden className="shrink-0 faint">
-                                🔒
-                              </span>
-                            )}
                             {!locked && mat.bookmarked && (
-                              <span aria-label="Bookmarked" className="shrink-0 text-[var(--warn)]">
-                                ★
-                              </span>
+                              <span aria-label="Bookmarked" className="shrink-0 text-[var(--warn)]">★</span>
                             )}
+                            {locked && <span aria-hidden className="faint shrink-0">🔒</span>}
                           </>
                         );
-
                         return (
                           <li key={mat.id}>
                             {locked ? (
-                              <span
-                                className="flex cursor-not-allowed items-start gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm"
-                                title={mat.lockedLabel ?? undefined}
-                              >
+                              <span className="flex cursor-not-allowed items-start gap-2.5 px-4 py-2" title={mat.lockedLabel ?? undefined}>
                                 {inner}
                               </span>
                             ) : (
                               <Link
                                 href={`/learn/${productId}/${mat.id}`}
-                                onClick={() => setSheet(false)}
                                 aria-current={current ? 'page' : undefined}
-                                className={`flex items-start gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-sm transition ${
-                                  current
-                                    ? 'bg-[var(--brand-soft)] font-medium'
-                                    : 'hover:bg-[var(--surface-2)]'
+                                className={`flex items-start gap-2.5 px-4 py-2 transition ${
+                                  current ? 'bg-[var(--brand-soft)] font-medium' : 'hover:bg-[var(--surface-2)]'
                                 }`}
                               >
                                 {inner}
@@ -169,44 +129,29 @@ export function Rail({
                         );
                       })}
                     </ul>
-                  </div>
+                  </li>
                 ))}
-            </div>
-          );
-        })}
-      </nav>
-    </>
-  );
-
-  return (
-    <>
-      <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-72 shrink-0 flex-col border-r bg-[var(--surface)] lg:flex">
-        {body}
-      </aside>
-
-      <div className="lg:hidden">
-        <button
-          type="button"
-          onClick={() => setSheet(true)}
-          className="flex w-full items-center justify-between gap-3 border-b bg-[var(--surface)] px-4 py-2.5 text-sm"
-        >
-          <span className="font-medium">Contents</span>
-          <span className="t-small faint tabular-nums">
-            {completed}/{total} done
-          </span>
-        </button>
-
-        {sheet && (
-          <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Course contents">
-            <button
-              aria-label="Close contents"
-              className="flex-1 bg-black/40"
-              onClick={() => setSheet(false)}
-            />
-            <div className="flex w-80 max-w-[85vw] flex-col bg-[var(--surface)]">{body}</div>
+              </ul>
+            )}
           </div>
-        )}
-      </div>
-    </>
+        );
+      })}
+    </nav>
+  );
+}
+
+function TypeIcon({ label }: { label: string }) {
+  const l = label.toLowerCase();
+  const d = l.includes('video')
+    ? 'M8 5v14l11-7z'
+    : l.includes('audio')
+      ? 'M9 18V6l12-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0z'
+      : l.includes('pdf') || l.includes('doc') || l.includes('text')
+        ? 'M6 2h9l5 5v15H6zM14 2v6h6M8 13h8M8 17h8'
+        : 'M4 6h16M4 12h16M4 18h10';
+  return (
+    <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
   );
 }

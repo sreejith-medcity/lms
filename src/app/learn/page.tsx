@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { Badge, Card, EmptyState, LinkButton, ProgressRing, Section } from '@/components/ui';
+import { CourseMedia } from '@/components/course-media';
 import { JoinButton } from './join-button';
 import { RateClass } from './rate-class';
 import { Banners } from '@/components/banners';
@@ -33,7 +34,7 @@ export default async function MyLearning({
     },
     orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     include: {
-      product: { select: { id: true, title: true } },
+      product: { select: { id: true, title: true, course: { select: { thumbnailAssetId: true } } } },
       batch: { select: { name: true } },
     },
   });
@@ -143,12 +144,28 @@ export default async function MyLearning({
     <div className="mx-auto max-w-5xl px-5 py-7">
       <div className="space-y-8">
       <div>
-        <h1 className="t-display">Hello, {user.name.split(' ')[0]}</h1>
+        <h1 className="t-display">My learning</h1>
         <p className="t-small muted mt-1">
           {enrollments.length === 0
-            ? 'Nothing on your shelf yet.'
-            : `${enrollments.length} course${enrollments.length === 1 ? '' : 's'} on your shelf.`}
+            ? `Hello, ${user.name.split(' ')[0]}. Nothing on your shelf yet.`
+            : `Hello, ${user.name.split(' ')[0]}. ${enrollments.length} course${enrollments.length === 1 ? '' : 's'} on your shelf.`}
         </p>
+        {enrollments.length > 0 && (
+          <nav aria-label="Sections" className="rail -mx-5 mt-4 flex gap-1 border-b px-5">
+            {[
+              ['#in-progress', 'In progress', inProgress.length],
+              ['#not-started', 'Not started', notStarted.length],
+              ['#completed', 'Completed', done.length],
+              ['#certificates', 'Certificates', certificates.length],
+            ]
+              .filter(([, , n]) => (n as number) > 0)
+              .map(([href, label, n]) => (
+                <a key={href as string} href={href as string} className="shrink-0 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-[var(--ink-2)] hover:border-[var(--brand)] hover:text-[var(--ink)]">
+                  {label} <span className="faint tabular-nums">{n as number}</span>
+                </a>
+              ))}
+          </nav>
+        )}
       </div>
 
       <Banners organizationId={tenant.organizationId} placement="LEARNER_HOME" />
@@ -261,10 +278,20 @@ export default async function MyLearning({
         />
       )}
 
+      {inProgress.length > 0 && (
+        <div id="in-progress" className="scroll-mt-20">
+          <Section title="Continue learning">
+            <CourseGrid items={inProgress} cta="Continue" />
+          </Section>
+        </div>
+      )}
+
       {notStarted.length > 0 && (
-        <Section title="Not started">
-          <CourseGrid items={notStarted} cta="Start" />
-        </Section>
+        <div id="not-started" className="scroll-mt-20">
+          <Section title="Not started">
+            <CourseGrid items={notStarted} cta="Start" />
+          </Section>
+        </div>
       )}
 
       {announcements.length > 0 && (
@@ -293,19 +320,16 @@ export default async function MyLearning({
         </Section>
       )}
 
-      {inProgress.length > 0 && (
-        <Section title="In progress">
-          <CourseGrid items={inProgress} cta="Continue" />
-        </Section>
-      )}
-
       {done.length > 0 && (
-        <Section title="Completed">
-          <CourseGrid items={done} cta="Revisit" />
-        </Section>
+        <div id="completed" className="scroll-mt-20">
+          <Section title="Completed">
+            <CourseGrid items={done} cta="Revisit" />
+          </Section>
+        </div>
       )}
 
       {certificates.length > 0 && (
+        <div id="certificates" className="scroll-mt-20">
         <Section title="Certificates">
           <ul className="divide-y rounded-[var(--radius)] border bg-[var(--surface)]">
             {certificates.map((c) => (
@@ -339,6 +363,7 @@ export default async function MyLearning({
             nothing about you beyond your name, the course and the date.
           </p>
         </Section>
+        </div>
       )}
       </div>
     </div>
@@ -354,36 +379,45 @@ function CourseGrid({
     productId: string;
     progressPercent: number;
     expiresAt: Date | null;
-    product: { title: string };
+    product: { title: string; course: { thumbnailAssetId: string | null } | null };
     batch: { name: string } | null;
   }[];
   cta: string;
 }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {items.map((e) => (
-        <Link
-          key={e.id}
-          href={`/learn/${e.productId}`}
-          className="group rounded-[var(--radius)] border bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--brand-line)] hover:shadow"
-        >
-          <div className="flex items-start gap-4">
-            <ProgressRing value={e.progressPercent} />
-            <div className="min-w-0 flex-1">
-              <p className="t-heading truncate">{e.product.title}</p>
-              {e.batch && <p className="t-small faint truncate">{e.batch.name}</p>}
-              {e.expiresAt && (
-                <p className="t-small faint mt-1">
-                  Access until {e.expiresAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </p>
-              )}
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((e) => {
+        const pct = Math.round(e.progressPercent);
+        return (
+          <Link
+            key={e.id}
+            href={`/learn/${e.productId}`}
+            className="group flex flex-col overflow-hidden rounded-[var(--radius)] border bg-[var(--surface)] shadow-sm transition hover:shadow"
+          >
+            <CourseMedia title={e.product.title} assetId={e.product.course?.thumbnailAssetId} ratio="aspect-video" />
+            <div className="flex flex-1 flex-col p-4">
+              <p className="text-[0.9375rem] font-bold leading-snug line-clamp-2 group-hover:text-[var(--brand)]">{e.product.title}</p>
+              <p className="t-small faint mt-1 truncate">
+                {e.batch?.name ?? 'Self-paced'}
+                {e.expiresAt
+                  ? ` · until ${e.expiresAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
+                  : ''}
+              </p>
+              <div className="mt-auto pt-4">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-2)]">
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--brand)' }} />
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="t-small faint tabular-nums">{pct === 0 ? 'Not started' : pct >= 100 ? 'Completed' : `${pct}% complete`}</span>
+                  <span className="t-small font-semibold" style={{ color: 'var(--brand)' }}>
+                    {cta} →
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-          <p className="t-small mt-4 font-medium" style={{ color: 'var(--brand)' }}>
-            {cta} →
-          </p>
-        </Link>
-      ))}
+          </Link>
+        );
+      })}
     </div>
   );
 }
