@@ -451,16 +451,22 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           container itself and the band would stop at the text. */}
       <div className="overflow-x-clip">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-12">
-          <section className="relative isolate pb-10 pt-6 sm:pb-14 lg:col-start-1 lg:row-start-1">
-            {/* The tinted band, bled to the window edges from inside a
-                constrained container, so it passes behind the card. */}
+          <div className="relative isolate lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-x-12">
+            {/* The dark band behind the hero, bled to the window edges from
+                inside a constrained container so it passes behind the card.
+                On a desktop it is a grid item across both columns of the
+                first row, which is exactly the hero's height. */}
+            <div aria-hidden className="relative -z-10 hidden lg:col-start-1 lg:col-end-3 lg:row-start-1 lg:block">
+              <span className="absolute inset-y-0 left-1/2 w-screen -translate-x-1/2" style={{ background: 'var(--shell)' }} />
+            </div>
+          <section className="relative isolate pb-8 pt-6 text-[var(--shell-ink)] sm:pb-10 lg:col-start-1 lg:row-start-1">
             <span
               aria-hidden
-              className="absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 border-b bg-[var(--surface-2)]"
+              className="absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 lg:hidden"
+              style={{ background: 'var(--shell)' }}
             />
 
-          <nav aria-label="Breadcrumb" className="t-small faint">
+          <nav aria-label="Breadcrumb" className="t-small text-[var(--shell-muted)]">
             <Link href="/courses" className="hover:underline">
               Courses
             </Link>
@@ -474,40 +480,34 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             )}
           </nav>
 
-          <div className="mt-6">
+          <div className="mt-5">
             <div>
-              {category && (
-                <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
-                  {category.name}
-                </p>
-              )}
-
-              <h1 className="t-hero mt-2 max-w-2xl">{product.title}</h1>
+              <h1 className="max-w-2xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl">{product.title}</h1>
 
               {course.description && (
-                <p className="t-lead muted mt-3.5 max-w-2xl">{course.description}</p>
+                <p className="mt-3 max-w-2xl text-base leading-relaxed text-[var(--shell-muted)] sm:text-lg">{course.description}</p>
               )}
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                 {ratingAverage !== null && (
-                  <Rating average={ratingAverage} count={ratingCount} />
+                  <Rating average={ratingAverage} count={ratingCount} className="[&_span]:text-[var(--shell-ink)]" />
                 )}
-                <Badge tone="brand">{format}</Badge>
-                {languageName(course.language) && (
-                  <Badge tone="neutral">Taught in {languageName(course.language)}</Badge>
-                )}
+                <span className="rounded-[3px] px-1.5 py-0.5 text-xs font-bold" style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}>
+                  {format}
+                </span>
+                {languageName(course.language) && <span className="text-[var(--shell-muted)]">Taught in {languageName(course.language)}</span>}
               </div>
 
-              <dl className="mt-7 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+              <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-3">
                 {facts.map((f) => (
                   <div key={f.label}>
-                    <dt className="t-small faint">{f.label}</dt>
+                    <dt className="text-xs text-[var(--shell-muted)]">{f.label}</dt>
                     <dd className="mt-0.5 text-sm font-semibold leading-snug">{f.value}</dd>
                   </div>
                 ))}
               </dl>
 
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap lg:hidden">
                 <a
                   href="#enrol"
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-6 text-sm font-semibold transition hover:brightness-105"
@@ -516,19 +516,13 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                   Enrol now
                   <span aria-hidden>→</span>
                 </a>
-                <Link
-                  href="/contact"
-                  className="inline-flex h-11 items-center justify-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-5 text-sm font-medium transition hover:border-[var(--brand)]"
-                >
-                  Talk to a course advisor
-                </Link>
               </div>
 
-              <ul className="mt-8 grid gap-x-6 gap-y-2.5 border-t pt-6 sm:grid-cols-2">
+              <ul className="mt-6 grid gap-x-6 gap-y-2 border-t border-[var(--shell-line)] pt-5 sm:grid-cols-2">
                 {heroPoints.map((p) => (
-                  <li key={p} className="t-small flex items-start gap-2">
-                    <Check />
-                    <span className="muted">{p}</span>
+                  <li key={p} className="flex items-start gap-2 text-sm text-[var(--shell-muted)]">
+                    <Check light />
+                    <span>{p}</span>
                   </li>
                 ))}
               </ul>
@@ -545,7 +539,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             {/* The height cap is the guard for a short laptop screen: a card
                 taller than the window would pin its top and put the buy
                 button permanently out of reach. */}
-            <div className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:overscroll-contain">
+            <div className="lg:sticky lg:top-[7.75rem] lg:max-h-[calc(100vh-8.5rem)] lg:overflow-y-auto lg:overscroll-contain">
               <div className="overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--surface)] shadow-[var(--shadow)]">
                 <div className="hidden lg:block">
                   <CourseMedia title={product.title} assetId={course.thumbnailAssetId} priority />
@@ -588,19 +582,13 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
               eyebrow="Learning outcomes"
               title="What you will be able to do"
             >
-              <ol className="grid gap-3 sm:grid-cols-2">
+              <ol className="grid gap-x-6 gap-y-3 rounded-[var(--radius)] border bg-[var(--surface)] p-5 sm:grid-cols-2 sm:p-6">
                 {outcomes.map((o, i) => (
                   <li
                     key={i}
-                    className="flex gap-3 rounded-[var(--radius)] border bg-[var(--surface)] p-4"
+                    className="flex gap-3"
                   >
-                    <span
-                      aria-hidden
-                      className="t-small shrink-0 font-bold tabular-nums"
-                      style={{ color: 'var(--brand)' }}
-                    >
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
+                    <Check />
                     <span className="min-w-0">
                       {o.heading && <strong className="block text-sm font-semibold">{o.heading}</strong>}
                       {o.body && <span className="t-small muted mt-0.5 block leading-relaxed">{o.body}</span>}
@@ -948,7 +936,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-20">
+    <section id={id} className="scroll-mt-32 lg:scroll-mt-40">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
@@ -1027,13 +1015,13 @@ function PriceBlock({
   );
 }
 
-function Check() {
+function Check({ light = false }: { light?: boolean }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden className="mt-[0.2rem] h-3.5 w-3.5 shrink-0">
       <path
         d="M2 8.6l4 4L14 4"
         fill="none"
-        stroke="var(--brand)"
+        stroke={light ? 'var(--accent)' : 'var(--brand)'}
         strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"

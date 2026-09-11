@@ -67,7 +67,7 @@ export function SectionNav({
       aria-label="On this page"
       // Opaque rather than translucent. A heading sliding half-visible under
       // a frosted bar reads as an overlap bug rather than as a design.
-      className="sticky top-0 z-20 -mx-4 border-b bg-[var(--surface)] px-4 sm:mx-0 sm:px-0" 
+      className="sticky top-[4.25rem] z-20 -mx-4 border-b bg-[var(--surface)] px-4 sm:mx-0 sm:px-0 lg:top-[6.875rem]"
     >
       <div className="flex items-center gap-4 py-2">
         <div className="rail flex min-w-0 flex-1 gap-1">

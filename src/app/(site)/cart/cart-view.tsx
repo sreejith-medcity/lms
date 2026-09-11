@@ -145,7 +145,7 @@ export function CartView({
         )}
       </div>
 
-      <aside className="lg:sticky lg:top-24 lg:self-start">
+      <aside className="lg:sticky lg:top-[7.75rem] lg:self-start">
         <div className="rounded-[var(--radius-lg)] border bg-[var(--surface)] p-5 shadow-sm">
           <h2 className="t-title">Order summary</h2>
 
