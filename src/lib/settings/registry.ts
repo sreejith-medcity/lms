@@ -439,6 +439,19 @@ export const SETTINGS: SettingDef[] = [
     live: true,
   },
   {
+    key: 'website.reviewBadgeOnLight',
+    group: 'website',
+    label: 'That badge needs a white background',
+    help: 'Reviews badges arrive with their own colours and only you know which one you picked. If the badge in the hero looks like stars with no numbers, its text is white and this should stay off. If the text is dark and hard to read on the purple panel, turn this on and it sits on a white chip instead.',
+    kind: 'boolean',
+    default: false,
+    live: true,
+    effect: (value) =>
+      value
+        ? 'The badge sits on a white chip, which suits a badge that writes in dark text.'
+        : 'The badge sits straight on the purple panel, which suits a badge that writes in white.',
+  },
+  {
     key: 'website.reviewWidgetHtml',
     group: 'website',
     label: 'Live reviews embed, for course pages',

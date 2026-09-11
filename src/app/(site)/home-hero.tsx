@@ -27,6 +27,7 @@ export function HomeHero({
   imageAssetId,
   google,
   badgeHtml,
+  badgeOnLight,
   sampleId,
 }: {
   /** Usually empty. Kept for an academy running a launch or an intake. */
@@ -39,6 +40,8 @@ export function HomeHero({
   google: { rating: string; reviewCount: string } | null;
   /** A provider's own badge widget. Takes the place of the plain one. */
   badgeHtml: string;
+  /** True when that badge writes in dark text and needs a light background. */
+  badgeOnLight: boolean;
   sampleId: string | null;
 }) {
   return (
@@ -118,21 +121,21 @@ export function HomeHero({
           {badgeHtml.trim() ? (
             <div className="mt-7 flex justify-center lg:justify-start">
               {/*
-                On a light chip, deliberately.
-
-                A provider's badge arrives with its own colours, and they are
-                chosen for a white page: this one paints its text pure black,
-                which measured 1.43:1 against the purple panel. Unreadable,
-                and not something we can fix from outside without fighting
-                their stylesheet every time they change it.
-
-                So the panel gives it the background it was designed for
-                rather than arguing with it. Any badge from any provider is
-                then readable here whatever colours it ships with.
+                A provider's badge arrives with its own colours, and only the
+                academy knows which it chose. One Trustindex badge paints its
+                text pure black, which is 1.43:1 on this purple panel; another
+                paints it white, which is invisible on a white chip. Both have
+                happened here, a week apart, which is why the background is a
+                setting rather than a guess: the badge is put on the ground it
+                was designed for instead of arguing with its stylesheet.
               */}
-              <span className="inline-flex max-w-full items-center rounded-full bg-[var(--surface)] px-3 py-1.5 shadow-sm">
+              {badgeOnLight ? (
+                <span className="inline-flex max-w-full items-center rounded-full bg-[var(--surface)] px-3 py-1.5 shadow-sm">
+                  <ReviewWidget html={badgeHtml} />
+                </span>
+              ) : (
                 <ReviewWidget html={badgeHtml} />
-              </span>
+              )}
             </div>
           ) : (
             google && (

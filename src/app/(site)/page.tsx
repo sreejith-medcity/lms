@@ -5,7 +5,7 @@ import { getTenantState } from '@/lib/tenant';
 import { getSiteContext, courseCardSelect, type CourseCard as Card } from '@/lib/site';
 import { CourseCard } from '@/components/course-card';
 import { SetupNotice, NoTenantNotice } from '@/components/tenant-notices';
-import { settingText } from '@/lib/settings/store';
+import { settingBool, settingText } from '@/lib/settings/store';
 import { SubjectCard } from '@/components/subject-card';
 import { HomeHero } from './home-hero';
 import { Banners } from '@/components/banners';
@@ -43,6 +43,7 @@ export default async function Home() {
     settingText(site.organizationId, 'website.googleRating'),
     settingText(site.organizationId, 'website.googleReviewCount'),
     settingText(site.organizationId, 'website.reviewBadgeHtml'),
+    settingBool(site.organizationId, 'website.reviewBadgeOnLight'),
   ]);
 
   // The two counts that fed the hero's counter row are gone with it. They were
@@ -99,6 +100,7 @@ export default async function Home() {
     googleRating,
     googleCount,
     reviewBadgeHtml,
+    reviewBadgeOnLight,
   ] = await hero;
 
   const google =
@@ -116,6 +118,7 @@ export default async function Home() {
         imageAssetId={heroImage.trim() || null}
         google={google ?? null}
         badgeHtml={reviewBadgeHtml}
+        badgeOnLight={reviewBadgeOnLight}
         sampleId={samples?.id ?? null}
       />
 
