@@ -3,6 +3,7 @@ import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { formatBytes } from '@/lib/storage';
 import { formatDayLabel, dayKey, formatTime } from '@/lib/clock';
+import { describeRemaining } from '@/lib/recording-share';
 import { EmptyState, PageHeader } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { RecordingsTable, Filters } from './table';
@@ -57,6 +58,18 @@ export default async function RecordingsPage({
         isPublished: true,
         assetId: true,
         asset: { select: { sizeBytes: true, durationSeconds: true, type: true } },
+        shares: {
+          orderBy: { createdAt: 'desc' },
+          take: 8,
+          select: {
+            id: true,
+            expiresAt: true,
+            revokedAt: true,
+            viewCount: true,
+            maxViews: true,
+            user: { select: { name: true, email: true } },
+          },
+        },
         session: {
           select: {
             id: true,
@@ -120,6 +133,17 @@ export default async function RecordingsPage({
             sessionTitle: r.session.title,
             batchName: r.session.batch?.name ?? 'One to one',
             roster: r.session.batch?._count.enrollments ?? 1,
+            shares: r.shares.map((share) => ({
+              id: share.id,
+              learner: share.user.name || share.user.email || 'a learner',
+              expiresLabel: describeRemaining(share.expiresAt),
+              views:
+                share.maxViews == null
+                  ? `${share.viewCount} view${share.viewCount === 1 ? '' : 's'}`
+                  : `${share.viewCount} of ${share.maxViews} views`,
+              revoked: Boolean(share.revokedAt),
+              path: '',
+            })),
             when: `${formatDayLabel(dayKey(r.session.startsAt, tz), tz)}, ${formatTime(r.session.startsAt, tz)}`,
           }))}
         />

@@ -154,7 +154,24 @@ export async function GET(
       db.recording.count({
         where: {
           assetId: asset.id,
-          session: { batch: { enrollments: { some: { userId: user.id } } } },
+          OR: [
+            // In the batch whose class this was.
+            { session: { batch: { enrollments: { some: { userId: user.id } } } } },
+            // The learner a one-to-one class was held for.
+            { session: { learnerId: user.id } },
+            // Or holding a live share of it, made for this account. The
+            // window and the withdrawal are enforced here as well as on the
+            // page, so an expired share cannot still stream the file.
+            {
+              shares: {
+                some: {
+                  userId: user.id,
+                  revokedAt: null,
+                  expiresAt: { gt: new Date() },
+                },
+              },
+            },
+          ],
         },
       }),
     ]);

@@ -16,6 +16,7 @@ import {
   Select,
   Table,
 } from '@/components/ui';
+import { ShareRecording, type ShareRow } from './share';
 
 export interface RecordingRow {
   id: string;
@@ -29,6 +30,7 @@ export interface RecordingRow {
   batchName: string;
   roster: number;
   when: string;
+  shares: ShareRow[];
 }
 
 export function Filters({
@@ -253,6 +255,11 @@ export function RecordingsTable({ rows, canEdit }: { rows: RecordingRow[]; canEd
               >
                 Play
               </a>
+              {canEdit && (
+                <div className="mt-1">
+                  <ShareRecording recordingId={r.id} title={r.title} shares={r.shares} />
+                </div>
+              )}
             </Cell>
           </Row>
         ))}
