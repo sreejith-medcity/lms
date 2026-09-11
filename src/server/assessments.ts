@@ -191,6 +191,51 @@ export async function saveQuestion(_prev: ActionState, formData: FormData): Prom
   }
 }
 
+export interface BankQuestionHit {
+  id: string;
+  type: string;
+  promptHtml: string;
+  marks: number;
+  difficulty: string;
+  tags: string[];
+}
+
+/**
+ * Questions for the picker, a page at a time. A bank of three thousand is
+ * not sent to the browser; the picker asks for what it needs.
+ */
+export async function searchBankQuestions(input: {
+  bankId: string;
+  q?: string;
+  tag?: string;
+  excludeAssessmentId?: string;
+}): Promise<{ rows: BankQuestionHit[]; total: number; error?: string }> {
+  try {
+    const { tenant } = await guard('courses.assessments', 'view');
+    const where = {
+      bankId: input.bankId,
+      bank: { organizationId: tenant.organizationId },
+      ...(input.q?.trim() ? { promptHtml: { contains: input.q.trim(), mode: 'insensitive' as const } } : {}),
+      ...(input.tag?.trim() ? { tags: { has: input.tag.trim().toLowerCase() } } : {}),
+      ...(input.excludeAssessmentId
+        ? { items: { none: { assessmentId: input.excludeAssessmentId } } }
+        : {}),
+    };
+    const [rows, total] = await Promise.all([
+      db.question.findMany({
+        where,
+        orderBy: { id: 'desc' },
+        take: 100,
+        select: { id: true, type: true, promptHtml: true, marks: true, difficulty: true, tags: true },
+      }),
+      db.question.count({ where }),
+    ]);
+    return { rows, total };
+  } catch (err) {
+    return { rows: [], total: 0, error: fail(err).error };
+  }
+}
+
 /**
  * A question used by an assessment that has already been attempted is not
  * deleted. Removing it would rewrite scores that were already earned and

@@ -1,13 +1,16 @@
 'use client';
 
-import { useActionState, useMemo, useState, useTransition } from 'react';
+import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addQuestionsToAssessment,
   removeQuestionFromAssessment,
+  searchBankQuestions,
   setAssessmentCourses,
   updateAssessment,
+  type BankQuestionHit,
 } from '@/server/assessments';
+import { redrawPaper } from '@/server/papers';
 import type { ActionState } from '@/server/courses';
 import {
   Badge,
@@ -186,27 +189,37 @@ export function PaperList({
 export function QuestionPicker({
   assessmentId,
   banks,
-  chosen,
+  chosenCount,
   locked,
 }: {
   assessmentId: string;
-  banks: {
-    id: string;
-    name: string;
-    questions: { id: string; type: string; promptHtml: string; marks: number; difficulty: string }[];
-  }[];
-  chosen: string[];
+  banks: { id: string; name: string; count: number }[];
+  chosenCount: number;
   locked: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [loading, startLoad] = useTransition();
   const [bankId, setBankId] = useState(banks[0]?.id ?? '');
+  const [q, setQ] = useState('');
+  const [tag, setTag] = useState('');
+  const [hits, setHits] = useState<{ rows: BankQuestionHit[]; total: number }>({ rows: [], total: 0 });
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string>();
 
-  const already = useMemo(() => new Set(chosen), [chosen]);
-  const bank = banks.find((b) => b.id === bankId);
-  const available = (bank?.questions ?? []).filter((q) => !already.has(q.id));
+  // Fetched on demand rather than shipped with the page: a bank of three
+  // thousand questions is a search box, not a list.
+  useEffect(() => {
+    if (!bankId || locked) return;
+    const handle = setTimeout(() => {
+      startLoad(async () => {
+        const res = await searchBankQuestions({ bankId, q, tag, excludeAssessmentId: assessmentId });
+        if (res.error) setError(res.error);
+        setHits({ rows: res.rows, total: res.total });
+      });
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [bankId, q, tag, assessmentId, locked, chosenCount]);
 
   if (locked) return null;
 
@@ -229,10 +242,20 @@ export function QuestionPicker({
             <Select value={bankId} onChange={(e) => setBankId(e.target.value)}>
               {banks.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.name} ({b.questions.length})
+                  {b.name} ({b.count})
                 </option>
               ))}
             </Select>
+          </Field>
+        </div>
+        <div className="min-w-40 flex-1">
+          <Field label="Search">
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Words in the question" />
+          </Field>
+        </div>
+        <div className="w-36">
+          <Field label="Tag">
+            <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="any" />
           </Field>
         </div>
         <Button
@@ -254,11 +277,15 @@ export function QuestionPicker({
 
       {error && <p className="t-small mt-2 text-[var(--bad)]">{error}</p>}
 
-      <ul className="mt-4 space-y-1.5">
-        {available.length === 0 && (
-          <li className="t-small faint">Every question in this bank is already on the paper.</li>
+      <p className="t-small faint mt-3 tabular-nums">
+        {loading ? 'Looking...' : `${hits.total} not yet on the paper${hits.total > hits.rows.length ? `, showing ${hits.rows.length}. Narrow it with a search or a tag.` : '.'}`}
+      </p>
+
+      <ul className="mt-2 space-y-1.5">
+        {!loading && hits.rows.length === 0 && (
+          <li className="t-small faint">Nothing here to add.</li>
         )}
-        {available.map((q) => (
+        {hits.rows.map((q) => (
           <li key={q.id}>
             <label className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-sm)] px-2 py-1.5 hover:bg-[var(--surface-2)]">
               <input
@@ -279,6 +306,7 @@ export function QuestionPicker({
                 <span className="t-micro faint">
                   {TYPE_LABELS[q.type] ?? q.type} · {q.marks} mark{q.marks === 1 ? '' : 's'} ·{' '}
                   {q.difficulty.toLowerCase()}
+                  {q.tags.length ? ` · ${q.tags.join(', ')}` : ''}
                 </span>
               </span>
             </label>
@@ -347,6 +375,34 @@ export function CoursePicker({
       >
         {pending ? 'Saving...' : 'Save courses'}
       </Button>
+    </div>
+  );
+}
+
+/** Another variant from the same recipe. Only while nobody has sat it. */
+export function RedrawButton({ assessmentId }: { assessmentId: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionState>({});
+
+  return (
+    <div className="space-y-1 text-right">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const res = await redrawPaper(assessmentId);
+            setState(res);
+            if (res.ok) router.refresh();
+          })
+        }
+      >
+        {pending ? 'Drawing...' : 'Draw a fresh variant'}
+      </Button>
+      <FormError message={state.error} />
+      <FormSuccess message={state.ok ? state.message : undefined} />
     </div>
   );
 }

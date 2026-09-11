@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
-import { Badge, Card, Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
+import { Badge, Card, Cell, EmptyState, LinkButton, PageHeader, Row, Table } from '@/components/ui';
 import { NewAssessmentForm } from './editors';
 
 export const dynamic = 'force-dynamic';
@@ -32,9 +32,14 @@ export default async function AssessmentsPage() {
         title="Assessments"
         description="Tests, mock exams and assignments, built from the question bank and attached to the courses that use them. A test can also be given to one candidate on their own page, with its own number of attempts."
         action={
-          <Link href="/admin/assessments/pools" className="t-small underline">
-            Sets of tests
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href="/admin/assessments/pools" className="t-small underline">
+              Sets of tests
+            </Link>
+            <LinkButton href="/admin/assessments/generate" size="sm">
+              Generate a paper
+            </LinkButton>
+          </div>
         }
       />
 

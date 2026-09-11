@@ -3,8 +3,9 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { parseBlueprint } from '@/lib/paper-blueprint';
 import { Badge, Card } from '@/components/ui';
-import { SettingsForm, QuestionPicker, CoursePicker, PaperList } from './editors';
+import { SettingsForm, QuestionPicker, CoursePicker, PaperList, RedrawButton } from './editors';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -26,6 +27,7 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
       passPercent: true,
       shuffleQuestions: true,
       showResultsImmediately: true,
+      blueprint: true,
       courses: { select: { courseId: true } },
       questions: {
         orderBy: { sortOrder: 'asc' },
@@ -48,17 +50,13 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
   });
   if (!assessment) notFound();
 
+  const recipe = parseBlueprint(((assessment.blueprint ?? {}) as { sections?: unknown }).sections);
+
   const [banks, courses] = await Promise.all([
     db.questionBank.findMany({
       where: { organizationId: tenant.organizationId },
       orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        questions: {
-          select: { id: true, type: true, promptHtml: true, marks: true, difficulty: true },
-        },
-      },
+      select: { id: true, name: true, _count: { select: { questions: true } } },
     }),
     db.course.findMany({
       where: { organizationId: tenant.organizationId },
@@ -89,6 +87,27 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-5">
+          {recipe.length > 0 && (
+            <Card>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="t-heading">Drawn from a recipe</h2>
+                  <ul className="t-small muted mt-1.5 space-y-0.5">
+                    {recipe.map((r, i) => (
+                      <li key={i}>
+                        {r.label}: {r.count}
+                        {r.difficulty ? ` ${r.difficulty.toLowerCase()}` : ''}
+                        {r.tags?.length ? ` tagged ${r.tags.join(r.anyTag ? ' or ' : ' and ')}` : ''}
+                        {r.bankIds?.length ? ' from one bank' : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {!locked && <RedrawButton assessmentId={assessment.id} />}
+              </div>
+            </Card>
+          )}
+
           <section>
             <h2 className="t-heading mb-3">The paper</h2>
             <PaperList
@@ -109,8 +128,8 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
             <h2 className="t-heading mb-3">Add from the bank</h2>
             <QuestionPicker
               assessmentId={assessment.id}
-              banks={banks}
-              chosen={[...chosen]}
+              banks={banks.map((b) => ({ id: b.id, name: b.name, count: b._count.questions }))}
+              chosenCount={chosen.size}
               locked={locked}
             />
           </section>
