@@ -192,6 +192,11 @@ model User {
   enrollments       Enrollment[]
   attendances       Attendance[]
   attempts          Attempt[]
+  recordingShares   RecordingShare[]
+  assessmentGrants  AssessmentGrant[]
+  poolGrants        AssessmentPoolGrant[]
+  oneToOneCredits   OneToOneCredit[]
+  oneToOneSessions  LiveSession[]        @relation("oneToOneLearner")
   submissions       Submission[]
   certificates      IssuedCertificate[]
   orders            Order[]
@@ -656,15 +661,99 @@ model MembershipCourse {
   @@map("membership_courses")
 }
 
+/// A one-to-one product: so many sessions with a trainer, bought like a course.
 model Mentorship {
   id              String @id @default(cuid())
   productId       String @unique
   durationMinutes Int    @default(30)
   mentorPoolMode  String @default("ASSIGNED") // ASSIGNED | ALL_TRAINERS
+  /// How many sessions one purchase buys.
+  sessionsIncluded Int   @default(1)
+  /// How far ahead a learner may book, from the day they buy.
+  bookingWindowDays Int  @default(60)
+  /// How much notice a booking or a cancellation needs.
+  minNoticeHours   Int   @default(12)
+  /// Sessions expire this many days after purchase. Null means they do not.
+  validityDays     Int?
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  mentors MentorshipMentor[]
 
   @@map("mentorships")
+}
+
+/// Which trainers a one-to-one product may be booked with.
+model MentorshipMentor {
+  mentorshipId String
+  userId       String
+
+  mentorship Mentorship @relation(fields: [mentorshipId], references: [id], onDelete: Cascade)
+
+  @@id([mentorshipId, userId])
+  @@map("mentorship_mentors")
+}
+
+/// When a trainer can be booked, as a weekly pattern in the academy's timezone.
+///
+/// A pattern rather than a list of slots, because a trainer describes their
+/// week once and the bookable times are worked out from it. Times are minutes
+/// from midnight, which sorts, compares and crosses a daylight change without
+/// a date library having an opinion.
+model MentorAvailability {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  /// 0 is Sunday, matching JavaScript rather than any local convention.
+  weekday        Int
+  startMinute    Int
+  endMinute      Int
+  slotMinutes    Int      @default(30)
+  isActive       Boolean  @default(true)
+  validFrom      DateTime?
+  validUntil     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, userId])
+  @@map("mentor_availability")
+}
+
+/// A day or a run of hours a trainer is not available, whatever the pattern says.
+model MentorBlackout {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  startsAt       DateTime
+  endsAt         DateTime
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, userId, startsAt])
+  @@map("mentor_blackouts")
+}
+
+/// Sessions a learner holds and has not booked yet.
+///
+/// Bought with a one-to-one product, or given by the office. What is left is
+/// counted from the sessions booked against it rather than stored, so a
+/// cancelled class returns its credit without anybody adjusting a number.
+model OneToOneCredit {
+  id                String    @id @default(cuid())
+  organizationId    String
+  userId            String
+  productId         String?
+  orderItemId       String?
+  sessionsTotal     Int       @default(1)
+  minutesPerSession Int       @default(30)
+  expiresAt         DateTime?
+  note              String?
+  grantedById       String?
+  createdAt         DateTime  @default(now())
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions LiveSession[]
+
+  @@index([organizationId, userId])
+  @@map("one_to_one_credits")
 }
 
 // ---------------------------------------------------------------------------
@@ -905,7 +994,13 @@ enum BatchRole {
 model LiveSession {
   id                String        @id @default(cuid())
   organizationId    String
-  batchId           String
+  /// Null for a one-to-one class, which belongs to a learner rather than to
+  /// a batch. Exactly one of batchId and learnerId is set.
+  batchId           String?
+  /// The single learner a one-to-one class is for.
+  learnerId         String?
+  /// The credit this class was booked against, where it was bought.
+  creditId          String?
   title             String
   topics            String?
   startsAt          DateTime
@@ -926,7 +1021,9 @@ model LiveSession {
   autoRecord        Boolean       @default(true)
   createdAt         DateTime      @default(now())
 
-  batch       Batch               @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batch       Batch?              @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  learner     User?               @relation("oneToOneLearner", fields: [learnerId], references: [id], onDelete: Cascade)
+  credit      OneToOneCredit?     @relation(fields: [creditId], references: [id])
   instructors SessionInstructor[]
   attendances Attendance[]
   recordings  Recording[]
@@ -935,6 +1032,7 @@ model LiveSession {
 
   @@index([organizationId, startsAt])
   @@index([batchId, startsAt])
+  @@index([learnerId, startsAt])
   @@index([organizationId, providerMeetingId])
   @@map("live_sessions")
 }
@@ -1024,9 +1122,44 @@ model Recording {
 
   session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   asset   Asset       @relation(fields: [assetId], references: [id])
+  shares  RecordingShare[]
 
   @@index([sessionId])
   @@map("recordings")
+}
+
+/// One recording, released to one learner, until a date.
+///
+/// A recording is normally seen by the batch that sat the class. This is the
+/// exception the office actually needs: a candidate who missed a session, or
+/// who is being shown one before they enrol, gets a link that works for them
+/// and stops working on a date. It is tied to a person rather than being a
+/// secret URL, so forwarding it to a WhatsApp group achieves nothing, and
+/// every view is counted so "I never got it" has an answer.
+model RecordingShare {
+  id             String    @id @default(cuid())
+  organizationId String
+  recordingId    String
+  /// The one learner this was made for. They sign in; the link alone is not a key.
+  userId         String
+  token          String    @unique
+  note           String?
+  expiresAt      DateTime
+  /// Optional ceiling on top of the date, for something genuinely sensitive.
+  maxViews       Int?
+  viewCount      Int       @default(0)
+  firstViewedAt  DateTime?
+  lastViewedAt   DateTime?
+  revokedAt      DateTime?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+
+  recording Recording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, expiresAt])
+  @@index([userId])
+  @@map("recording_shares")
 }
 
 /// AI layer: every recording gets transcribed, summarised and chaptered.
@@ -1201,9 +1334,97 @@ model Assessment {
   questions AssessmentQuestion[]
   courses   AssessmentCourse[]
   attempts  Attempt[]
+  grants    AssessmentGrant[]
+  pools     AssessmentPoolItem[]
 
   @@index([organizationId])
   @@map("assessments")
+}
+
+/// What one learner may do with one test, over and above their course.
+///
+/// Mock tests come with the course, which is right for most people and wrong
+/// for the ones who need a fourth attempt before their exam date, or a test
+/// their course does not include. Both are decided per learner here rather
+/// than by loosening the test for everybody.
+model AssessmentGrant {
+  id             String    @id @default(cuid())
+  organizationId String
+  assessmentId   String
+  userId         String
+  /// Given to this learner even where their course does not include it.
+  isAssigned     Boolean   @default(true)
+  /// On top of the test's own limit. Two extra on a two-attempt test is four.
+  extraAttempts  Int       @default(0)
+  /// A window for this learner alone, inside or outside the test's own.
+  opensAt        DateTime?
+  closesAt       DateTime?
+  note           String?
+  grantedById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([assessmentId, userId])
+  @@index([organizationId, userId])
+  @@map("assessment_grants")
+}
+
+/// A set of tests a learner may take some of, and choose which.
+///
+/// "Twenty mocks, take any five" is how extra practice is actually sold, and
+/// it cannot be expressed by assigning tests one at a time: the learner has
+/// to do the choosing, and the count has to hold across whichever they pick.
+model AssessmentPool {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items  AssessmentPoolItem[]
+  grants AssessmentPoolGrant[]
+
+  @@index([organizationId])
+  @@map("assessment_pools")
+}
+
+model AssessmentPoolItem {
+  poolId       String
+  assessmentId String
+  sortOrder    Int    @default(0)
+
+  pool       AssessmentPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  assessment Assessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@id([poolId, assessmentId])
+  @@map("assessment_pool_items")
+}
+
+/// How many of a pool one learner may take. What they have used is counted
+/// from their attempts rather than kept here, so the two can never disagree.
+model AssessmentPoolGrant {
+  id             String    @id @default(cuid())
+  organizationId String
+  poolId         String
+  userId         String
+  allowance      Int       @default(1)
+  expiresAt      DateTime?
+  note           String?
+  grantedById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  pool AssessmentPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([poolId, userId])
+  @@index([organizationId, userId])
+  @@map("assessment_pool_grants")
 }
 
 enum AssessmentKind {
