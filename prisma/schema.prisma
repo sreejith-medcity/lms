@@ -1712,6 +1712,10 @@ model OrderItem {
   orderId       String
   productId     String
   pricingPlanId String?
+  /// Set when the line is an instalment being paid online rather than a
+  /// purchase: fulfilment then settles that instalment instead of enrolling
+  /// the learner a second time.
+  instalmentId  String?
   titleSnapshot String
   pricePaise    Int
   discountPaise Int     @default(0)
@@ -1721,7 +1725,9 @@ model OrderItem {
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product      @relation(fields: [productId], references: [id])
   pricingPlan PricingPlan? @relation(fields: [pricingPlanId], references: [id])
+  instalment  Instalment?  @relation(fields: [instalmentId], references: [id])
 
+  @@index([instalmentId])
   @@map("order_items")
 }
 
@@ -1740,6 +1746,7 @@ model Instalment {
   reminderSentAt DateTime?
 
   enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
 
   @@unique([enrollmentId, sequence])
   @@index([dueDate, paidAt])
