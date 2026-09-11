@@ -6,7 +6,6 @@ import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
-import type { Prisma } from '@prisma/client';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -99,68 +98,7 @@ export async function createInstalmentPlan(
     });
 
     revalidatePath('/admin/fees');
-    return { ok: true, message: `${d.count} instalments scheduled.` };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-export async function markInstalmentPaid(
-  instalmentId: string,
-  method: string,
-): Promise<ActionState> {
-  try {
-    const { tenant, user } = await guard('sales.fee_tracking');
-
-    const instalment = await db.instalment.findFirst({
-      where: { id: instalmentId, enrollment: { organizationId: tenant.organizationId } },
-      select: {
-        id: true,
-        amountPaise: true,
-        paidAt: true,
-        sequence: true,
-        enrollment: { select: { userId: true, branchId: true, user: { select: { name: true } } } },
-      },
-    });
-    if (!instalment) return { error: 'Instalment not found.' };
-    if (instalment.paidAt) return { error: 'Already marked paid.' };
-
-    // A collected instalment is a payment. Recording it any other way would
-    // leave the collections figure short.
-    const payment = await db.payment.create({
-      data: {
-        organizationId: tenant.organizationId,
-        userId: instalment.enrollment.userId,
-        gateway: method === 'CASH' ? 'CASH' : 'MANUAL',
-        method: method.toLowerCase(),
-        amountPaise: instalment.amountPaise,
-        status: 'CAPTURED',
-        capturedAt: new Date(),
-        raw: { instalment: instalment.sequence, recordedBy: user.id } as Prisma.InputJsonValue,
-      },
-      select: { id: true },
-    });
-
-    await db.instalment.update({
-      where: { id: instalmentId },
-      data: { paidAt: new Date(), paymentId: payment.id },
-    });
-
-    await recordAudit({
-      organizationId: tenant.organizationId,
-      actorId: user.id,
-      action: 'fee.instalment.paid',
-      entity: 'Instalment',
-      entityId: instalmentId,
-      after: {
-        learner: instalment.enrollment.user.name,
-        amountPaise: instalment.amountPaise,
-        method,
-      },
-    });
-
-    revalidatePath('/admin/fees');
-    return { ok: true };
+    return { ok: true, message: `${d.count} instalments scheduled. Payments against them are taken from the learner's statement.` };
   } catch (err) {
     return fail(err);
   }

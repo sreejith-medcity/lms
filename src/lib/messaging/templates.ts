@@ -75,8 +75,8 @@ const DEFAULTS: Record<string, Default> = {
     body: 'Hello {{name}}, the payment of {{amount}} for {{item}} did not go through, and nothing has been charged. You can try again at {{retryUrl}}.',
   },
   'instalment.due': {
-    subject: '{{amount}} is due on {{date}}',
-    body: 'Hello {{name}}, an instalment of {{amount}} for {{item}} is due on {{date}}. Pay at {{payUrl}}.',
+    subject: '{{amount}} for {{item}} is {{stage}}',
+    body: 'Hello {{name}}, an instalment of {{amount}} for {{item}} is due on {{date}}. Pay online at {{payUrl}} or at the academy. If you have already paid, please ignore this.',
   },
   'cart.abandoned': {
     subject: 'You left {{item}} in your cart',

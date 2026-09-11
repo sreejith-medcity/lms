@@ -10,6 +10,7 @@ import { queueNotifications } from '@/lib/notify';
 import { invoicePrefix, nextInvoiceNumber } from '@/lib/invoice-number';
 import { checkPaidAmount, estimatedGatewayFeePaise } from '@/lib/payment-amount';
 import { settingBool, settingNumber } from '@/lib/settings/store';
+import { scheduleFromPlan } from '@/lib/dues';
 
 /**
  * The one place a payment becomes access.
@@ -98,7 +99,9 @@ export async function fulfilPaidOrder(input: {
   const order = await db.order.findFirst({
     where: { id: input.orderId, organizationId: input.organizationId },
     include: {
-      items: { select: { id: true, productId: true, pricingPlanId: true } },
+      items: {
+        select: { id: true, productId: true, pricingPlanId: true, instalmentId: true, pricePaise: true },
+      },
       invoice: { select: { invoiceNo: true } },
     },
   });
@@ -238,16 +241,30 @@ export async function fulfilPaidOrder(input: {
         item.pricingPlanId
           ? db.pricingPlan.findUnique({
               where: { id: item.pricingPlanId },
-              select: { validityDays: true },
+              select: {
+                validityDays: true,
+                planType: true,
+                pricePaise: true,
+                instalmentCount: true,
+                instalmentPlan: true,
+              },
             })
           : Promise.resolve(null),
       ]);
+
+      // A plan paid in parts: the order charged the first part, and the
+      // rest becomes a schedule on the enrolment, written below.
+      const schedule =
+        plan?.planType === 'INSTALMENT' && plan.instalmentCount > 1 && !item.instalmentId
+          ? scheduleFromPlan(plan, new Date())
+          : null;
 
       return {
         item,
         batchId: batch?.id ?? null,
         validityDays: plan?.validityDays ?? null,
         mentorship: product?.mentorship ?? null,
+        schedule,
       };
     }),
   );
@@ -287,7 +304,7 @@ export async function fulfilPaidOrder(input: {
   await db.$transaction(async (tx) => {
     // 1. The payment. Unique on (organisation, gateway, reference), so a repeated
     //    delivery of the same event updates one row instead of creating a second.
-    await tx.payment.upsert({
+    const payment = await tx.payment.upsert({
       where: {
         organizationId_gateway_gatewayRef: {
           organizationId: input.organizationId,
@@ -314,6 +331,7 @@ export async function fulfilPaidOrder(input: {
         method: input.method ?? undefined,
         raw: (input.raw ?? undefined) as Prisma.InputJsonValue,
       },
+      select: { id: true },
     });
 
     // 2. The order.
@@ -325,7 +343,55 @@ export async function fulfilPaidOrder(input: {
     //    (user, product, batch) is what makes a second delivery harmless.
     const branchId = order.branchId;
 
-    for (const { item, batchId: itemBatchId, validityDays, mentorship } of context) {
+    for (const { item, batchId: itemBatchId, validityDays, mentorship, schedule } of context) {
+      /**
+       * The fee plan behind an enrolment bought in parts. The first part is
+       * what this order took, so it is written as paid against this
+       * payment; the rest are dated and open, and the dues screen and the
+       * reminders take it from there. Only ever written once per enrolment.
+       */
+      async function writeSchedule(enrollmentId: string) {
+        if (!schedule) return;
+        const already = await tx.instalment.count({ where: { enrollmentId } });
+        if (already > 0) return;
+        await tx.instalment.createMany({
+          data: schedule.map((part, i) => ({
+            enrollmentId,
+            sequence: part.sequence,
+            amountPaise: part.amountPaise,
+            dueDate: part.dueDate,
+            paidPaise: i === 0 ? part.amountPaise : 0,
+            paidAt: i === 0 ? new Date() : null,
+            paymentId: i === 0 ? payment.id : null,
+          })),
+        });
+      }
+
+      /*
+       * An instalment paid online. The learner is already enrolled; what
+       * this payment does is settle one part of their fee plan. Guarded on
+       * paidAt so a replayed webhook cannot count the money twice.
+       */
+      if (item.instalmentId) {
+        const part = await tx.instalment.findFirst({
+          where: { id: item.instalmentId, enrollment: { organizationId: input.organizationId } },
+          select: { id: true, amountPaise: true, paidPaise: true, paidAt: true },
+        });
+        if (part && !part.paidAt) {
+          await tx.instalment.update({
+            where: { id: part.id },
+            data: {
+              // The order was for the balance, so this lands exactly on the
+              // amount; the clamp is for a plan edited in between.
+              paidPaise: Math.min(part.amountPaise, part.paidPaise + item.pricePaise),
+              paidAt: new Date(),
+              paymentId: payment.id,
+            },
+          });
+        }
+        continue;
+      }
+
       /*
        * A one-to-one purchase becomes sessions to book rather than a course
        * to open. Keyed on the order item, so a repeated webhook delivery
@@ -376,6 +442,7 @@ export async function fulfilPaidOrder(input: {
               expiresAt: validityDays ? new Date(Date.now() + validityDays * 864e5) : null,
             },
           });
+          if (schedule) await writeSchedule(existing.id);
         }
         enrollmentIds.push(existing.id);
         continue;
@@ -398,6 +465,7 @@ export async function fulfilPaidOrder(input: {
         select: { id: true },
       });
       enrollmentIds.push(created.id);
+      if (schedule) await writeSchedule(created.id);
     }
 
     // 4. The invoice. Numbered inside the transaction, and the global unique on

@@ -296,7 +296,7 @@ export const salesReports: ReportDef[] = [
     category: 'sales',
     question: 'Who owes us money, and how late is it?',
     definitions: [
-      ['Overdue', 'An instalment whose due date has passed with nothing recorded against it.'],
+      ['Overdue', 'An instalment whose due date has passed with a balance still open. A part payment leaves it here for what is left.'],
       ['Days late', 'Days since the due date. Not since the enrolment.'],
     ],
     ignoresRange: true,
@@ -311,6 +311,7 @@ export const salesReports: ReportDef[] = [
         take: 500,
         select: {
           amountPaise: true,
+          paidPaise: true,
           dueDate: true,
           sequence: true,
           enrollment: {
@@ -330,7 +331,7 @@ export const salesReports: ReportDef[] = [
           { key: 'contact', label: 'Contact' },
           { key: 'course', label: 'Course' },
           { key: 'instalment', label: 'Instalment', numeric: true },
-          { key: 'amount', label: 'Amount', numeric: true },
+          { key: 'amount', label: 'Balance', numeric: true },
           { key: 'due', label: 'Was due' },
           { key: 'late', label: 'Days late', numeric: true },
         ],
@@ -339,7 +340,7 @@ export const salesReports: ReportDef[] = [
           i.enrollment.user.phone ?? i.enrollment.user.email ?? '—',
           i.enrollment.product.title,
           i.sequence,
-          formatMoney(i.amountPaise, ctx.currency),
+          formatMoney(i.amountPaise - i.paidPaise, ctx.currency),
           dayKey(i.dueDate, ctx.timeZone),
           Math.floor((now - i.dueDate.getTime()) / 86_400_000),
         ]),
@@ -347,7 +348,7 @@ export const salesReports: ReportDef[] = [
           {
             label: 'Owed',
             value: formatMoney(
-              instalments.reduce((n, i) => n + i.amountPaise, 0),
+              instalments.reduce((n, i) => n + i.amountPaise - i.paidPaise, 0),
               ctx.currency,
             ),
             sub: `${instalments.length} instalments past their date`,

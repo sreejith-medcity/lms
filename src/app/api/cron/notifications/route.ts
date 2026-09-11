@@ -4,6 +4,7 @@ import { authorizeCron } from '@/lib/cron';
 import { drain } from '@/lib/messaging/drain';
 import { purgeExpiredOtps } from '@/lib/otp';
 import { queueUpcomingReminders } from '@/lib/messaging/reminders';
+import { queueFeeReminders } from '@/lib/messaging/fee-reminders';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -41,10 +42,11 @@ export async function GET(request: Request) {
     // Queue before draining, so a class starting in the next hour is reminded
     // about on this run rather than the next one.
     const reminders = await queueUpcomingReminders(organization.id);
+    const fees = await queueFeeReminders(organization.id);
     const result = await drain(organization.id, 100);
     sent += result.sent;
     failed += result.failed;
-    results[organization.name] = { ...result, reminders };
+    results[organization.name] = { ...result, reminders, fees };
   }
 
   const purged = await purgeExpiredOtps();

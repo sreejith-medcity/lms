@@ -28,9 +28,9 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
   {
     group: 'Money',
     events: [
-      { key: 'payment.received', label: 'A payment went through', who: 'The learner who paid', live: false, waitingOn: 'the fulfilment path to emit it' },
+      { key: 'payment.received', label: 'A payment went through', who: 'The learner who paid', live: true },
       { key: 'payment.failed', label: 'A payment failed', who: 'The learner who tried', live: false, waitingOn: 'the fulfilment path to emit it' },
-      { key: 'instalment.due', label: 'An instalment is due', who: 'The learner who owes it', live: false, waitingOn: 'a scheduler, which arrives in Phase 7' },
+      { key: 'instalment.due', label: 'An instalment is due', who: 'The learner who owes it', live: true },
       { key: 'cart.abandoned', label: 'They left a cart', who: 'The learner who left it', live: true },
     ],
   },

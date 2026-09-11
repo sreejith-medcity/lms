@@ -10,6 +10,7 @@ import { Leaderboard } from '@/components/leaderboard';
 import { questionsOf } from '@/lib/feedback';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { assessmentsForLearner } from '@/lib/assessment-access';
+import { feeNoticeFor } from '@/lib/dues';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,14 @@ export default async function MyLearning() {
     : [];
 
   const now = new Date();
+
+  // A fee that is due is said once, at the top, with the amount. Nobody
+  // should find out from the office that they are three weeks late.
+  const openInstalments = await db.instalment.findMany({
+    where: { enrollment: { organizationId: tenant.organizationId, userId: user.id }, paidAt: null },
+    select: { amountPaise: true, paidPaise: true, dueDate: true },
+  });
+  const feeNotice = feeNoticeFor(openInstalments, now, tenant.currency);
 
   // Classes worth asking about: sat in the last week, finished, not yet rated.
   // Asked here rather than by email, because this is where the learner already is.
@@ -137,6 +146,18 @@ export default async function MyLearning() {
       </div>
 
       <Banners organizationId={tenant.organizationId} placement="LEARNER_HOME" />
+
+      {feeNotice && (
+        <Link
+          href="/learn/fees"
+          className={`mb-6 flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius)] border px-4 py-3 text-sm ${
+            feeNotice.overdue ? 'border-[var(--bad)] bg-[var(--bad-soft)]' : 'border-[var(--warn)] bg-[var(--warn-soft)]'
+          }`}
+        >
+          <span className="font-medium">{feeNotice.text}</span>
+          <span className="underline">Pay now</span>
+        </Link>
+      )}
 
       {extraTests.length > 0 && (
         <Section title="Set for you">

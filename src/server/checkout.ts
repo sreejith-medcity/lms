@@ -15,6 +15,7 @@ import { normaliseContact, type GuestContact } from '@/lib/guest-checkout';
 import { headers } from 'next/headers';
 import { authAttemptKeys, checkAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
 import { credit, loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
+import { scheduleFromPlan } from '@/lib/dues';
 
 /**
  * Checkout starts here, and every number on it is computed here.
@@ -118,6 +119,24 @@ export async function startCheckout(
     });
     if (!branch) return { ok: false, error: 'This academy has no branch configured.' };
 
+    // A plan paid in parts charges its first part now. The rest becomes a
+    // dated schedule on the enrolment once this payment lands, and each
+    // later part is paid from the learner's fees page or at the counter.
+    const parts =
+      buyingCourse && plan.planType === 'INSTALMENT' && plan.instalmentCount > 1
+        ? scheduleFromPlan(plan, new Date())
+        : null;
+    const courseChargePaise = parts ? parts[0].amountPaise : plan.pricePaise;
+    const courseTitle = parts
+      ? `${product.title} (instalment 1 of ${parts.length})`
+      : product.title;
+
+    // A code is quoted against the whole fee, and a schedule has no single
+    // moment to take it off, so the two are kept apart rather than guessed at.
+    if (parts && promoCode?.trim()) {
+      return { ok: false, error: 'Promo codes apply to full-payment plans, not instalment plans.' };
+    }
+
     const taxConfig = await db.taxConfig.findFirst({
       where: { organizationId: tenant.organizationId },
     });
@@ -154,8 +173,8 @@ export async function startCheckout(
               {
                 productId: product.id,
                 pricingPlanId: plan.id,
-                title: product.title,
-                pricePaise: plan.pricePaise,
+                title: courseTitle,
+                pricePaise: courseChargePaise,
                 isPrimary: true,
               },
             ]

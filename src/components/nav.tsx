@@ -86,7 +86,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Payments', href: '/admin/payments' },
       { label: 'Abandoned carts', href: '/admin/carts' },
       { label: 'Invoices', href: '/admin/invoices' },
-      { label: 'Fee tracking', href: '/admin/fees' },
+      { label: 'Fees and dues', href: '/admin/fees' },
       { label: 'Cheques', href: '/admin/cheques' },
       { label: 'Settlements', href: '/admin/settlements' },
       { label: 'Refunds', href: '/admin/refunds' },

@@ -13,6 +13,11 @@ export default async function PurchasesPage() {
   const user = await getSessionUser();
   if (!user) return null;
 
+  const hasPlan =
+    (await db.instalment.count({
+      where: { enrollment: { organizationId: tenant.organizationId, userId: user.id } },
+    })) > 0;
+
   const orders = await db.order.findMany({
     where: { organizationId: tenant.organizationId, userId: user.id },
     orderBy: { placedAt: 'desc' },
@@ -34,6 +39,16 @@ export default async function PurchasesPage() {
       <h1 className="text-xl font-semibold">Purchases</h1>
       <p className="t-small faint mt-1">
         Every order, what you paid and its invoice number. Nothing here is ever deleted.
+        {hasPlan && (
+          <>
+            {' '}
+            Instalment plans and receipts are under{' '}
+            <Link href="/learn/fees" className="underline">
+              Fees
+            </Link>
+            .
+          </>
+        )}
       </p>
 
       <div className="mt-6">
@@ -91,7 +106,9 @@ export default async function PurchasesPage() {
                 </Cell>
                 <Cell>
                   {o.invoice ? (
-                    <span className="tabular-nums">{o.invoice.invoiceNo}</span>
+                    <Link href={`/learn/invoices/${o.invoice.invoiceNo}`} className="tabular-nums underline">
+                      {o.invoice.invoiceNo}
+                    </Link>
                   ) : (
                     <span className="faint">—</span>
                   )}
