@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
+import { assessmentAccess } from '@/lib/assessment-access';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { deadlineFor } from '@/lib/attempt-clock';
@@ -31,26 +32,39 @@ async function entitled(assessmentId: string) {
   });
   if (!assessment) throw new Error('NOT_FOUND');
 
-  // Reachable only through an enrolment on a course this assessment is attached
-  // to. Staff can preview without one.
+  /*
+   * Three ways a learner reaches a test: their course includes it, the
+   * academy gave it to them, or it is in a set they hold an allowance for.
+   * One resolver answers all three, so this and the page they came from
+   * cannot disagree about whether they are allowed in. Staff preview
+   * without any of it.
+   */
   if (user.kind !== 'STAFF') {
-    const courseIds = assessment.courses.map((c) => c.courseId);
-    if (courseIds.length === 0) throw new Error('NOT_AVAILABLE');
+    const access = await assessmentAccess({
+      organizationId: tenant.organizationId,
+      userId: user.id,
+      assessmentId: assessment.id,
+    });
+    if (!access.entitled) throw new Error('NOT_ENROLLED');
 
     const enrolled = await db.enrollment.findFirst({
       where: {
         userId: user.id,
         organizationId: tenant.organizationId,
         status: { notIn: ['CANCELLED', 'ARCHIVED'] },
-        product: { course: { id: { in: courseIds } } },
+        ...(assessment.courses.length > 0
+          ? { product: { course: { id: { in: assessment.courses.map((c) => c.courseId) } } } }
+          : {}),
       },
       select: { id: true },
     });
-    if (!enrolled) throw new Error('NOT_ENROLLED');
-    return { tenant, user, assessment, enrollmentId: enrolled.id };
+
+    // A test given to somebody outside its course has no enrolment to hang
+    // the attempt on, and that is allowed: the attempt stands on its own.
+    return { tenant, user, assessment, enrollmentId: enrolled?.id ?? null, access };
   }
 
-  return { tenant, user, assessment, enrollmentId: null as string | null };
+  return { tenant, user, assessment, enrollmentId: null as string | null, access: null };
 }
 
 function fail(err: unknown): ActionState {
@@ -73,7 +87,7 @@ export async function startAttempt(
   assessmentId: string,
 ): Promise<ActionState & { attemptId?: string }> {
   try {
-    const { user, assessment, enrollmentId } = await entitled(assessmentId);
+    const { user, assessment, enrollmentId, access } = await entitled(assessmentId);
 
     const now = new Date();
     if (assessment.opensAt && assessment.opensAt > now) {
@@ -97,21 +111,21 @@ export async function startAttempt(
       await submitAttempt(existing.id, true);
     }
 
-    const used = await db.attempt.count({
-      where: { assessmentId, userId: user.id, status: { not: 'VOID' } },
-    });
-    if (used >= assessment.maxAttempts) {
-      return {
-        error: `You have used all ${assessment.maxAttempts} attempt${assessment.maxAttempts === 1 ? '' : 's'}.`,
-      };
+    // The allowance, including anything the academy granted this learner.
+    if (access && !access.canStart) {
+      return { error: access.message ?? 'You have used every attempt at this test.' };
     }
+
+    // Numbered from what exists rather than from the allowance, so a voided
+    // attempt does not hand out a number already taken.
+    const taken = await db.attempt.count({ where: { assessmentId, userId: user.id } });
 
     const created = await db.attempt.create({
       data: {
         assessmentId,
         userId: user.id,
         enrollmentId,
-        attemptNo: used + 1,
+        attemptNo: taken + 1,
         status: 'IN_PROGRESS',
       },
       select: { id: true },

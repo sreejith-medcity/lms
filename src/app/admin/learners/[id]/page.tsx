@@ -7,6 +7,7 @@ import { formatMoney } from '@/lib/money';
 import { Badge, Card, Cell, EmptyState, Row, Table, ProgressRing } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { ResetPassword, SignInAs } from './controls';
+import { LearnerTests } from './tests';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -64,6 +65,45 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
     },
   });
   if (!learner) notFound();
+
+  // What the office can hand out, and what it already has.
+  const canGrantTests = me.permissions['courses.assessments']?.edit ?? false;
+  const [tests, pools, grants, poolGrants] = canGrantTests
+    ? await Promise.all([
+        db.assessment.findMany({
+          where: { organizationId: tenant.organizationId, questions: { some: {} } },
+          orderBy: { title: 'asc' },
+          take: 200,
+          select: { id: true, title: true, maxAttempts: true },
+        }),
+        db.assessmentPool.findMany({
+          where: { organizationId: tenant.organizationId, isActive: true },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, _count: { select: { items: true } } },
+        }),
+        db.assessmentGrant.findMany({
+          where: { organizationId: tenant.organizationId, userId: learner.id },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            extraAttempts: true,
+            closesAt: true,
+            note: true,
+            assessment: { select: { title: true, maxAttempts: true } },
+          },
+        }),
+        db.assessmentPoolGrant.findMany({
+          where: { organizationId: tenant.organizationId, userId: learner.id },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            allowance: true,
+            expiresAt: true,
+            pool: { select: { name: true, _count: { select: { items: true } } } },
+          },
+        }),
+      ])
+    : [[], [], [], []];
 
   const paid = learner.orders
     .filter((o) => o.status === 'PAID')
@@ -174,6 +214,41 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
             </Table>
           )}
         </section>
+
+        {canGrantTests && (
+          <section>
+            <LearnerTests
+              userId={learner.id}
+              tests={tests.map((t) => ({ id: t.id, title: t.title, maxAttempts: t.maxAttempts }))}
+              pools={pools.map((p) => ({ id: p.id, name: p.name, count: p._count.items }))}
+              grants={grants.map((g) => ({
+                id: g.id,
+                title: g.assessment.title,
+                detail: [
+                  `${g.assessment.maxAttempts + g.extraAttempts} attempts`,
+                  g.closesAt
+                    ? `until ${g.closesAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+                    : null,
+                  g.note,
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+              }))}
+              poolGrants={poolGrants.map((g) => ({
+                id: g.id,
+                title: g.pool.name,
+                detail: [
+                  `${g.allowance} of ${g.pool._count.items}`,
+                  g.expiresAt
+                    ? `until ${g.expiresAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · '),
+              }))}
+            />
+          </section>
+        )}
 
         {learner.certificates.length > 0 && (
           <section>

@@ -30,7 +30,12 @@ export default async function AssessmentsPage() {
     <div>
       <PageHeader
         title="Assessments"
-        description="Tests, mock exams and assignments, built from the question bank and attached to the courses that use them."
+        description="Tests, mock exams and assignments, built from the question bank and attached to the courses that use them. A test can also be given to one candidate on their own page, with its own number of attempts."
+        action={
+          <Link href="/admin/assessments/pools" className="t-small underline">
+            Sets of tests
+          </Link>
+        }
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { Badge, Card, EmptyState, LinkButton } from '@/components/ui';
+import { assessmentAccess } from '@/lib/assessment-access';
 import { StartButton } from './start';
 
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,15 @@ export default async function AssessmentIntro({ params }: { params: Promise<{ id
     },
   });
 
+  // What this learner in particular may do here: their course, anything the
+  // academy granted them, and any set they hold an allowance over.
+  const access = await assessmentAccess({
+    organizationId: tenant.organizationId,
+    userId: user.id,
+    assessmentId: assessment.id,
+    isStaff: user.kind === 'STAFF',
+  });
+
   const total = assessment.questions.reduce((n, q) => n + (q.marks ?? q.question.marks), 0);
   const written = assessment.questions.filter(
     (q) => q.question.type === 'SHORT_ANSWER' || q.question.type === 'LONG_ANSWER',
@@ -86,9 +96,17 @@ export default async function AssessmentIntro({ params }: { params: Promise<{ id
 
         <ul className="t-small muted mt-5 space-y-1.5 border-t pt-5">
           <li>
-            You have {assessment.maxAttempts} attempt{assessment.maxAttempts === 1 ? '' : 's'}, and
-            have used {used}.
+            You have {access.allowance.allowed} attempt
+            {access.allowance.allowed === 1 ? '' : 's'}, and have used {access.allowance.used}.
+            {access.allowance.allowed > assessment.maxAttempts &&
+              ` The academy has added ${access.allowance.allowed - assessment.maxAttempts} for you.`}
           </li>
+          {access.via === 'POOL' && access.pool && (
+            <li>
+              This one counts towards {access.pool.name}: {access.pool.state.used} of{' '}
+              {access.pool.state.allowed} taken.
+            </li>
+          )}
           {assessment.durationMinutes ? (
             <li>
               The clock starts when you begin and runs on our server, so closing the page does not
@@ -112,8 +130,10 @@ export default async function AssessmentIntro({ params }: { params: Promise<{ id
             <LinkButton href={`/learn/attempt/${inProgress.id}`} size="lg">
               Resume attempt {inProgress.attemptNo}
             </LinkButton>
-          ) : used >= assessment.maxAttempts ? (
-            <p className="t-small faint">You have used every attempt.</p>
+          ) : !access.canStart ? (
+            <p className="t-small faint">
+              {access.message ?? 'You have used every attempt.'}
+            </p>
           ) : (
             <StartButton assessmentId={assessment.id} first={used === 0} />
           )}

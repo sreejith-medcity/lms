@@ -9,6 +9,7 @@ import { Banners } from '@/components/banners';
 import { Leaderboard } from '@/components/leaderboard';
 import { questionsOf } from '@/lib/feedback';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
+import { assessmentsForLearner } from '@/lib/assessment-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -100,6 +101,17 @@ export default async function MyLearning() {
     select: { id: true, title: true, bodyHtml: true, urgency: true, publishAt: true },
   });
 
+  /*
+   * Tests the academy set for this learner personally, rather than through a
+   * course. Without this they exist and are reachable only by a link nobody
+   * sends, which is the same as not existing.
+   */
+  const allTests = await assessmentsForLearner({
+    organizationId: tenant.organizationId,
+    userId: user.id,
+  });
+  const extraTests = allTests.filter((t) => t.via !== 'COURSE');
+
   const certificates = await db.issuedCertificate.findMany({
     where: { userId: user.id, revokedAt: null },
     orderBy: { issuedAt: 'desc' },
@@ -125,6 +137,32 @@ export default async function MyLearning() {
       </div>
 
       <Banners organizationId={tenant.organizationId} placement="LEARNER_HOME" />
+
+      {extraTests.length > 0 && (
+        <Section title="Set for you">
+          <Card padded={false}>
+            <ul className="divide-y">
+              {extraTests.map((t) => (
+                <li key={t.id}>
+                  <Link
+                    href={`/learn/assessment/${t.id}`}
+                    className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-[var(--surface-2)]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{t.title}</span>
+                      <span className="t-small faint">
+                        {t.kind.toLowerCase().replace('_', ' ')}
+                        {t.via === 'POOL' ? ' · from your practice set' : ' · added by the academy'}
+                      </span>
+                    </span>
+                    <Badge>open</Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </Section>
+      )}
 
       {todayClasses.length > 0 && (
         <Section title="Today">
