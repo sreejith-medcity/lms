@@ -161,6 +161,9 @@ model User {
   avatarUrl              String?
   dateOfBirth            DateTime?
   gender                 String?
+  /// Free labels the office and the automations put on a learner: "needs a
+  /// call", "B1 batch October", whatever the academy uses to sort people.
+  tags                   String[]   @default([])
   timezone               String     @default("Asia/Calcutta")
   locale                 String     @default("en")
   kind                   UserKind   @default(LEARNER)
@@ -2367,14 +2370,23 @@ model Workflow {
   id             String   @id @default(cuid())
   organizationId String
   name           String
-  triggerType    String // ENROLLMENT_CREATED, PAYMENT_FAILED, INACTIVE_7D, CART_ABANDONED...
+  description    String?
+  /// A key from the domain event catalogue: enrolment.created, course.completed,
+  /// learner.inactive, and so on.
+  triggerType    String
+  /// Narrowing: which products, which batches, how many days quiet.
   triggerConfig  Json?
   isActive       Boolean  @default(false)
+  /// One run per learner per subject, so a rule cannot nag the same person
+  /// about the same course twice.
+  runOnce        Boolean  @default(true)
   createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   steps WorkflowStep[]
   runs  WorkflowRun[]
 
+  @@index([organizationId, triggerType, isActive])
   @@map("workflows")
 }
 
@@ -2392,18 +2404,30 @@ model WorkflowStep {
 }
 
 model WorkflowRun {
-  id          String    @id @default(cuid())
-  workflowId  String
-  userId      String?
-  context     Json
-  currentStep Int       @default(0)
-  status      String    @default("RUNNING")
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
+  id             String    @id @default(cuid())
+  organizationId String
+  workflowId     String
+  userId         String?
+  context        Json
+  currentStep    Int       @default(0)
+  /// RUNNING | DONE | STOPPED (a condition said no) | FAILED
+  status         String    @default("RUNNING")
+  /// When the runner should next look at it: now, or after a step's delay.
+  nextAt         DateTime  @default(now())
+  /// One line per step, what it did and when.
+  log            Json?
+  error          String?
+  /// `<workflowId>:<userId>:<subject>`, so the same trigger cannot start the
+  /// same run twice for the same person.
+  dedupeKey      String?
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
 
   workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
+  @@unique([dedupeKey])
   @@index([workflowId, status])
+  @@index([organizationId, status, nextAt])
   @@map("workflow_runs")
 }
 
