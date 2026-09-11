@@ -5,6 +5,8 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { reportConversion } from '@/lib/analytics-server';
+import { conversionHints, requestAttribution } from '@/lib/attribution-server';
 import { SESSION_COOKIE } from '@/lib/auth';
 import { hashPassword } from '@/lib/password';
 import { resolveTenantByHost } from '@/lib/tenant';
@@ -140,12 +142,23 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     });
 
     await startSession(user.id, h.get('user-agent'), h.get('x-forwarded-for'));
+
+    reportConversion({
+      organizationId: org.id,
+      event: 'sign_up',
+      eventId: `signup:${user.id}`,
+      email: email || null,
+      phone: phone || null,
+      ...conversionHints(await requestAttribution()),
+    }).catch(() => undefined);
   } catch (err) {
     console.error('[accounts]', err instanceof Error ? err.message : err);
     return { error: 'Could not create the account. Please try again.' };
   }
 
-  redirect('/learn');
+  // The flag lets the learner home page raise the browser-side sign-up
+  // event once, with the same id the server just sent.
+  redirect('/learn?welcome=1');
 }
 
 async function startSession(userId: string, userAgent: string | null, forwardedFor: string | null) {

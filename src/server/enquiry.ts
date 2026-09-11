@@ -2,6 +2,8 @@
 
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { reportConversion } from '@/lib/analytics-server';
+import { attributionJson, conversionHints, requestAttribution } from '@/lib/attribution-server';
 import { getTenantContext } from '@/lib/tenant';
 import type { ActionState } from '@/server/courses';
 
@@ -19,7 +21,9 @@ const enquiry = z.object({
  * The public enquiry form. It writes a real Lead, which is the same record the
  * admin pipeline will read, rather than sending an email into a void.
  */
-export async function submitEnquiry(_prev: ActionState, formData: FormData): Promise<ActionState> {
+export type EnquiryState = ActionState & { eventId?: string };
+
+export async function submitEnquiry(_prev: EnquiryState, formData: FormData): Promise<EnquiryState> {
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { error: 'This academy is not reachable right now.' };
@@ -40,7 +44,9 @@ export async function submitEnquiry(_prev: ActionState, formData: FormData): Pro
       return { error: 'Leave an email address or a phone number so we can reply.' };
     }
 
-    await db.lead.create({
+    const attribution = await requestAttribution();
+
+    const lead = await db.lead.create({
       data: {
         organizationId: tenant.organizationId,
         name: d.name,
@@ -49,10 +55,24 @@ export async function submitEnquiry(_prev: ActionState, formData: FormData): Pro
         message: d.message || null,
         interestedIn: d.interestedIn || null,
         source: 'WEB',
+        campaign: attribution?.last.utm_campaign ?? null,
+        attribution: attributionJson(attribution),
       },
+      select: { id: true },
     });
 
-    return { ok: true, message: 'Thanks. Someone from the team will get back to you.' };
+    // Told to the ad platforms from here as well as from the browser, keyed
+    // on the lead id so the two copies count once.
+    reportConversion({
+      organizationId: tenant.organizationId,
+      event: 'lead',
+      eventId: lead.id,
+      email: d.email || null,
+      phone: d.phone || null,
+      ...conversionHints(attribution),
+    }).catch(() => undefined);
+
+    return { ok: true, message: 'Thanks. Someone from the team will get back to you.', eventId: lead.id };
   } catch (err) {
     console.error('[enquiry]', err instanceof Error ? err.message : err);
     return { error: 'We could not record that just now. Please try again.' };

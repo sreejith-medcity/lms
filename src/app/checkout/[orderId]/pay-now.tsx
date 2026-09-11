@@ -4,6 +4,8 @@ import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui';
+import { trackOnce } from '@/lib/track-browser';
+import type { TrackItem } from '@/lib/tracking-events';
 
 declare global {
   interface Window {
@@ -35,8 +37,14 @@ export function PayNow({
   learnerName,
   learnerEmail,
   productId,
+  orderNo,
+  taxPaise,
+  items,
 }: {
   orderId: string;
+  orderNo: string;
+  taxPaise: number;
+  items: TrackItem[];
   gatewayOrderId: string;
   keyId: string;
   testMode: boolean;
@@ -104,6 +112,15 @@ export function PayNow({
           }
 
           setStage('done');
+          trackOnce(`purchase:${orderNo}`, {
+            name: 'purchase',
+            items,
+            currency,
+            valuePaise: amountPaise,
+            taxPaise,
+            transactionId: orderNo,
+            eventId: orderNo,
+          });
           // Somebody who bought as a guest is now signed in and has no
           // password yet, so they land back here, where the receipt and the
           // one-time "set a password" step are, rather than in the player.
@@ -134,9 +151,12 @@ export function PayNow({
     learnerEmail,
     learnerName,
     orderId,
+    orderNo,
     organizationName,
     productId,
     router,
+    taxPaise,
+    items,
   ]);
 
   return (

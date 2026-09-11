@@ -11,10 +11,16 @@ import { questionsOf } from '@/lib/feedback';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { assessmentsForLearner } from '@/lib/assessment-access';
 import { feeNoticeFor } from '@/lib/dues';
+import { TrackEvent } from '@/components/track-event';
 
 export const dynamic = 'force-dynamic';
 
-export default async function MyLearning() {
+export default async function MyLearning({
+  searchParams,
+}: {
+  searchParams?: Promise<{ welcome?: string }>;
+}) {
+  const { welcome } = (await searchParams) ?? {};
   const tenant = await requireTenant();
   const user = await getSessionUser();
   if (!user) return null;
@@ -146,6 +152,9 @@ export default async function MyLearning() {
       </div>
 
       <Banners organizationId={tenant.organizationId} placement="LEARNER_HOME" />
+      {welcome && (
+        <TrackEvent once={`signup:${user.id}`} event={{ name: 'sign_up', eventId: `signup:${user.id}`, method: 'form' }} />
+      )}
 
       {feeNotice && (
         <Link

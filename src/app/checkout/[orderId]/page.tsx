@@ -12,6 +12,7 @@ import { CART_COOKIE } from '@/lib/cart-cookie';
 import { contactOf, mayViewOrder } from '@/lib/guest-order';
 import { PayNow } from './pay-now';
 import { SetPassword } from './set-password';
+import { TrackEvent } from '@/components/track-event';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Checkout', robots: { index: false, follow: false } };
@@ -63,11 +64,25 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
     select: { name: true, brandColor: true, supportEmail: true, contactNumber: true },
   });
 
+  const trackItems = order.items.map((i) => ({ id: i.productId, name: i.titleSnapshot, pricePaise: i.pricePaise }));
+
   // Already paid, from an earlier attempt or a webhook that landed first.
   if (order.status === 'PAID') {
     const productId = order.items[0]?.productId;
     return (
       <Shell title="You are enrolled">
+        <TrackEvent
+          once={`purchase:${order.orderNo}`}
+          event={{
+            name: 'purchase',
+            items: trackItems,
+            currency: order.currency,
+            valuePaise: order.totalPaise,
+            taxPaise: order.taxPaise,
+            transactionId: order.orderNo,
+            eventId: order.orderNo,
+          }}
+        />
         <p className="muted">
           Payment received against order {order.orderNo}
           {order.invoice ? `, invoice ${order.invoice.invoiceNo}` : ''}.
@@ -184,9 +199,23 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
           </div>
         )}
 
+        <TrackEvent
+          once={`begin_checkout:${order.orderNo}`}
+          event={{
+            name: 'begin_checkout',
+            items: trackItems,
+            currency: order.currency,
+            valuePaise: order.totalPaise,
+            eventId: order.orderNo,
+          }}
+        />
+
         <div className="mt-6">
           <PayNow
             orderId={order.id}
+            orderNo={order.orderNo}
+            taxPaise={order.taxPaise}
+            items={trackItems}
             gatewayOrderId={order.gatewayOrderId}
             keyId={config.keyId}
             testMode={config.isTestMode}

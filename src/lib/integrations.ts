@@ -564,7 +564,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 1,
     requires:
       'A GA4 property with a web data stream. The measurement ID for the tag, and a Measurement Protocol API secret if server side events are sent.',
-    purpose: 'What people looked at before they enrolled, and which page lost them. A paid enrolment is also reported from this server, keyed to the order number so it deduplicates against the browser tag.',
+    purpose: 'What people looked at before they enrolled, and which page lost them. The tag goes on every page with view, add to cart, checkout and purchase events in the standard ecommerce shape, and a paid enrolment is also reported from this server, keyed to the order number so it deduplicates against the browser tag. If Tag Manager is connected the tag is left to the container and only the dataLayer is fed.',
     status: 'wired',
     fields: [
       TEXT('measurementId', 'Measurement ID', 'GA4_MEASUREMENT_ID', 'G-XXXXXXXXXX'),
@@ -578,9 +578,8 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 1,
     requires:
       'A GTM container for this domain, with publish rights for whoever manages tags. Server side tagging is a separate paid container.',
-    purpose: 'One container, so marketing adds tags without waiting for a deployment.',
-    status: 'planned',
-    landsIn: 'Phase 8',
+    purpose: 'One container, so marketing adds tags without waiting for a deployment. The storefront pushes view_item, add_to_cart, begin_checkout, purchase, generate_lead and sign_up to the dataLayer in the GA4 ecommerce shape, each with an event_id. When a container is set here, the GA4 and Meta tags are not loaded directly, so nothing is counted twice.',
+    status: 'wired',
     fields: [TEXT('containerId', 'Container ID', undefined, 'GTM-XXXXXXX')],
   },
   {
@@ -590,12 +589,11 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 1,
     requires:
       'A pixel in Events Manager owned by the same Business Manager as the ad account, and the domain verified so events survive iOS restrictions.',
-    purpose: 'Attributing enrolments to the Facebook and Instagram ads that produced them.',
-    status: 'planned',
-    landsIn: 'Phase 8',
+    purpose: 'Attributing enrolments to the Facebook and Instagram ads that produced them. The pixel goes on every page with ViewContent, AddToCart, InitiateCheckout, Purchase, Lead and CompleteRegistration, each carrying an event id that matches the server copy sent through the Conversions API.',
+    status: 'wired',
     fields: [
       TEXT('pixelId', 'Pixel ID'),
-      KEY('accessToken', 'Conversions API token', undefined, 'Optional, for server-side events.'),
+      KEY('accessToken', 'Conversions API token', undefined, 'Optional here: server-side events are configured on the Conversions API card.'),
     ],
   },
   {
@@ -605,10 +603,14 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 1,
     requires:
       'A Google Ads account, the conversion ID and label from the conversion action, and the tag firing on the site. Reporting and offline uploads need the API separately.',
-    purpose: 'Conversion tracking, so spend is judged against enrolments rather than clicks.',
-    status: 'planned',
-    landsIn: 'Phase 8',
-    fields: [TEXT('conversionId', 'Conversion ID'), TEXT('conversionLabel', 'Conversion label')],
+    purpose: 'Conversion tracking, so spend is judged against enrolments rather than clicks. The conversion tag fires on purchase, enquiry and sign-up with the order number as the transaction id, so a refreshed thank-you page cannot count twice. Offline conversion upload comes with the API connection.',
+    status: 'wired',
+    fields: [
+      TEXT('conversionId', 'Conversion ID', undefined, 'The AW- number, with or without the prefix.'),
+      TEXT('conversionLabel', 'Purchase conversion label', undefined, 'Only the part after the slash in AW-123/AbCdEf.'),
+      TEXT('leadLabel', 'Enquiry conversion label', undefined, 'Optional. A second conversion action for enquiries.'),
+      TEXT('signUpLabel', 'Sign-up conversion label', undefined, 'Optional. A conversion action for new accounts.'),
+    ],
   },
   {
     id: 'clarity',
@@ -617,9 +619,8 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 2,
     requires:
       'Nothing paid. A Clarity project and its ID.',
-    purpose: 'Session recordings and heatmaps, free, and the fastest way to see why a page is not converting.',
-    status: 'planned',
-    landsIn: 'Phase 8',
+    purpose: 'Session recordings and heatmaps, free, and the fastest way to see why a page is not converting. Loads on the public site and checkout only, never inside the learner or admin areas.',
+    status: 'wired',
     fields: [TEXT('projectId', 'Project ID')],
   },
 

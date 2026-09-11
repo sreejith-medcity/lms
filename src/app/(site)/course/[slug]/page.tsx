@@ -15,6 +15,7 @@ import { settingText } from '@/lib/settings/store';
 import { GoogleBadge, ReviewWidget } from '@/components/review-badge';
 import { AddonPicker } from './addon-picker';
 import { AddToCart } from '@/components/add-to-cart';
+import { TrackEvent } from '@/components/track-event';
 import { PageBlocks } from '@/components/page-blocks';
 import { parseBlocks } from '@/lib/page-blocks';
 import { CourseCta } from './course-cta';
@@ -391,7 +392,13 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           the first button, because most people are here for one thing. */}
       {!isFree && (
         <div className="mt-2.5">
-          <AddToCart productId={product.id} pricingPlanId={plan?.id} fullWidth />
+          <AddToCart
+            productId={product.id}
+            pricingPlanId={plan?.id}
+            fullWidth
+            item={plan ? { id: product.id, name: product.title, pricePaise: plan.pricePaise, category: category?.name } : undefined}
+            currency={plan?.currency}
+          />
         </div>
       )}
 
@@ -415,6 +422,15 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      {!isFree && plan && (
+        <TrackEvent
+          event={{
+            name: 'view_item',
+            currency: plan.currency,
+            items: [{ id: product.id, name: product.title, pricePaise: plan.pricePaise, category: category?.name }],
+          }}
+        />
+      )}
 
       {/* Hero ------------------------------------------------------------- */}
       {/*

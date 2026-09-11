@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
+import { describeAttribution, parseAttributionValue } from '@/lib/attribution';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
@@ -36,6 +37,7 @@ export default async function PaymentsPage() {
         currency: true,
         placedAt: true,
         gatewayOrderId: true,
+        attribution: true,
         user: { select: { name: true, email: true } },
         items: { select: { id: true, titleSnapshot: true } },
         invoice: { select: { invoiceNo: true } },
@@ -161,6 +163,8 @@ export default async function PaymentsPage() {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
+                      {' · '}
+                      {describeAttribution(parseAttributionValue(o.attribution))}
                     </span>
                   </Cell>
                   <Cell>

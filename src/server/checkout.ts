@@ -16,6 +16,7 @@ import { headers } from 'next/headers';
 import { authAttemptKeys, checkAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
 import { credit, loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
 import { scheduleFromPlan } from '@/lib/dues';
+import { attributionJson, requestAttribution } from '@/lib/attribution-server';
 
 /**
  * Checkout starts here, and every number on it is computed here.
@@ -226,6 +227,7 @@ export async function startCheckout(
       };
     }
 
+    const attribution = await requestAttribution();
     const count = await db.order.count({ where: { organizationId: tenant.organizationId } });
     const orderNo = `ORD-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
 
@@ -239,6 +241,7 @@ export async function startCheckout(
           userId: user.id,
           orderNo,
           status: 'PENDING',
+          attribution: attributionJson(attribution),
           currency: plan.currency,
           subtotalPaise: priced.subtotalPaise,
           discountPaise: priced.discountPaise,
@@ -513,6 +516,7 @@ export async function startCartCheckout(input: {
       return { ok: false, error: 'Points cannot cover the whole order. Please contact the academy.' };
     }
 
+    const attribution = await requestAttribution();
     const count = await db.order.count({ where: { organizationId: tenant.organizationId } });
     const orderNo = `ORD-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
 
@@ -524,6 +528,7 @@ export async function startCartCheckout(input: {
           userId,
           orderNo,
           status: 'PENDING',
+          attribution: attributionJson(attribution),
           currency: basket.currency,
           subtotalPaise: priced.subtotalPaise,
           discountPaise: priced.discountPaise,

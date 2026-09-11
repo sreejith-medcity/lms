@@ -13,6 +13,7 @@ import { priceOrder } from '@/lib/order-lines';
 import { createRazorpayOrder, paymentsConfigured } from '@/lib/razorpay';
 import { allocatePayment, balanceOf, daysOverdue, nextReceiptNumber, receiptPrefix } from '@/lib/dues';
 import type { ActionState } from '@/server/courses';
+import { attributionJson, requestAttribution } from '@/lib/attribution-server';
 
 /**
  * Collecting fees.
@@ -386,6 +387,7 @@ export async function startInstalmentCheckout(instalmentId: string): Promise<Ins
         userId: user.id,
         orderNo,
         status: 'PENDING',
+        attribution: attributionJson(await requestAttribution()),
         currency: tenant.currency,
         subtotalPaise: priced.subtotalPaise,
         discountPaise: 0,

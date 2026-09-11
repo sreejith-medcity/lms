@@ -1,11 +1,11 @@
 'use client';
 
 import { useActionState } from 'react';
-import { submitEnquiry } from '@/server/enquiry';
-import type { ActionState } from '@/server/courses';
+import { submitEnquiry, type EnquiryState } from '@/server/enquiry';
 import { Button, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
+import { TrackEvent } from '@/components/track-event';
 
-const initial: ActionState = {};
+const initial: EnquiryState = {};
 
 export function EnquiryForm({ courses }: { courses: { id: string; title: string }[] }) {
   const [state, action, pending] = useActionState(submitEnquiry, initial);
@@ -13,6 +13,9 @@ export function EnquiryForm({ courses }: { courses: { id: string; title: string 
   if (state.ok) {
     return (
       <div className="rounded-[var(--radius)] border bg-[var(--surface)] p-8">
+        {state.eventId && (
+          <TrackEvent once={`lead:${state.eventId}`} event={{ name: 'generate_lead', eventId: state.eventId }} />
+        )}
         <FormSuccess message={state.message ?? 'Thanks. We will be in touch.'} />
         <p className="t-small muted mt-3">
           If it is urgent, calling is faster than waiting for a reply.

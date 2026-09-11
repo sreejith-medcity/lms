@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useState, useTransition } from 'react';
 import { addItemToCart } from '@/server/basket';
 import { CART_EVENT } from '@/lib/cart-cookie';
+import { track } from '@/lib/track-browser';
+import type { TrackItem } from '@/lib/tracking-events';
 
 /**
  * Add to cart, wherever a course is shown.
@@ -21,11 +23,16 @@ export function AddToCart({
   pricingPlanId,
   fullWidth = false,
   label = 'Add to cart',
+  item,
+  currency = 'INR',
 }: {
   productId: string;
   pricingPlanId?: string;
   fullWidth?: boolean;
   label?: string;
+  /** What to tell the ad tags, when the page already knows the price. */
+  item?: TrackItem;
+  currency?: string;
 }) {
   const [pending, start] = useTransition();
   const [state, setState] = useState<'idle' | 'in' | 'error'>('idle');
@@ -64,6 +71,9 @@ export function AddToCart({
             if (result.ok) {
               setState('in');
               setMessage(result.outcome === 'already-in' ? 'Already in your cart' : 'Added');
+              if (item && result.outcome !== 'already-in') {
+                track({ name: 'add_to_cart', items: [item], currency });
+              }
             } else {
               setState('error');
               setMessage(result.message);

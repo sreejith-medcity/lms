@@ -25,7 +25,7 @@ export interface Conversion {
   email?: string | null;
   phone?: string | null;
   /** The click ids the landing page captured, without which none of this works. */
-  clickIds?: { gclid?: string | null; fbclid?: string | null; fbp?: string | null };
+  clickIds?: { gclid?: string | null; fbclid?: string | null; fbp?: string | null; fbc?: string | null };
   clientId?: string | null;
   userAgent?: string | null;
   ip?: string | null;
@@ -142,9 +142,11 @@ async function toMetaCapi(conversion: Conversion): Promise<void> {
             user_data: {
               em: hashed(conversion.email),
               ph: digitsOnly(conversion.phone),
-              fbc: conversion.clickIds?.fbclid
-                ? `fb.1.${Math.floor(Date.now() / 1000)}.${conversion.clickIds.fbclid}`
-                : undefined,
+              fbc:
+                conversion.clickIds?.fbc ??
+                (conversion.clickIds?.fbclid
+                  ? `fb.1.${Date.now()}.${conversion.clickIds.fbclid}`
+                  : undefined),
               fbp: conversion.clickIds?.fbp ?? undefined,
               client_user_agent: conversion.userAgent ?? undefined,
               client_ip_address: conversion.ip ?? undefined,

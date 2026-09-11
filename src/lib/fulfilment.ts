@@ -11,6 +11,7 @@ import { invoicePrefix, nextInvoiceNumber } from '@/lib/invoice-number';
 import { checkPaidAmount, estimatedGatewayFeePaise } from '@/lib/payment-amount';
 import { settingBool, settingNumber } from '@/lib/settings/store';
 import { scheduleFromPlan } from '@/lib/dues';
+import { conversionHints } from '@/lib/attribution-server';
 
 /**
  * The one place a payment becomes access.
@@ -587,6 +588,7 @@ export async function fulfilPaidOrder(input: {
       amountPaise: order.totalPaise,
       invoiceNo,
       enrollmentIds,
+      attribution: order.attribution,
     }).catch((err: unknown) => {
       console.error(
         '[fulfilment] the enrolment stands, but reporting it failed:',
@@ -692,6 +694,7 @@ async function tellTheWorld(input: {
   amountPaise: number;
   invoiceNo?: string | null;
   enrollmentIds: string[];
+  attribution?: unknown;
 }): Promise<void> {
   const [buyer, organization, items] = await Promise.all([
     db.user.findUnique({
@@ -739,6 +742,8 @@ async function tellTheWorld(input: {
     currency: organization?.currency ?? 'INR',
     email: buyer?.email ?? null,
     phone: buyer?.phone ?? null,
+    // The click that started it, stored on the order when it was created.
+    ...conversionHints(input.attribution),
   });
 
   // The member travels with the event. A loyalty platform on the other end

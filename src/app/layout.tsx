@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { getTenantContext } from '@/lib/tenant';
+import { trackingTags } from '@/lib/tracking-config';
+import { Tracking } from '@/components/tracking';
 
 const sans = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -32,6 +34,7 @@ export async function generateViewport() {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const tenant = await getTenantContext();
+  const tags = tenant ? await trackingTags(tenant.organizationId) : {};
 
   // The tenant's accent is injected here and nowhere else, which is what makes
   // white labelling a data change rather than a rebuild.
@@ -48,6 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       )}
       <body className="font-sans antialiased" style={themeVars}>
         {children}
+        <Tracking tags={tags} />
       </body>
     </html>
   );
