@@ -1731,6 +1731,10 @@ model Instalment {
   sequence       Int
   amountPaise    Int
   dueDate        DateTime
+  /// Collected so far against this instalment. A branch takes what the
+  /// learner has in hand, not what the schedule says, so this is a running
+  /// figure and paidAt is set only when it reaches the amount.
+  paidPaise      Int       @default(0)
   paidAt         DateTime?
   paymentId      String?
   reminderSentAt DateTime?
