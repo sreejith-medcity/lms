@@ -117,6 +117,7 @@ export const INTEGRATION_CATEGORIES = [
   { key: 'automation', group: 'Sales, teaching and operations', label: 'Automation and signing', blurb: 'Getting events out, and agreements signed.' },
   { key: 'auth', group: 'Sales, teaching and operations', label: 'Signing in', blurb: 'Ways into an account other than a password.' },
   { key: 'ai', group: 'Sales, teaching and operations', label: 'AI', blurb: 'Transcription, feedback and the course companion.' },
+  { key: 'practice', group: 'Sales, teaching and operations', label: 'Practice and exam partners', blurb: 'Other systems a learner reaches from here with one login, whose results come back.' },
 ] as const;
 
 export type CategoryKey = (typeof INTEGRATION_CATEGORIES)[number]['key'];
@@ -622,6 +623,24 @@ export const INTEGRATIONS: IntegrationDef[] = [
     purpose: 'Session recordings and heatmaps, free, and the fastest way to see why a page is not converting. Loads on the public site and checkout only, never inside the learner or admin areas.',
     status: 'wired',
     fields: [TEXT('projectId', 'Project ID')],
+  },
+
+  /* Practice partners -------------------------------------------------------- */
+  {
+    id: 'telc',
+    name: 'TELC AI Mocktest',
+    category: 'practice',
+    priority: 1,
+    requires:
+      'The telc mock test site with the same shared secret set on its side (LMS_SSO_SECRET) and this site named as its LMS (LMS_RESULTS_URL). Nothing else: no accounts are created by hand.',
+    purpose:
+      'One login. A learner presses Open on their dashboard, arrives on the mock test already signed in as themselves, and every result they earn there comes back to their record here and to the admin.',
+    status: 'wired',
+    docsUrl: 'https://telc.medcitylms.in',
+    fields: [
+      TEXT('baseUrl', 'Site address', undefined, 'https://telc.medcitylms.in'),
+      KEY('sharedSecret', 'Shared secret', undefined, 'A long random string, the same on both sides. openssl rand -hex 32 makes one.'),
+    ],
   },
 
   /* AI --------------------------------------------------------------------- */

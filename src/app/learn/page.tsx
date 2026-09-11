@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { Badge, Card, EmptyState, LinkButton, ProgressRing, Section } from '@/components/ui';
 import { CourseMedia } from '@/components/course-media';
+import { PartnerPractice } from '@/components/partner-practice';
 import { JoinButton } from './join-button';
 import { RateClass } from './rate-class';
 import { Banners } from '@/components/banners';
@@ -19,9 +20,9 @@ export const dynamic = 'force-dynamic';
 export default async function MyLearning({
   searchParams,
 }: {
-  searchParams?: Promise<{ welcome?: string }>;
+  searchParams?: Promise<{ welcome?: string; practice?: string }>;
 }) {
-  const { welcome } = (await searchParams) ?? {};
+  const { welcome, practice } = (await searchParams) ?? {};
   const tenant = await requireTenant();
   const user = await getSessionUser();
   if (!user) return null;
@@ -251,6 +252,8 @@ export default async function MyLearning({
           }))}
         />
       )}
+
+      <PartnerPractice organizationId={tenant.organizationId} userId={user.id} unavailable={practice === 'unavailable'} />
 
       <Leaderboard
         organizationId={tenant.organizationId}

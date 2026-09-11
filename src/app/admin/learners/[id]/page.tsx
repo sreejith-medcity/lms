@@ -66,6 +66,13 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
   });
   if (!learner) notFound();
 
+  const partnerResults = await db.partnerResult.findMany({
+    where: { organizationId: tenant.organizationId, userId: learner.id },
+    orderBy: { takenAt: 'desc' },
+    take: 20,
+    select: { id: true, provider: true, title: true, level: true, scorePercent: true, passed: true, takenAt: true, certificateUrl: true },
+  });
+
   // What the office can hand out, and what it already has.
   const canGrantTests = me.permissions['courses.assessments']?.edit ?? false;
   const [tests, pools, grants, poolGrants] = canGrantTests
@@ -187,6 +194,34 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
             </Card>
           )}
         </section>
+
+        {partnerResults.length > 0 && (
+          <section>
+            <h2 className="t-heading mb-3">Mock exam results</h2>
+            <Card padded={false}>
+              <Table head={['Test', 'When', 'Score', 'Result', '']}>
+                {partnerResults.map((r) => (
+                  <Row key={r.id}>
+                    <Cell>
+                      <span className="text-sm font-medium">{r.title}</span>
+                      <span className="t-small faint block">{r.provider}{r.level ? ` · ${r.level}` : ''}</span>
+                    </Cell>
+                    <Cell className="tabular-nums">{r.takenAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</Cell>
+                    <Cell className="tabular-nums">{r.scorePercent !== null ? `${Math.round(r.scorePercent)}%` : '—'}</Cell>
+                    <Cell>{r.passed === true ? <Badge tone="ok">passed</Badge> : r.passed === false ? <Badge tone="warn">not passed</Badge> : null}</Cell>
+                    <Cell>
+                      {r.certificateUrl && (
+                        <a href={r.certificateUrl} target="_blank" rel="noreferrer noopener" className="t-small underline">
+                          Certificate
+                        </a>
+                      )}
+                    </Cell>
+                  </Row>
+                ))}
+              </Table>
+            </Card>
+          </section>
+        )}
 
         <section>
           <h2 className="t-heading mb-3">Orders</h2>
