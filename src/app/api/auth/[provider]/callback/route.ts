@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { providerConfig, consumeState, exchangeCode, type Provider } from '@/lib/sso';
 import { completeSignIn } from '@/lib/sign-in';
-import { redirectResponse } from '@/lib/http-headers';
+import { publicOrigin, redirectResponse } from '@/lib/http-headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,7 +50,7 @@ export async function GET(
   const identity = await exchangeCode({
     config,
     code,
-    redirectUri: `${url.origin}/api/auth/${provider}/callback`,
+    redirectUri: `${publicOrigin(request)}/api/auth/${provider}/callback`,
   });
 
   if (!identity) return back(request, 'failed');

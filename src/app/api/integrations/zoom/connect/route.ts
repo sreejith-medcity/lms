@@ -5,7 +5,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { resolveIntegration } from '@/lib/integration-store';
 import { zoomAuthoriseUrl } from '@/lib/zoom-connect';
-import { redirectResponse } from '@/lib/http-headers';
+import { publicOrigin, redirectResponse } from '@/lib/http-headers';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     maxAge: 600,
   });
 
-  const origin = new URL(request.url).origin;
+  const origin = publicOrigin(request);
   return NextResponse.redirect(
     zoomAuthoriseUrl({ clientId, origin, state: `${state}.${signature}` }),
   );

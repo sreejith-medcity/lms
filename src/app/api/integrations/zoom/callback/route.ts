@@ -6,7 +6,7 @@ import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { resolveIntegration } from '@/lib/integration-store';
 import { saveZoomConnection, zoomRedirectUri } from '@/lib/zoom-connect';
-import { redirectResponse } from '@/lib/http-headers';
+import { publicOrigin, redirectResponse } from '@/lib/http-headers';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: zoomRedirectUri(url.origin),
+    redirect_uri: zoomRedirectUri(publicOrigin(request)),
   });
 
   const response = await fetch('https://zoom.us/oauth/token', {

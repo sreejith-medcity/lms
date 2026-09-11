@@ -35,3 +35,23 @@ export function redirectResponse(
     headers: { ...init.headers, Location: target },
   });
 }
+
+/**
+ * The origin the outside world used to reach us.
+ *
+ * `request.url` behind a reverse proxy is the address the Node process
+ * listens on, which on shared hosting is `https://0.0.0.0:3000`, and a
+ * redirect URL built from that is refused by every OAuth provider. The
+ * proxy says where the request really came from in the forwarded headers,
+ * and the Host header is the next best thing; the process address is only
+ * for a bare local run.
+ */
+export function publicOrigin(request: Request): string {
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const host = forwardedHost || request.headers.get('host')?.trim();
+  const proto =
+    request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+    (host && /^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|$)/.test(host) ? 'http' : 'https');
+  if (host && !/^0\.0\.0\.0(:|$)/.test(host)) return `${proto}://${host}`;
+  return new URL(request.url).origin;
+}

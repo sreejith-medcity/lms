@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getTenantContext } from '@/lib/tenant';
 import { providerConfig, issueState, type Provider } from '@/lib/sso';
-import { redirectResponse } from '@/lib/http-headers';
+import { publicOrigin, redirectResponse } from '@/lib/http-headers';
 
 export const dynamic = 'force-dynamic';
 
 function redirectUri(request: Request, provider: string): string {
-  const url = new URL(request.url);
-  return `${url.origin}/api/auth/${provider}/callback`;
+  return `${publicOrigin(request)}/api/auth/${provider}/callback`;
 }
 
 export async function GET(
