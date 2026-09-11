@@ -193,6 +193,7 @@ model User {
   attendances       Attendance[]
   attempts          Attempt[]
   partnerResults    PartnerResult[]
+  practiceAttempts  PracticeAttempt[]
   recordingShares   RecordingShare[]
   assessmentGrants  AssessmentGrant[]
   poolGrants        AssessmentPoolGrant[]
@@ -1462,6 +1463,33 @@ model AssessmentCourse {
 
   @@id([assessmentId, courseId])
   @@map("assessment_courses")
+}
+
+/// A piece of practice a learner did with the AI examiner: a writing task
+/// or a speaking task, the answer, and the mark and feedback that came
+/// back. Kept so a learner can see themselves improve, and so a trainer can
+/// see what the examiner said before deciding whether to agree.
+model PracticeAttempt {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  kind           String // WRITING | SPEAKING
+  /// IELTS_TASK2, OET_LETTER, PTE_ESSAY, GERMAN_B1_WRITING, and so on.
+  exam           String
+  prompt         String
+  response       String
+  /// Score out of the exam's own scale: a band, a grade or a percentage.
+  score          Float?
+  scoreLabel     String?
+  evaluation     Json?
+  /// Seconds of speech, for a speaking task.
+  durationSeconds Int?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, createdAt])
+  @@map("practice_attempts")
 }
 
 /// A result earned on a partner system the learner reached from here with
