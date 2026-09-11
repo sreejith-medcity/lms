@@ -4,7 +4,7 @@ import { senderFor } from './index';
 import { render } from './render';
 import { estimatedCostPaise } from './pricing';
 import { canSpend, spend, refund } from './wallet';
-import { templateFor } from './templates';
+import { templateForRow } from './templates';
 import { recordIntegrationEvent } from '@/lib/integration-events';
 
 /**
@@ -68,6 +68,7 @@ export async function drain(organizationId: string, limit = 100): Promise<DrainR
       eventKey: true,
       target: true,
       context: true,
+      templateKey: true,
       attempts: true,
       userId: true,
     },
@@ -106,7 +107,7 @@ export async function drain(organizationId: string, limit = 100): Promise<DrainR
     result.claimed += 1;
 
     const context = (row.context ?? {}) as Record<string, string>;
-    const template = await templateFor(organizationId, row.eventKey, row.channel);
+    const template = await templateForRow(organizationId, row);
 
     if (!template) {
       await fail(row.id, `No template for ${row.eventKey} on ${row.channel}.`, true);

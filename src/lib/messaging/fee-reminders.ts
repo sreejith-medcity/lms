@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { queueNotifications } from '@/lib/notify';
+import { happened } from '@/lib/events';
 import { balanceOf, reminderDue } from '@/lib/dues';
 import { formatMoney } from '@/lib/money';
 
@@ -40,6 +41,7 @@ export async function queueFeeReminders(organizationId: string): Promise<FeeRemi
       dueDate: true,
       enrollment: {
         select: {
+          productId: true,
           product: { select: { title: true } },
           user: { select: { id: true, name: true, email: true, phone: true } },
         },
@@ -82,6 +84,19 @@ export async function queueFeeReminders(organizationId: string): Promise<FeeRemi
     if (result.queued > 0) {
       queued += result.queued;
       await db.instalment.update({ where: { id: row.id }, data: { reminderSentAt: now } });
+
+      // The first reminder after the due date is the moment it becomes
+      // overdue, and the moment an automation may want to act.
+      if (due.stage === 'ON_DAY' || due.stage === 'WEEK') {
+        await happened({
+          organizationId,
+          key: 'instalment.overdue',
+          userId: learner.id,
+          subjectId: `${row.id}:${due.stage}`,
+          productId: row.enrollment.productId,
+          data: { instalmentId: row.id, sequence: row.sequence, amountPaise: balanceOf(row), item: row.enrollment.product.title, dueDate: row.dueDate.toISOString(), stage: due.stage },
+        });
+      }
     }
   }
 

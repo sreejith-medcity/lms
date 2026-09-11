@@ -88,9 +88,9 @@ export function NewSegment({
                       name="ruleValue"
                       value={rule.value}
                       disabled={input === 'NONE'}
-                      type={input === 'NONE' ? 'text' : 'number'}
+                      type={input === 'NONE' || input === 'TEXT' ? 'text' : 'number'}
                       min={0}
-                      placeholder={input === 'PERCENT' ? '50' : input === 'DAYS' ? '14' : ''}
+                      placeholder={input === 'PERCENT' ? '50' : input === 'DAYS' ? '14' : input === 'TEXT' ? 'needs a call' : ''}
                       onChange={(e) => update(i, { value: e.target.value })}
                     />
                   )}

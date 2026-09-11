@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
+import { happened, notifyLearner } from '@/lib/events';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { curriculumGate } from '@/lib/curriculum-access';
@@ -78,7 +79,7 @@ export async function enrol(productId: string, pricingPlanId?: string): Promise<
         select: { id: true },
       });
 
-      await db.enrollment.create({
+      const created = await db.enrollment.create({
         data: {
           organizationId: tenant.organizationId,
           branchId: branch.id,
@@ -94,11 +95,29 @@ export async function enrol(productId: string, pricingPlanId?: string): Promise<
               ? new Date(Date.now() + plan.validityDays * 864e5)
               : null,
         },
+        select: { id: true },
       });
 
       if (user.kind === 'LEARNER') {
         await db.user.update({ where: { id: user.id }, data: { status: 'ACTIVE' } });
       }
+
+      await happened({
+        organizationId: tenant.organizationId,
+        key: 'enrolment.created',
+        userId: user.id,
+        subjectId: created.id,
+        productId,
+        batchId: batch?.id ?? null,
+        data: { enrollmentId: created.id, item: product.title, source: 'SELF' },
+      });
+      await notifyLearner({
+        organizationId: tenant.organizationId,
+        eventKey: 'course.welcome',
+        userId: user.id,
+        subjectId: created.id,
+        context: { item: product.title, url: `/learn/${productId}` },
+      });
 
       destination = `/learn/${productId}`;
     }
@@ -241,5 +260,28 @@ async function recomputeProgress(enrollmentId: string, courseId: string, userId:
   if (progressPercent === 100) {
     const { autoIssueOnCompletion } = await import('@/server/certificates');
     await autoIssueOnCompletion(enrollmentId);
+
+    const finished = await db.enrollment.findUnique({
+      where: { id: enrollmentId },
+      select: { organizationId: true, userId: true, productId: true, batchId: true, product: { select: { title: true } } },
+    });
+    if (finished) {
+      await happened({
+        organizationId: finished.organizationId,
+        key: 'course.completed',
+        userId: finished.userId,
+        subjectId: enrollmentId,
+        productId: finished.productId,
+        batchId: finished.batchId,
+        data: { enrollmentId, item: finished.product.title },
+      });
+      await notifyLearner({
+        organizationId: finished.organizationId,
+        eventKey: 'course.completed',
+        userId: finished.userId,
+        subjectId: enrollmentId,
+        context: { item: finished.product.title, url: `/learn/${finished.productId}` },
+      });
+    }
   }
 }

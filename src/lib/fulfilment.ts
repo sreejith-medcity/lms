@@ -4,7 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { markCartConverted } from '@/lib/cart';
 import { credit, creditOnPurchase } from '@/lib/wallet';
 import { reportConversion } from '@/lib/analytics-server';
-import { emit } from '@/lib/webhooks';
+import { happened, notifyLearner } from '@/lib/events';
 import { memberRef } from '@/lib/loyalty-provider';
 import { queueNotifications } from '@/lib/notify';
 import { invoicePrefix, nextInvoiceNumber } from '@/lib/invoice-number';
@@ -670,6 +670,31 @@ export async function recordFailedPayment(input: {
         });
       }
     }
+
+    // The learner hears about it once per order, and so do the automations:
+    // a failed payment is the moment a counsellor should call, not a fact
+    // for the payments table alone.
+    if (marked.count > 0 && input.userId) {
+      const order = await db.order.findUnique({
+        where: { id: input.orderId },
+        select: { orderNo: true, totalPaise: true, items: { select: { titleSnapshot: true } } },
+      });
+      const item = order?.items.map((i) => i.titleSnapshot).filter(Boolean).join(', ') || 'your course';
+      await notifyLearner({
+        organizationId: input.organizationId,
+        eventKey: 'payment.failed',
+        userId: input.userId,
+        subjectId: input.orderId,
+        context: { amount: `INR ${(input.amountPaise / 100).toFixed(2)}`, item, retryUrl: `/checkout/${input.orderId}` },
+      });
+      await happened({
+        organizationId: input.organizationId,
+        key: 'payment.failed',
+        userId: input.userId,
+        subjectId: input.orderId,
+        data: { orderId: input.orderId, orderNo: order?.orderNo ?? null, amountPaise: input.amountPaise, item, reason: input.reason ?? null },
+      });
+    }
   }
 }
 
@@ -751,23 +776,46 @@ async function tellTheWorld(input: {
   // user id would make it useless without a second call back into here.
   const member = buyer ? memberRef(buyer) : null;
 
-  await emit(input.organizationId, 'payment.captured', {
-    orderId: input.orderId,
-    orderNo: input.orderNo,
-    amountPaise: input.amountPaise,
-    invoiceNo: input.invoiceNo ?? null,
+  await happened({
+    organizationId: input.organizationId,
+    key: 'payment.captured',
     userId: input.userId,
-    member,
-    items: items.map((row) => row.titleSnapshot),
-  });
-
-  if (input.enrollmentIds.length) {
-    await emit(input.organizationId, 'enrolment.created', {
+    subjectId: input.orderId,
+    data: {
+      orderId: input.orderId,
       orderNo: input.orderNo,
-      userId: input.userId,
-      enrollmentIds: input.enrollmentIds,
+      amountPaise: input.amountPaise,
+      amount,
+      invoiceNo: input.invoiceNo ?? null,
       member,
       items: items.map((row) => row.titleSnapshot),
+    },
+  });
+
+  // One event per enrolment, because a rule about "the German B1 course" has
+  // to be able to tell which of the three things in the order it applies to.
+  if (input.enrollmentIds.length) {
+    const enrolments = await db.enrollment.findMany({
+      where: { id: { in: input.enrollmentIds } },
+      select: { id: true, productId: true, batchId: true, product: { select: { title: true } } },
     });
+    for (const e of enrolments) {
+      await happened({
+        organizationId: input.organizationId,
+        key: 'enrolment.created',
+        userId: input.userId,
+        subjectId: e.id,
+        productId: e.productId,
+        batchId: e.batchId,
+        data: { orderNo: input.orderNo, enrollmentId: e.id, item: e.product.title, member, source: 'PURCHASE' },
+      });
+      await notifyLearner({
+        organizationId: input.organizationId,
+        eventKey: 'course.welcome',
+        userId: input.userId,
+        subjectId: e.id,
+        context: { item: e.product.title, url: `/learn/${e.productId}`, organization: organization?.name ?? '' },
+      });
+    }
   }
 }

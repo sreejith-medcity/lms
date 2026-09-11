@@ -141,6 +141,43 @@ export async function templateFor(
   };
 }
 
+/**
+ * The wording for a queued row: a saved template named on the row, the text
+ * the row carries itself, or the event's own template. In that order, so a
+ * campaign or an automation says what it was written to say.
+ */
+export async function templateForRow(
+  organizationId: string,
+  row: { eventKey: string; channel: $Enums.Channel; templateKey: string | null; context: unknown },
+): Promise<ResolvedTemplate | null> {
+  const key = row.templateKey ?? '';
+  if (key.startsWith('tpl:')) {
+    const own = await db.messageTemplate.findFirst({
+      where: { id: key.slice(4), organizationId, channel: row.channel },
+      select: { subject: true, body: true, providerTemplateId: true },
+    });
+    if (!own) return null;
+    return {
+      subject: own.subject,
+      body: own.body,
+      templateName: own.providerTemplateId,
+      orderedVariables: (context) => orderedVariables(own.body, context),
+    };
+  }
+  if (key === 'inline') {
+    const context = (row.context ?? {}) as Record<string, string>;
+    const body = String(context._body ?? '');
+    if (!body.trim()) return null;
+    return {
+      subject: String(context._subject ?? '') || null,
+      body,
+      templateName: null,
+      orderedVariables: (ctx) => orderedVariables(body, ctx),
+    };
+  }
+  return templateFor(organizationId, row.eventKey, row.channel);
+}
+
 /** For the settings screen, so an academy can see what it would send today. */
 export function defaultTemplate(eventKey: string): Default | null {
   return DEFAULTS[eventKey] ?? null;

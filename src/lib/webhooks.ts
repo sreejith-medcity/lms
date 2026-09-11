@@ -136,11 +136,17 @@ export async function dispatchWebhooks(limit = 50): Promise<DispatchResult> {
 /** Every event a hook can subscribe to, declared so the form is a list. */
 export const WEBHOOK_EVENTS = [
   { key: 'lead.created', label: 'An enquiry came in' },
+  { key: 'account.created', label: 'Somebody created an account' },
   { key: 'enrolment.created', label: 'Somebody was enrolled' },
   { key: 'payment.captured', label: 'A payment succeeded' },
+  { key: 'payment.failed', label: 'A payment failed' },
   { key: 'payment.refunded', label: 'A refund went through' },
+  { key: 'cart.abandoned', label: 'Somebody left a cart' },
+  { key: 'instalment.overdue', label: 'An instalment went overdue' },
   { key: 'course.completed', label: 'Somebody finished a course' },
   { key: 'certificate.issued', label: 'A certificate was issued' },
+  { key: 'assessment.marked', label: 'A paper was marked' },
   { key: 'session.cancelled', label: 'A class was called off' },
+  { key: 'session.absent', label: 'Somebody missed a class' },
   { key: 'attendance.recorded', label: 'Somebody joined a class' },
 ] as const;

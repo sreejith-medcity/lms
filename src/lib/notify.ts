@@ -50,6 +50,13 @@ export interface QueueRequest {
    * gave, find nothing to send to, and report that the code went out.
    */
   channels?: $Enums.Channel[];
+  /**
+   * Which wording to use, when it is not the event's own template:
+   * `tpl:<id>` for a saved template, `inline` for a subject and body carried
+   * in the context as `_subject` and `_body`. Automations and campaigns use
+   * this; the event-driven messages leave it empty.
+   */
+  templateKey?: string;
 }
 
 const DEFAULT_CHANNELS: $Enums.Channel[] = ['EMAIL'];
@@ -122,6 +129,7 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
     target: string;
     status: string;
     dedupeKey: string | null;
+    templateKey: string | null;
     context: Prisma.InputJsonValue;
     nextAttemptAt: Date;
   }[] = [];
@@ -151,6 +159,7 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
         target,
         status: 'QUEUED',
         dedupeKey: dedupe,
+        templateKey: request.templateKey ?? null,
         context: {
           ...(request.context ?? {}),
           ...(request.contextFor?.(person) ?? {}),

@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { reportConversion } from '@/lib/analytics-server';
 import { attributionJson, conversionHints, requestAttribution } from '@/lib/attribution-server';
 import { getTenantContext } from '@/lib/tenant';
+import { happened } from '@/lib/events';
 import type { ActionState } from '@/server/courses';
 
 const enquiry = z.object({
@@ -59,6 +60,14 @@ export async function submitEnquiry(_prev: EnquiryState, formData: FormData): Pr
         attribution: attributionJson(attribution),
       },
       select: { id: true },
+    });
+
+    await happened({
+      organizationId: tenant.organizationId,
+      key: 'lead.created',
+      leadId: lead.id,
+      subjectId: lead.id,
+      data: { leadId: lead.id, name: d.name, email: d.email || null, phone: d.phone || null, interestedIn: d.interestedIn || null, source: 'WEB' },
     });
 
     // Told to the ad platforms from here as well as from the browser, keyed

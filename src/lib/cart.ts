@@ -5,6 +5,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { reviewBasket, type BasketRow, type BasketReview } from '@/lib/cart-rules';
 import { CART_COOKIE, CART_COUNT_COOKIE } from '@/lib/cart-cookie';
+import { happened } from '@/lib/events';
 
 /**
  * The cart, kept for the sake of the ones who did not buy.
@@ -89,10 +90,31 @@ export async function rememberIntent(productId: string, pricingPlanId?: string):
 export async function sweepAbandonedCarts(organizationId: string): Promise<number> {
   const cutoff = new Date(Date.now() - ABANDON_AFTER_HOURS * 3600_000);
 
-  const result = await db.cart.updateMany({
+  // Found first, then aged, so each one can be announced: an abandoned cart
+  // is the event a recovery automation runs on.
+  const quiet = await db.cart.findMany({
     where: { organizationId, status: 'OPEN', updatedAt: { lt: cutoff } },
+    select: { id: true, userId: true, items: { select: { productId: true, product: { select: { title: true } } } } },
+    take: 200,
+  });
+  if (!quiet.length) return 0;
+
+  const result = await db.cart.updateMany({
+    where: { id: { in: quiet.map((c) => c.id) }, status: 'OPEN' },
     data: { status: 'ABANDONED', abandonedAt: new Date() },
   });
+
+  for (const cart of quiet) {
+    if (!cart.userId) continue;
+    await happened({
+      organizationId,
+      key: 'cart.abandoned',
+      userId: cart.userId,
+      subjectId: cart.id,
+      productId: cart.items[0]?.productId ?? null,
+      data: { cartId: cart.id, items: cart.items.map((i) => i.product.title), url: '/cart' },
+    });
+  }
   return result.count;
 }
 

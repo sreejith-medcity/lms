@@ -8,6 +8,7 @@ import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { hashPassword } from '@/lib/password';
 import { recordAudit } from '@/lib/audit';
+import { happened, notifyLearner } from '@/lib/events';
 import { computeTax } from '@/lib/money';
 import type { ActionState } from '@/server/courses';
 
@@ -262,6 +263,23 @@ export async function enrolManually(
         expiresAt: plan?.validityDays ? new Date(Date.now() + plan.validityDays * 864e5) : null,
       },
       select: { id: true },
+    });
+
+    await happened({
+      organizationId: tenant.organizationId,
+      key: 'enrolment.created',
+      userId,
+      subjectId: enrollment.id,
+      productId: product.id,
+      batchId: batch?.id ?? null,
+      data: { enrollmentId: enrollment.id, item: product.title, source: 'ADMIN_SINGLE' },
+    });
+    await notifyLearner({
+      organizationId: tenant.organizationId,
+      eventKey: 'course.welcome',
+      userId,
+      subjectId: enrollment.id,
+      context: { item: product.title, url: `/learn/${product.id}` },
     });
 
     await recordAudit({

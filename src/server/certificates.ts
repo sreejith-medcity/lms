@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
+import { happened, notifyLearner } from '@/lib/events';
 import type { Prisma } from '@prisma/client';
 import type { ActionState } from '@/server/courses';
 
@@ -133,7 +134,7 @@ export async function issueCertificate(
       }),
       db.enrollment.findFirst({
         where: { id: enrollmentId, organizationId: tenant.organizationId },
-        select: { id: true, userId: true, product: { select: { title: true } } },
+        select: { id: true, userId: true, productId: true, product: { select: { title: true } } },
       }),
     ]);
     if (!tpl || !enrollment) return { error: 'Not found.' };
@@ -153,7 +154,7 @@ export async function issueCertificate(
       const number = claimed.nextSerial - 1;
       const serial = `${claimed.serialPrefix}-${String(number).padStart(5, '0')}`;
 
-      await tx.issuedCertificate.create({
+      const issued = await tx.issuedCertificate.create({
         data: {
           templateId,
           userId: enrollment.userId,
@@ -163,8 +164,21 @@ export async function issueCertificate(
             ? new Date(Date.now() + tpl.validityMonths * 30 * 864e5)
             : null,
         },
+        select: { id: true, verifyToken: true },
       });
 
+      return { serial, issued };
+    }).then(async ({ serial, issued }) => {
+      await announceCertificate({
+        organizationId: tenant.organizationId,
+        certificateId: issued.id,
+        verifyToken: issued.verifyToken,
+        serialNo: serial,
+        userId: enrollment.userId,
+        enrollmentId,
+        item: enrollment.product.title,
+        productId: enrollment.productId,
+      });
       return serial;
     });
 
@@ -246,7 +260,7 @@ export async function autoIssueOnCompletion(enrollmentId: string): Promise<void>
         select: { nextSerial: true, serialPrefix: true },
       });
 
-      await tx.issuedCertificate.create({
+      return tx.issuedCertificate.create({
         data: {
           templateId: template.id,
           userId: enrollment.userId,
@@ -256,9 +270,49 @@ export async function autoIssueOnCompletion(enrollmentId: string): Promise<void>
             ? new Date(Date.now() + template.validityMonths * 30 * 864e5)
             : null,
         },
+        select: { id: true, verifyToken: true, serialNo: true, enrollment: { select: { productId: true, product: { select: { title: true } } } } },
       });
-    });
+    }).then((issued) =>
+      announceCertificate({
+        organizationId: enrollment.organizationId,
+        certificateId: issued.id,
+        verifyToken: issued.verifyToken,
+        serialNo: issued.serialNo,
+        userId: enrollment.userId,
+        enrollmentId,
+        item: issued.enrollment?.product.title ?? 'your course',
+        productId: issued.enrollment?.productId ?? null,
+      }),
+    );
   } catch (err) {
     console.error('[certificates] auto issue failed', err instanceof Error ? err.message : err);
   }
+}
+
+/** The learner hears, the webhooks hear, the automations hear: once per certificate. */
+async function announceCertificate(input: {
+  organizationId: string;
+  certificateId: string;
+  verifyToken: string;
+  serialNo: string;
+  userId: string;
+  enrollmentId: string;
+  item: string;
+  productId?: string | null;
+}) {
+  await happened({
+    organizationId: input.organizationId,
+    key: 'certificate.issued',
+    userId: input.userId,
+    subjectId: input.certificateId,
+    productId: input.productId ?? null,
+    data: { certificateId: input.certificateId, serialNo: input.serialNo, enrollmentId: input.enrollmentId, item: input.item, verifyUrl: `/verify/${input.verifyToken}` },
+  });
+  await notifyLearner({
+    organizationId: input.organizationId,
+    eventKey: 'certificate.issued',
+    userId: input.userId,
+    subjectId: input.certificateId,
+    context: { item: input.item, url: `/verify/${input.verifyToken}`, code: input.serialNo },
+  });
 }

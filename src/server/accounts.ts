@@ -15,6 +15,7 @@ import type { ActionState } from '@/server/courses';
 import { creditOnSignup } from '@/lib/wallet';
 import { settingBool, settingText } from '@/lib/settings/store';
 import { saveFieldValues, signupFields } from '@/lib/custom-fields';
+import { happened, notifyLearner } from '@/lib/events';
 
 const SESSION_DAYS = 30;
 
@@ -50,7 +51,7 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     const tenantId = await resolveTenantByHost(h.get('host') ?? '');
     if (!tenantId) return { error: 'This hostname is not linked to an academy.' };
 
-    const org = await db.organization.findFirst({ where: { tenantId }, select: { id: true } });
+    const org = await db.organization.findFirst({ where: { tenantId }, select: { id: true, name: true } });
     if (!org) return { error: 'This hostname is not linked to an academy.' };
 
     const [primary, selfSignup] = await Promise.all([
@@ -142,6 +143,21 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     });
 
     await startSession(user.id, h.get('user-agent'), h.get('x-forwarded-for'));
+
+    await happened({
+      organizationId: org.id,
+      key: 'account.created',
+      userId: user.id,
+      subjectId: user.id,
+      data: { name, email: email || null, phone: phone || null },
+    });
+    await notifyLearner({
+      organizationId: org.id,
+      eventKey: 'account.welcome',
+      userId: user.id,
+      subjectId: user.id,
+      context: { organization: org.name, loginUrl: '/login', identifier: email || phone || '' },
+    });
 
     reportConversion({
       organizationId: org.id,

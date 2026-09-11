@@ -9,6 +9,7 @@ import type { ActionState } from '@/server/courses';
 import { recordAudit } from '@/lib/audit';
 import { dayStart, dayEnd } from '@/lib/clock';
 import { queueNotifications, describeQueue } from '@/lib/notify';
+import { happened } from '@/lib/events';
 import { provisionMeetings, releaseMeeting } from '@/lib/zoom-sessions';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 
@@ -651,6 +652,17 @@ export async function notifyAbsentees(sessionId: string): Promise<ActionState> {
       recipients: absentees,
       dedupeKey: `session:${session.id}`,
     });
+
+    for (const person of absentees) {
+      await happened({
+        organizationId: tenant.organizationId,
+        key: 'session.absent',
+        userId: person.userId,
+        subjectId: session.id,
+        batchId: session.batch?.id ?? null,
+        data: { sessionId: session.id, title: session.title, startsAt: session.startsAt.toISOString(), batch: session.batch?.name ?? null },
+      });
+    }
 
     revalidatePath(`/admin/sessions/${sessionId}`);
     return { ok: true, message: describeQueue(result, 'note') };

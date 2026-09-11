@@ -319,7 +319,7 @@ export async function prepareCampaign(campaignId: string): Promise<ActionState> 
       message:
         reachable.length === 0
           ? 'Nobody in that audience can be reached on this channel.'
-          : `${reachable.length} people queued${unreachable > 0 ? `, ${unreachable} left out with no address on this channel` : ''}. Nothing sends until a provider is connected.`,
+          : `${reachable.length} people queued${unreachable > 0 ? `, ${unreachable} left out with no address on this channel` : ''}. It goes out on the scheduler run after its date, or within a few minutes if no date is set.`,
     };
   } catch (err) {
     return fail(err);

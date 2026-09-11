@@ -5,6 +5,8 @@ import { drain } from '@/lib/messaging/drain';
 import { purgeExpiredOtps } from '@/lib/otp';
 import { queueUpcomingReminders } from '@/lib/messaging/reminders';
 import { queueFeeReminders } from '@/lib/messaging/fee-reminders';
+import { sendDueCampaigns } from '@/lib/messaging/campaigns';
+import { runDueWorkflows } from '@/lib/workflows';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -43,10 +45,14 @@ export async function GET(request: Request) {
     // about on this run rather than the next one.
     const reminders = await queueUpcomingReminders(organization.id);
     const fees = await queueFeeReminders(organization.id);
+    // Automations and campaigns write into the same outbox, so they go
+    // before the drain and their messages leave on this run.
+    const workflows = await runDueWorkflows(organization.id, 50);
+    const campaigns = await sendDueCampaigns(organization.id);
     const result = await drain(organization.id, 100);
     sent += result.sent;
     failed += result.failed;
-    results[organization.name] = { ...result, reminders, fees };
+    results[organization.name] = { ...result, reminders, fees, workflows, campaigns };
   }
 
   const purged = await purgeExpiredOtps();

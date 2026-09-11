@@ -29,7 +29,7 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
     group: 'Money',
     events: [
       { key: 'payment.received', label: 'A payment went through', who: 'The learner who paid', live: true },
-      { key: 'payment.failed', label: 'A payment failed', who: 'The learner who tried', live: false, waitingOn: 'the fulfilment path to emit it' },
+      { key: 'payment.failed', label: 'A payment failed', who: 'The learner who tried', live: true },
       { key: 'instalment.due', label: 'An instalment is due', who: 'The learner who owes it', live: true },
       { key: 'cart.abandoned', label: 'They left a cart', who: 'The learner who left it', live: true },
     ],
@@ -37,10 +37,10 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
   {
     group: 'Learning',
     events: [
-      { key: 'course.welcome', label: 'They were enrolled', who: 'The new learner', live: false, waitingOn: 'the enrolment path to emit it' },
-      { key: 'course.completed', label: 'They finished a course', who: 'The learner', live: false, waitingOn: 'the completion path to emit it' },
-      { key: 'certificate.issued', label: 'A certificate was issued', who: 'The learner', live: false, waitingOn: 'the certificate path to emit it' },
-      { key: 'assessment.marked', label: 'Their paper was marked', who: 'The learner', live: false, waitingOn: 'the marking path to emit it' },
+      { key: 'course.welcome', label: 'They were enrolled', who: 'The new learner', live: true },
+      { key: 'course.completed', label: 'They finished a course', who: 'The learner', live: true },
+      { key: 'certificate.issued', label: 'A certificate was issued', who: 'The learner', live: true },
+      { key: 'assessment.marked', label: 'Their paper was marked', who: 'The learner', live: true },
     ],
   },
   {
@@ -48,7 +48,7 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
     events: [
       { key: 'account.otp', label: 'A one-time code was asked for', who: 'Whoever asked for it', live: true },
       { key: 'account.two_factor', label: 'A sign-in code was asked for', who: 'The account holder', live: true },
-      { key: 'account.welcome', label: 'They created an account', who: 'The new account', live: false, waitingOn: 'the signup path to emit it' },
+      { key: 'account.welcome', label: 'They created an account', who: 'The new account', live: true },
       { key: 'account.password_reset', label: 'A password was reset', who: 'The account holder', live: false, waitingOn: 'the reset flow to emit it' },
       { key: 'announcement.published', label: 'An announcement went out', who: 'Its targets', live: false, waitingOn: 'the announcement path to emit it' },
     ],

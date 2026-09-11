@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { anthropicReady, askClaude } from '@/lib/anthropic';
+import { announceMarked } from '@/lib/assessment-events';
 import { settingBool } from '@/lib/settings/store';
 import {
   EXAM_PRESETS,
@@ -56,6 +57,8 @@ export async function evaluateAttemptWriting(attemptId: string): Promise<{ marke
       scoreRaw: true,
       assessment: {
         select: {
+          id: true,
+          title: true,
           organizationId: true,
           aiEvaluation: true,
           passPercent: true,
@@ -144,6 +147,18 @@ export async function evaluateAttemptWriting(attemptId: string): Promise<{ marke
       },
     }),
   ]);
+
+  if (allMarked) {
+    await announceMarked({
+      organizationId,
+      attemptId: attempt.id,
+      userId: attempt.userId,
+      assessmentId: attempt.assessment.id,
+      title: attempt.assessment.title,
+      scorePercent: Math.round(scorePercent * 10) / 10,
+      passed: scorePercent >= attempt.assessment.passPercent,
+    });
+  }
 
   return { marked, skipped };
 }

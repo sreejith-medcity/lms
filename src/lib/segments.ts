@@ -22,6 +22,7 @@ export const FIELDS = [
   { key: 'has_unpaid_instalment', label: 'Has an overdue instalment', input: 'NONE' },
   { key: 'abandoned_cart', label: 'Left a cart', input: 'NONE' },
   { key: 'never_enrolled', label: 'Signed up but never enrolled', input: 'NONE' },
+  { key: 'has_tag', label: 'Has the tag', input: 'TEXT' },
 ] as const;
 
 export type FieldKey = (typeof FIELDS)[number]['key'];
@@ -105,6 +106,11 @@ function clauseFor(rule: Rule): Prisma.UserWhereInput | null {
 
     case 'never_enrolled':
       return { enrollments: { none: {} } };
+
+    case 'has_tag': {
+      const tag = String(rule.value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+      return tag ? { tags: { has: tag } } : null;
+    }
   }
 }
 
@@ -133,6 +139,7 @@ export function describe(rules: SegmentRules): string {
     if (field.input === 'NONE') return field.label.toLowerCase();
     if (field.input === 'PERCENT') return `${field.label.toLowerCase()} ${r.value}%`;
     if (field.input === 'DAYS') return `${field.label.toLowerCase()} ${r.value} days`;
+    if (field.input === 'TEXT') return `${field.label.toLowerCase()} "${r.value}"`;
     return field.label.toLowerCase();
   });
 

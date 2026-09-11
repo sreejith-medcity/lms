@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { evaluateAttemptWriting } from '@/lib/ai-marking';
+import { announceMarked } from '@/lib/assessment-events';
 import { assessmentAccess } from '@/lib/assessment-access';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
@@ -343,6 +344,8 @@ export async function markSubmission(
         answers: { include: { question: { select: { id: true, type: true, marks: true } } } },
         assessment: {
           select: {
+            id: true,
+            title: true,
             passPercent: true,
             questions: { select: { marks: true, question: { select: { id: true, marks: true } } } },
           },
@@ -403,6 +406,16 @@ export async function markSubmission(
         },
       }),
     ]);
+
+    await announceMarked({
+      organizationId: tenant.organizationId,
+      attemptId,
+      userId: attempt.userId,
+      assessmentId: attempt.assessment.id,
+      title: attempt.assessment.title,
+      scorePercent: Math.round(scorePercent * 10) / 10,
+      passed: scorePercent >= attempt.assessment.passPercent,
+    });
 
     revalidatePath('/admin/submissions');
     return { ok: true, message: 'Marked. The learner can see it now.' };

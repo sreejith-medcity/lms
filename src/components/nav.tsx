@@ -69,6 +69,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Banners', href: '/admin/banners' },
       { label: 'Testimonials', href: '/admin/testimonials' },
       { label: 'Campaigns', href: '/admin/campaigns' },
+      { label: 'Automations', href: '/admin/workflows' },
       { label: 'Message templates', href: '/admin/templates' },
       { label: 'Segments', href: '/admin/segments' },
       { label: 'Community', href: '/admin/community' },

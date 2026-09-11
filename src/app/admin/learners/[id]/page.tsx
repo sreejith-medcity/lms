@@ -28,6 +28,7 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
       phone: true,
       status: true,
       registrationNo: true,
+      tags: true,
       createdAt: true,
       lastSeenAt: true,
       mustResetPassword: true,
@@ -133,6 +134,11 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
               <Badge tone="warn">{learner.status.toLowerCase().replace('_', ' ')}</Badge>
             )}
             {learner.mustResetPassword && <Badge tone="warn">password not set</Badge>}
+            {learner.tags.map((tag) => (
+              <Badge key={tag} tone="brand">
+                {tag}
+              </Badge>
+            ))}
           </h1>
           <p className="t-small faint mt-1">
             {[learner.email, learner.phone].filter(Boolean).join(' · ') || 'No contact details'}
