@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
-import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
+import { canonicalHost } from '@/lib/canonical-host';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,8 +11,9 @@ export const dynamic = 'force-dynamic';
  * /learn is ever queried here.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const host = (await headers()).get('host') ?? '';
-  const base = `https://${host}`;
+  // The primary domain, not whichever name this request arrived on. A
+  // sitemap listing a rehearsal host is a sitemap asking to be indexed twice.
+  const base = (await canonicalHost()).origin;
 
   const tenant = await getTenantContext();
   if (!tenant) return [{ url: base, changeFrequency: 'weekly', priority: 1 }];

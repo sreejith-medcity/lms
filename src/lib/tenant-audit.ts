@@ -86,6 +86,10 @@ export const EXCEPTIONS: { file: string; why: string }[] = [
     file: 'prisma/seed.ts',
     why: 'Creates the first academy, so it cannot be scoped to one.',
   },
+  {
+    file: 'src/lib/storage-migrate.ts',
+    why: 'An operator moving the server\u2019s files into a bucket moves every academy\u2019s, and it is run from a shell rather than from a request.',
+  },
 ];
 
 function walk(dir: string, out: string[] = []): string[] {
