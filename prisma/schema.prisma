@@ -1685,6 +1685,10 @@ model Order {
   billingAddress   Json?
   gstin            String?
   gatewayOrderId   String? // the provider's order id, so a webhook can find us
+  /// Where the buyer came from: click ids, UTM, landing page, first and last
+  /// touch. Captured when the order is created and sent on with the
+  /// conversion, which is what lets an ad platform tie a sale back to a click.
+  attribution      Json?
   placedAt         DateTime    @default(now())
   legacyEdmingleId String?
   legacyWooId      String?
@@ -2013,6 +2017,8 @@ model Lead {
   source          String? // WEB, WHATSAPP, WALK_IN, ADS, IMPORT
   campaign        String?
   interestedIn    String?
+  /// Same shape as Order.attribution, for the enquiry that started it all.
+  attribution     Json?
   stage           LeadStage @default(NEW)
   score           Float? // model output
   ownerId         String?
