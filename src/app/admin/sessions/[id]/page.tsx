@@ -5,7 +5,7 @@ import { requireTenant } from '@/lib/tenant';
 import { Badge, Card, EmptyState, Section } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { storageConfigured } from '@/lib/storage';
-import { AttendanceRow, CancelSession, ClassNotices, Recordings } from './controls';
+import { AttendanceRow, CancelSession, ClassNotices, MeetingPanel, Recordings } from './controls';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +95,20 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
           value={roster.length > 0 ? `${Math.round(((present + late) / roster.length) * 100)}%` : '—'}
         />
       </StatGrid>
+
+      {session.status !== 'CANCELLED' && !session.isHoliday && (
+        <Section title={session.provider === 'ZOOM' ? 'Zoom meeting' : 'Join link'}>
+          <Card>
+            <MeetingPanel
+              sessionId={session.id}
+              joinUrl={session.joinUrl}
+              hostUrl={session.hostUrl}
+              meetingId={session.providerMeetingId}
+              finished={session.endsAt < new Date()}
+            />
+          </Card>
+        </Section>
+      )}
 
       <Section title="Attendance">
         {roster.length === 0 ? (

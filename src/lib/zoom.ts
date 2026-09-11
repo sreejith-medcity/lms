@@ -163,31 +163,48 @@ export async function createMeeting(
   // has a licensed Zoom seat, because the meeting then appears in their own app.
   const host = input.hostEmail || 'me';
 
-  const created = await client.request<{
-    id: number;
-    join_url: string;
-    start_url: string;
-    host_id: string;
-  }>(`/users/${encodeURIComponent(host)}/meetings`, {
-    method: 'POST',
-    body: JSON.stringify({
-      topic: input.topic.slice(0, 200),
-      type: 2, // scheduled
-      start_time: input.startsAt.toISOString().replace(/\.\d{3}Z$/, 'Z'),
-      duration: Math.max(1, input.minutes),
-      timezone: input.timezone,
-      agenda: input.agenda?.slice(0, 2000),
-      settings: {
-        join_before_host: false,
-        waiting_room: true,
-        // Cloud recording needs a paid plan. Where it is not available Zoom
-        // ignores this rather than failing, so the class still happens.
-        auto_recording: input.autoRecord ? 'cloud' : 'none',
-        approval_type: 2,
-        mute_upon_entry: true,
-      },
-    }),
-  });
+  const post = (who: string) =>
+    client.request<{
+      id: number;
+      join_url: string;
+      start_url: string;
+      host_id: string;
+    }>(`/users/${encodeURIComponent(who)}/meetings`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+  const payload = {
+    topic: input.topic.slice(0, 200),
+    type: 2, // scheduled
+    start_time: input.startsAt.toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    duration: Math.max(1, input.minutes),
+    timezone: input.timezone,
+    agenda: input.agenda?.slice(0, 2000),
+    settings: {
+      join_before_host: false,
+      waiting_room: true,
+      // Cloud recording needs a paid plan. Where it is not available Zoom
+      // ignores this rather than failing, so the class still happens.
+      auto_recording: input.autoRecord ? 'cloud' : 'none',
+      approval_type: 2,
+      mute_upon_entry: true,
+    },
+  };
+
+  // A trainer whose email is not a seat on this Zoom account is the ordinary
+  // case at an institute with one licence. Zoom answers 404 for them, and the
+  // class is then hosted by the account itself rather than not at all.
+  let created;
+  try {
+    created = await post(host);
+  } catch (err) {
+    if (host !== 'me' && err instanceof ZoomError && err.status === 404) {
+      created = await post('me');
+    } else {
+      throw err;
+    }
+  }
 
   return {
     meetingId: String(created.id),

@@ -99,6 +99,9 @@ export default async function SessionsPage() {
                     </div>
                     {live && <Badge tone="ok">live now</Badge>}
                     {s.status === 'CANCELLED' && <Badge tone="bad">cancelled</Badge>}
+                    {s.status !== 'CANCELLED' && !s.isHoliday && !s.joinUrl && (
+                      <Badge tone="warn">no join link</Badge>
+                    )}
                     <span className="t-small faint w-28 shrink-0 text-right tabular-nums">
                       {s._count.attendances} / {s.batch?._count.enrollments ?? 1} in
                     </span>
@@ -125,7 +128,10 @@ export default async function SessionsPage() {
                     <span className="w-16 shrink-0 tabular-nums">
                       {s.startsAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                     </span>
-                    <span className="t-small min-w-0 flex-1 truncate">{s.title}</span>
+                    <Link href={`/admin/sessions/${s.id}`} className="t-small min-w-0 flex-1 truncate hover:underline">
+                      {s.title}
+                    </Link>
+                    {!s.isHoliday && !s.joinUrl && <Badge tone="warn">no join link</Badge>}
                     <span className="t-small faint hidden shrink-0 truncate sm:block">{s.batch?.name ?? 'One to one'}</span>
                   </li>
                 ))}

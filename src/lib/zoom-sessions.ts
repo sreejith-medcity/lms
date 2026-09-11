@@ -84,6 +84,7 @@ export async function provisionMeetings(
   let failed = 0;
   let skipped = 0;
   let stopReason: string | undefined;
+  let lastError: string | undefined;
 
   for (const session of due) {
     if (stopReason) {
@@ -120,6 +121,7 @@ export async function provisionMeetings(
     } catch (err) {
       failed += 1;
       const message = err instanceof Error ? err.message : String(err);
+      lastError = message;
 
       // A wrong scope or a missing licence fails identically for every class in
       // the list, so there is no sense making the same call twenty five times.
@@ -136,10 +138,12 @@ export async function provisionMeetings(
     action: 'Meetings created',
     ok: failed === 0,
     records: created,
-    detail: stopReason ?? null,
+    detail: stopReason ?? lastError ?? null,
   });
 
-  return { created, failed, skipped, reason: stopReason };
+  // A transient failure is still a failure the person scheduling should
+  // hear about; only the permanent kind stops the loop.
+  return { created, failed, skipped, reason: stopReason ?? lastError };
 }
 
 /** Keeps Zoom in step when a class is moved. */

@@ -186,6 +186,41 @@ export async function cancelSession(sessionId: string, reason?: string): Promise
 }
 
 /**
+ * A Zoom meeting for one class, now. For a class scheduled before Zoom was
+ * connected, or one whose first attempt failed, so nobody has to wait for
+ * the scheduled run or guess why there is no link.
+ */
+export async function createMeetingNow(sessionId: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+
+    const session = await db.liveSession.findFirst({
+      where: { id: sessionId, organizationId: tenant.organizationId },
+      select: { id: true, providerMeetingId: true, status: true, startsAt: true, endsAt: true },
+    });
+    if (!session) return { error: 'Class not found.' };
+    if (session.providerMeetingId) return { ok: true, message: 'This class already has its meeting.' };
+    if (session.status === 'CANCELLED') return { error: 'This class was cancelled.' };
+    if (session.endsAt < new Date()) return { error: 'This class has already finished.' };
+
+    const result = await provisionMeetings(tenant.organizationId, { sessionIds: [session.id] });
+
+    revalidatePath(`/admin/sessions/${session.id}`);
+    revalidatePath('/admin/sessions');
+    revalidatePath('/learn');
+
+    if (result.created > 0) return { ok: true, message: 'Zoom meeting created.' };
+    if (result.reason) return { error: `Zoom refused: ${result.reason}` };
+    return {
+      error:
+        'Nothing was created. The class may already be in the past, or Zoom is not connected for this academy.',
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
  * Attendance without anyone remembering to take it: joining records it, and the
  * in-time flag comes from the clock rather than a trainer's judgement.
  */

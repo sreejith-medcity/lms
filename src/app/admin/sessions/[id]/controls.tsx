@@ -5,12 +5,15 @@ import { useState, useTransition } from 'react';
 import {
   attachRecording,
   cancelSession,
+  createMeetingNow,
   markAttendance,
   notifyAbsentees,
   remindRoster,
   removeRecording,
 } from '@/server/sessions';
+import { CopyField } from '@/components/copy-field';
 import { Badge, Button } from '@/components/ui';
+import type { ActionState } from '@/server/courses';
 import { Uploader } from '@/components/uploader';
 
 type Status = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
@@ -246,6 +249,66 @@ export function ClassNotices({
       <p className="t-small faint">
         Messages are written to the outbox now and go out once a messaging provider is connected.
       </p>
+    </div>
+  );
+}
+
+/* The meeting ---------------------------------------------------------------- */
+
+export function MeetingPanel({
+  sessionId,
+  joinUrl,
+  hostUrl,
+  meetingId,
+  finished,
+}: {
+  sessionId: string;
+  joinUrl: string | null;
+  hostUrl: string | null;
+  meetingId: string | null;
+  finished: boolean;
+}) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionState>({});
+  const router = useRouter();
+
+  if (joinUrl) {
+    return (
+      <div className="space-y-3">
+        {meetingId && <p className="t-small faint tabular-nums">Zoom meeting {meetingId}</p>}
+        <CopyField label="Join link (learners)" value={joinUrl} />
+        {hostUrl && <CopyField label="Start link (trainer)" value={hostUrl} />}
+        <p className="t-small muted">
+          Learners get a Join button on their own page a few minutes before the start; they do not need
+          this link sent to them.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="t-small muted">
+        No meeting yet. One is made automatically a fortnight before the class once Zoom is connected;
+        press below to make it now.
+      </p>
+      {!finished && (
+        <Button
+          size="sm"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              const res = await createMeetingNow(sessionId);
+              setState(res);
+              if (res.ok) router.refresh();
+            })
+          }
+        >
+          {pending ? 'Asking Zoom...' : 'Create Zoom meeting'}
+        </Button>
+      )}
+      {state.error && <p className="t-small text-[var(--bad)]">{state.error}</p>}
+      {state.ok && state.message && <p className="t-small text-[var(--ok)]">{state.message}</p>}
     </div>
   );
 }
