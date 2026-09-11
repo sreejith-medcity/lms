@@ -330,6 +330,7 @@ function IntegrationCard({
                     // admin's own credentials. "new-password" is the one
                     // value it honours.
                     autoComplete={field.kind === 'secret' ? 'new-password' : 'off'}
+                    defaultValue={field.kind === 'secret' ? undefined : (field.value ?? undefined)}
                     data-1p-ignore
                     data-lpignore="true"
                     disabled={field.fromEnv}

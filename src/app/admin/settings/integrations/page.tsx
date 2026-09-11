@@ -107,7 +107,7 @@ export default async function IntegrationsPage() {
                   fromEnv: summary?.fromEnv.includes(f.key) ?? false,
                   tail: summary?.tails[f.key] ?? null,
                   /** Plain values are safe to show again; secrets never are. */
-                  value: null,
+                  value: f.kind === 'secret' ? null : (summary?.plain[f.key] ?? null),
                 })),
                 mappings: (def.mappings ?? []).map((m) => ({
                   key: m.key,

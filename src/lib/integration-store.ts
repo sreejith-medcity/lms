@@ -90,6 +90,8 @@ export interface IntegrationSummary {
   fromEnv: string[];
   /** Last four characters of each secret, so somebody can tell test from live. */
   tails: Record<string, string>;
+  /** Plain fields as stored, so the form shows what it has rather than a blank. */
+  plain: Record<string, string>;
   connectedAt: string | null;
 }
 
@@ -105,6 +107,7 @@ export async function summarise(
     filled: [],
     fromEnv: [],
     tails: {},
+    plain: {},
     connectedAt: null,
   };
   if (!def) return empty;
@@ -118,9 +121,12 @@ export async function summarise(
   });
 
   const tails: Record<string, string> = {};
+  const plain: Record<string, string> = {};
   for (const field of def.fields) {
     const value = resolved.values[field.key];
-    if (value && field.kind === 'secret') tails[field.key] = value.slice(-4);
+    if (!value) continue;
+    if (field.kind === 'secret') tails[field.key] = value.slice(-4);
+    else plain[field.key] = value;
   }
 
   return {
@@ -130,6 +136,7 @@ export async function summarise(
     filled: Object.keys(resolved.values).filter((k) => resolved.values[k]),
     fromEnv: resolved.fromEnv,
     tails,
+    plain,
     connectedAt: row?.connectedAt ? row.connectedAt.toISOString() : null,
   };
 }
@@ -199,6 +206,7 @@ export async function summariseAll(organizationId: string): Promise<Map<string, 
 
     const filled: string[] = [];
     const tails: Record<string, string> = {};
+    const plain: Record<string, string> = {};
 
     for (const field of def.fields) {
       const fromEnv = env.values[field.key];
@@ -207,8 +215,10 @@ export async function summariseAll(organizationId: string): Promise<Map<string, 
 
       filled.push(field.key);
       if (field.kind === 'secret') {
-        const plain = fromEnv ?? open(raw) ?? '';
-        if (plain) tails[field.key] = plain.slice(-4);
+        const opened = fromEnv ?? open(raw) ?? '';
+        if (opened) tails[field.key] = opened.slice(-4);
+      } else {
+        plain[field.key] = raw;
       }
     }
 
@@ -225,6 +235,7 @@ export async function summariseAll(organizationId: string): Promise<Map<string, 
       filled,
       fromEnv: env.keys,
       tails,
+      plain,
       connectedAt: row?.connectedAt ? row.connectedAt.toISOString() : null,
     });
   }
