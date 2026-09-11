@@ -1329,6 +1329,10 @@ model Assessment {
   aiEvaluation           Boolean        @default(false)
   opensAt                DateTime?
   closesAt               DateTime?
+  /// The recipe a generated paper was drawn from: sections of count, tags,
+  /// difficulty and banks. Kept so another variant can be drawn from the
+  /// same recipe, and so the office can see why the paper looks as it does.
+  blueprint              Json?
   createdAt              DateTime       @default(now())
 
   questions AssessmentQuestion[]
