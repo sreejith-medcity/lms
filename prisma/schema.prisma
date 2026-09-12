@@ -1295,8 +1295,14 @@ model Question {
   difficulty    Difficulty   @default(MEDIUM)
   marks         Float        @default(1)
   negativeMarks Float        @default(0)
+  /// A picture or a clip the question is about: a chart to read, a
+  /// recording to listen to. Any image, audio or video asset.
   mediaAssetId  String?
   rubric        Json? // for AI-scored writing and speaking tasks
+  /// The key for the types options cannot express: the accepted words for
+  /// each blank, the pairs to match, the right order. Shape per type in
+  /// src/lib/question-scoring.ts.
+  answerKey     Json?
   tags          String[]
 
   bank    QuestionBank         @relation(fields: [bankId], references: [id], onDelete: Cascade)
@@ -1314,6 +1320,7 @@ enum QuestionType {
   TRUE_FALSE
   FILL_BLANK
   MATCH
+  ORDERING
   SHORT_ANSWER
   LONG_ANSWER
   FILE_UPLOAD
@@ -1356,6 +1363,7 @@ model Assessment {
   createdAt              DateTime       @default(now())
 
   questions AssessmentQuestion[]
+  sections  AssessmentSection[]
   courses   AssessmentCourse[]
   attempts  Attempt[]
   grants    AssessmentGrant[]
@@ -1459,14 +1467,36 @@ enum AssessmentKind {
   SURVEY
 }
 
+/// A part of a paper with a name and, where it wants one, a clock of its
+/// own: Listening 30 minutes, then Reading 60, then Writing 60. A timed
+/// section starts when the learner opens it and closes on its own clock
+/// whatever the paper's says, and once closed it is not reopened.
+model AssessmentSection {
+  id              String  @id @default(cuid())
+  assessmentId    String
+  title           String
+  instructions    String?
+  /// Null shares the paper's time.
+  durationMinutes Int?
+  sortOrder       Int     @default(0)
+
+  assessment Assessment           @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questions  AssessmentQuestion[]
+
+  @@index([assessmentId, sortOrder])
+  @@map("assessment_sections")
+}
+
 model AssessmentQuestion {
   assessmentId String
   questionId   String
-  sortOrder    Int    @default(0)
+  sortOrder    Int     @default(0)
   marks        Float?
+  sectionId    String?
 
-  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  assessment Assessment         @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  question   Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  section    AssessmentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
   @@id([assessmentId, questionId])
   @@map("assessment_questions")
@@ -1554,6 +1584,10 @@ model Attempt {
   scorePercent Float?
   passed       Boolean?
   proctorFlags Json?
+  /// When each timed section was opened: { sectionId: ISO time }. A section
+  /// not in here has not started; one in here is closed once its clock
+  /// runs out, by arithmetic rather than by a row that could be missed.
+  sectionClock Json?
 
   assessment Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
