@@ -138,7 +138,7 @@ export async function confirmTwoFactor(
       entityId: user.id,
     });
 
-    revalidatePath('/account/security');
+    revalidatePath('/learn/account/security');
 
     return {
       ok: true,
@@ -186,7 +186,7 @@ export async function disableTwoFactor(
       entityId: user.id,
     });
 
-    revalidatePath('/account/security');
+    revalidatePath('/learn/account/security');
     return { ok: true, message: 'Two factor is off.' };
   } catch (err) {
     return fail(err);
@@ -214,7 +214,7 @@ export async function regenerateRecoveryCodes(): Promise<SetupState> {
       data: { twoFactorRecoveryCodes: hashes },
     });
 
-    revalidatePath('/account/security');
+    revalidatePath('/learn/account/security');
     return {
       ok: true,
       message: 'New codes. The old ones no longer work.',

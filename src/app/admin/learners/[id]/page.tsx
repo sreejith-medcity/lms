@@ -29,6 +29,9 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
       status: true,
       registrationNo: true,
       tags: true,
+      emailOptOut: true,
+      smsOptOut: true,
+      whatsappOptOut: true,
       createdAt: true,
       lastSeenAt: true,
       mustResetPassword: true,
@@ -139,6 +142,11 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
                 {tag}
               </Badge>
             ))}
+            {(learner.emailOptOut || learner.smsOptOut || learner.whatsappOptOut) && (
+              <Badge tone="warn">
+                no marketing by {[learner.emailOptOut && 'email', learner.smsOptOut && 'SMS', learner.whatsappOptOut && 'WhatsApp'].filter(Boolean).join(', ')}
+              </Badge>
+            )}
           </h1>
           <p className="t-small faint mt-1">
             {[learner.email, learner.phone].filter(Boolean).join(' · ') || 'No contact details'}

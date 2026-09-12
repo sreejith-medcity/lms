@@ -53,6 +53,7 @@ export const SETTING_GROUPS = [
   { key: 'loyalty', label: 'Loyalty', blurb: 'Who runs the points, and who does the arithmetic.' },
   { key: 'website', label: 'The public site', blurb: 'What a stranger sees before they have an account.' },
   { key: 'ai', label: 'The AI examiner', blurb: 'What learners may practise with it, and how much.' },
+  { key: 'messaging', label: 'Messaging', blurb: 'When promotional messages may go out, and when they wait.' },
 ] as const;
 
 export type SettingGroupKey = (typeof SETTING_GROUPS)[number]['key'];
@@ -358,6 +359,28 @@ export const SETTINGS: SettingDef[] = [
           ? 'Nobody awards anything. Existing balances are left alone rather than cleared.'
           : 'The wallet in this product awards and redeems, which is what runs today.',
   },
+  /* Messaging ----------------------------------------------------------------- */
+  {
+    key: 'messaging.quietFrom',
+    group: 'messaging',
+    label: 'Quiet hours start',
+    help: 'Campaigns, automations and cart nudges queued after this time wait until the morning. Service messages (receipts, class reminders, sign-in codes) are not held. Leave blank for no quiet hours. In the academy\u2019s timezone, 24-hour clock.',
+    kind: 'text',
+    default: '21:00',
+    placeholder: '21:00',
+    live: true,
+  },
+  {
+    key: 'messaging.quietTo',
+    group: 'messaging',
+    label: 'Quiet hours end',
+    help: 'When held messages are released.',
+    kind: 'text',
+    default: '08:00',
+    placeholder: '08:00',
+    live: true,
+  },
+
   /* The AI examiner ---------------------------------------------------------- */
   {
     key: 'ai.practiceEnabled',

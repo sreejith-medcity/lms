@@ -1,4 +1,6 @@
 import { db } from '@/lib/db';
+import { isMarketing, optedOut, releaseAfterQuietHours } from '@/lib/consent';
+import { settingText } from '@/lib/settings/store';
 import type { $Enums, Prisma } from '@prisma/client';
 
 /**
@@ -90,6 +92,8 @@ export interface QueueResult {
   queued: number;
   skipped: number;
   unreachable: number;
+  /** Left out because the person said no to this channel. Marketing only. */
+  optedOut?: number;
 }
 
 export async function queueNotifications(request: QueueRequest): Promise<QueueResult> {
@@ -136,9 +140,43 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
 
   let skipped = 0;
   let unreachable = 0;
+  let optedOutCount = 0;
+
+  // Marketing honours consent and quiet hours; service messages do not, and
+  // the difference is decided by the event, never by the caller.
+  const marketing = isMarketing(request.eventKey);
+  const consent = marketing
+    ? new Map(
+        (
+          await db.user.findMany({
+            where: {
+              organizationId: request.organizationId,
+              id: { in: request.recipients.map((r) => r.userId).filter((id): id is string => Boolean(id)) },
+            },
+            select: { id: true, emailOptOut: true, smsOptOut: true, whatsappOptOut: true },
+          })
+        ).map((u) => [u.id, u]),
+      )
+    : null;
+  let sendAt = request.sendAt ?? new Date();
+  if (marketing) {
+    const [organization, from, to] = await Promise.all([
+      db.organization.findUnique({ where: { id: request.organizationId }, select: { timezone: true } }),
+      settingText(request.organizationId, 'messaging.quietFrom'),
+      settingText(request.organizationId, 'messaging.quietTo'),
+    ]);
+    sendAt = releaseAfterQuietHours(sendAt, organization?.timezone || 'Asia/Kolkata', from, to);
+  }
 
   for (const person of request.recipients) {
     for (const channel of channels) {
+      if (consent && person.userId) {
+        const prefs = consent.get(person.userId);
+        if (prefs && optedOut(prefs, channel)) {
+          optedOutCount += 1;
+          continue;
+        }
+      }
       // Nobody without an account can be deduplicated against, because there is
       // no id to match on. That is correct: a stranger asking for a second code
       // should get one, and `issueOtp` is what rate limits them.
@@ -165,8 +203,9 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
           ...(request.contextFor?.(person) ?? {}),
         } as Prisma.InputJsonValue,
         // Due immediately unless the caller said otherwise. A class reminder is
-        // decided now and sent an hour before the class.
-        nextAttemptAt: request.sendAt ?? new Date(),
+        // decided now and sent an hour before the class; a campaign queued at
+        // midnight waits for the morning.
+        nextAttemptAt: sendAt,
       });
     }
   }
@@ -175,7 +214,7 @@ export async function queueNotifications(request: QueueRequest): Promise<QueueRe
   // request named, so there is nothing here that could belong to another one.
   if (rows.length) await db.notificationLog.createMany({ data: rows, skipDuplicates: true });
 
-  return { queued: rows.length, skipped, unreachable };
+  return { queued: rows.length, skipped, unreachable, optedOut: optedOutCount };
 }
 
 /** Plain English for the person who pressed the button. */
@@ -191,5 +230,6 @@ export function describeQueue(result: QueueResult, noun = 'message'): string {
   ];
   if (result.skipped > 0) parts.push(`${result.skipped} already sent`);
   if (result.unreachable > 0) parts.push(`${result.unreachable} with no contact details`);
+  if (result.optedOut) parts.push(`${result.optedOut} opted out`);
   return `${parts.join(', ')}. They go out on the next send, or when a provider is connected if none is yet.`;
 }

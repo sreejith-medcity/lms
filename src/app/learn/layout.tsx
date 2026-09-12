@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getSessionUser } from '@/lib/auth';
+import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { learnerNav } from '@/lib/learner-nav';
@@ -19,6 +20,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
 
   const nav = await learnerNav(tenant.organizationId);
   const initial = user.name.trim().slice(0, 1).toUpperCase() || '?';
+  const avatar = (await db.user.findUnique({ where: { id: user.id }, select: { avatarUrl: true } }))?.avatarUrl ?? null;
 
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
@@ -32,14 +34,21 @@ export default async function LearnLayout({ children }: { children: React.ReactN
           <LearnerNav items={nav} isStaff={user.kind === 'STAFF'} />
 
           <div className="ml-auto flex items-center gap-3">
-            <span className="t-small faint hidden sm:inline">{user.name}</span>
-            <span
-              aria-hidden
-              className="grid h-9 w-9 place-items-center rounded-full text-sm font-bold text-[var(--brand-ink)]"
-              style={{ background: 'var(--brand)' }}
-            >
-              {initial}
-            </span>
+            <Link href="/learn/account" className="flex items-center gap-2" title="Account">
+              <span className="t-small faint hidden sm:inline">{user.name}</span>
+              {avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatar} alt="" className="h-9 w-9 rounded-full object-cover" />
+              ) : (
+                <span
+                  aria-hidden
+                  className="grid h-9 w-9 place-items-center rounded-full text-sm font-bold text-[var(--brand-ink)]"
+                  style={{ background: 'var(--brand)' }}
+                >
+                  {initial}
+                </span>
+              )}
+            </Link>
             <a href="/logout" className="t-small muted hover:text-[var(--ink)]">
               Sign out
             </a>

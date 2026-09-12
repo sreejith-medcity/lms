@@ -91,12 +91,20 @@ export async function GET(
   const user = await getSessionUser();
   const sameOrg = user?.organizationId === tenant.organizationId;
 
+  // A profile photo is seen by classmates in the community and by staff,
+  // so anyone signed in to the same academy may load it. Not the public:
+  // a learner's face is not course artwork.
+  const portrait = user && sameOrg
+    ? await db.user.findFirst({ where: { organizationId: tenant.organizationId, avatarUrl: { contains: asset.id } }, select: { id: true } })
+    : null;
+
   // Staff see everything in their own organisation.
   let allowed =
     Boolean(branding) ||
     Boolean(artwork) ||
     Boolean(categoryArt) ||
     heroImage ||
+    Boolean(portrait) ||
     Boolean(user && sameOrg && user.kind === 'STAFF');
 
   // Anyone, signed in or not, may see a material marked as a free preview.

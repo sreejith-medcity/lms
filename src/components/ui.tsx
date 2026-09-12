@@ -126,7 +126,8 @@ export function Field({
 
 const control = `w-full rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3 py-2 text-sm
   text-[var(--ink)] placeholder:text-[var(--ink-3)] transition
-  focus:border-[var(--brand)] focus:outline-none focus:ring-4 focus:ring-[var(--brand-soft)]`;
+  focus:border-[var(--brand)] focus:outline-none focus:ring-4 focus:ring-[var(--brand-soft)]
+  disabled:cursor-not-allowed disabled:bg-[var(--surface-2)] disabled:text-[var(--ink-2)]`;
 
 export function Input({ className = '', ...props }: ComponentProps<'input'>) {
   return <input {...props} className={`${control} ${className}`} />;

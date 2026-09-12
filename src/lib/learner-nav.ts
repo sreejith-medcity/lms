@@ -18,6 +18,7 @@ export const LEARNER_NAV_ITEMS = [
   { key: 'purchases', label: 'Purchases', href: '/learn/purchases' },
   { key: 'fees', label: 'Fees', href: '/learn/fees' },
   { key: 'practice', label: 'Practice', href: '/learn/practice' },
+  { key: 'account', label: 'Account', href: '/learn/account' },
   { key: 'explore', label: 'Explore', href: '/' },
 ] as const;
 
