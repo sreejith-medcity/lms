@@ -230,6 +230,7 @@ model User {
   comments          CommunityComment[]
 
   assignmentSubmissions AssignmentSubmission[]
+  reportCards          ReportCard[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -1235,6 +1236,7 @@ model Enrollment {
   instalments  Instalment[]
 
   assignmentSubmissions AssignmentSubmission[]
+  reportCards           ReportCard[]
   @@unique([userId, productId, batchId])
   @@index([organizationId, status])
   @@index([batchId])
@@ -1771,6 +1773,39 @@ model AssignmentFile {
 
   @@unique([submissionId, assetId])
   @@map("assignment_files")
+}
+
+// ---------------------------------------------------------------------------
+// REPORT CARDS
+// ---------------------------------------------------------------------------
+
+/// A term sheet for one learner on one course: attendance, every test and
+/// piece of homework with its mark and grade, and a trainer's remark. The
+/// figures are copied in at issue rather than read live, so the sheet a
+/// parent was sent in March still says in June what it said in March.
+model ReportCard {
+  id             String    @id @default(cuid())
+  organizationId String
+  enrollmentId   String
+  userId         String
+  title          String
+  periodFrom     DateTime?
+  periodTo       DateTime?
+  remark         String?
+  /// The figures as they stood: attendance, assessments, assignments, overall.
+  data           Json
+  issuedAt       DateTime  @default(now())
+  issuedById     String?
+  /// When it went to the learner (and the parent, where there is one).
+  sentAt         DateTime?
+  pdfAssetId     String?
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, issuedAt])
+  @@index([enrollmentId])
+  @@map("report_cards")
 }
 
 // ---------------------------------------------------------------------------
