@@ -10,6 +10,9 @@ import { requireTenant } from '@/lib/tenant';
 import { deadlineFor } from '@/lib/attempt-clock';
 import { buildObjectKey, inferType, putObject, sanitiseFileName } from '@/lib/storage';
 import { ANSWER_FILE_MAX_BYTES, SPEAKING_MAX_SECONDS, isHumanMarked, markAuto, readSectionClock, sectionState } from '@/lib/question-scoring';
+import { parseBulkForm, percentOf, publishable } from '@/lib/bulk-marking';
+import { bulkPapersFor } from '@/lib/marking-queue';
+import { recordAudit } from '@/lib/audit';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -522,6 +525,203 @@ export async function uploadAnswer(
     const saved = await saveAnswer(attemptId, questionId, answer);
     if (saved.error) return saved;
     return { ok: true, answer };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+
+/* Marking many at once --------------------------------------------------- */
+
+/**
+ * Publish one paper from marks already decided: the written part from the
+ * caller, the objective part from what submit-time marking left on the
+ * answers. Shared by the single screen and the bulk one so a paper means
+ * the same whichever way it was marked.
+ */
+async function publishPaper(input: {
+  organizationId: string;
+  staffId: string;
+  attemptId: string;
+  marks: Record<string, number>;
+  feedback: string;
+}): Promise<{ scorePercent: number; passed: boolean } | null> {
+  const attempt = await db.attempt.findFirst({
+    where: { id: input.attemptId, assessment: { organizationId: input.organizationId } },
+    include: {
+      answers: { include: { question: { select: { id: true, type: true, marks: true } } } },
+      assessment: {
+        select: { id: true, title: true, passPercent: true, questions: { select: { marks: true, question: { select: { id: true, type: true, marks: true } } } } },
+      },
+    },
+  });
+  if (!attempt) return null;
+
+  let awarded = 0;
+  const updates = [];
+  for (const item of attempt.assessment.questions) {
+    const q = item.question;
+    const answer = attempt.answers.find((a) => a.question.id === q.id);
+    const max = item.marks ?? q.marks;
+    if (isHumanMarked(q.type)) {
+      const given = Math.max(0, Math.min(max, input.marks[q.id] ?? answer?.marksAwarded ?? 0));
+      awarded += given;
+      if (answer) updates.push(db.answer.update({ where: { id: answer.id }, data: { marksAwarded: given, evaluatedById: input.staffId } }));
+    } else {
+      awarded += answer?.marksAwarded ?? 0;
+    }
+  }
+  const paperTotal = attempt.assessment.questions.reduce((n, q) => n + (q.marks ?? q.question.marks), 0);
+  const scorePercent = percentOf(awarded, paperTotal);
+  const passed = scorePercent >= attempt.assessment.passPercent;
+
+  await db.$transaction([
+    ...updates,
+    db.attempt.update({ where: { id: attempt.id }, data: { status: 'EVALUATED', scoreRaw: awarded, scorePercent, passed } }),
+    db.submission.upsert({
+      where: { attemptId: attempt.id },
+      create: { attemptId: attempt.id, userId: attempt.userId, status: 'EVALUATED', evaluatedAt: new Date(), evaluatedById: input.staffId, score: awarded, feedback: input.feedback || null },
+      update: { status: 'EVALUATED', evaluatedAt: new Date(), evaluatedById: input.staffId, score: awarded, feedback: input.feedback || null },
+    }),
+  ]);
+
+  await announceMarked({
+    organizationId: input.organizationId,
+    attemptId: attempt.id,
+    userId: attempt.userId,
+    assessmentId: attempt.assessment.id,
+    title: attempt.assessment.title,
+    scorePercent,
+    passed,
+  });
+  return { scorePercent, passed };
+}
+
+/**
+ * One press, a whole class. Every paper with a mark in every box (typed
+ * now, or drafted by the AI examiner) is published; a paper with a blank
+ * box is left waiting, never published with a zero nobody typed. Papers
+ * already released are not touched.
+ */
+export async function bulkMarkAttempts(_prev: ActionState, formData: FormData): Promise<ActionState & { published?: number; waiting?: number }> {
+  try {
+    const tenant = await requireTenant();
+    const staff = await requireStaffFor('submission.evaluate_submissions');
+    const assessmentId = String(formData.get('assessmentId') ?? '');
+    const acceptDrafts = formData.get('acceptDrafts') === 'on';
+
+    const papers = await bulkPapersFor(tenant.organizationId, assessmentId);
+    if (papers.length === 0) return { error: 'Nothing waiting on this paper.' };
+
+    const parsed = parseBulkForm(papers, (name) => {
+      const v = formData.get(name);
+      return typeof v === 'string' ? v : null;
+    });
+    const ready = publishable(parsed, !acceptDrafts);
+    if (ready.length === 0) {
+      return { error: acceptDrafts ? 'No paper has a mark in every box yet.' : 'Type a mark in every box of at least one paper, or tick "accept the AI examiner\'s drafts as they stand".' };
+    }
+
+    let published = 0;
+    for (const p of ready) {
+      const done = await publishPaper({ organizationId: tenant.organizationId, staffId: staff.id, attemptId: p.attemptId, marks: p.marks, feedback: p.feedback });
+      if (done) published += 1;
+    }
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: staff.id,
+      action: 'submission.bulk_marked',
+      entity: 'Assessment',
+      entityId: assessmentId,
+      after: { published, attempted: parsed.length },
+    });
+
+    revalidatePath('/admin/submissions');
+    revalidatePath(`/admin/submissions/bulk/${assessmentId}`);
+    const waiting = parsed.length - published;
+    return { ok: true, published, waiting, message: `${published} paper${published === 1 ? '' : 's'} marked and released${waiting ? `; ${waiting} still waiting` : ''}.` };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Re-mark the objective part of every attempt at one assessment, after
+ * a key was corrected. The written marks are kept; the machine-marked
+ * answers are scored again from the options and keys as they now stand,
+ * and every attempt that was already released is re-totalled and the
+ * change written to the audit trail, because a score that moves without
+ * a trace is the thing the single screen refuses to do.
+ */
+export async function remarkObjective(assessmentId: string, includeReleased: boolean): Promise<ActionState & { changed?: number }> {
+  try {
+    const tenant = await requireTenant();
+    const staff = await requireStaffFor('submission.evaluate_submissions');
+    const assessment = await db.assessment.findFirst({
+      where: { id: assessmentId, organizationId: tenant.organizationId },
+      select: {
+        id: true,
+        title: true,
+        passPercent: true,
+        questions: { select: { marks: true, question: { select: { id: true, type: true, marks: true, negativeMarks: true, answerKey: true, options: { select: { id: true, isCorrect: true } } } } } },
+        attempts: {
+          where: { status: { in: includeReleased ? ['SUBMITTED', 'EVALUATED'] : ['SUBMITTED'] } },
+          select: { id: true, status: true, scoreRaw: true, scorePercent: true, answers: { select: { id: true, questionId: true, response: true, marksAwarded: true } } },
+        },
+      },
+    });
+    if (!assessment) return { error: 'Assessment not found.' };
+
+    const paperTotal = assessment.questions.reduce((n, q) => n + (q.marks ?? q.question.marks), 0);
+    let changed = 0;
+
+    for (const attempt of assessment.attempts) {
+      const updates = [];
+      let awarded = 0;
+      let touched = false;
+      for (const item of assessment.questions) {
+        const q = item.question;
+        const answer = attempt.answers.find((a) => a.questionId === q.id);
+        if (isHumanMarked(q.type)) {
+          awarded += answer?.marksAwarded ?? 0;
+          continue;
+        }
+        if (!answer) continue;
+        const marked = markAuto({ type: q.type, marks: item.marks ?? q.marks, negativeMarks: q.negativeMarks, options: q.options, answerKey: q.answerKey, response: answer.response });
+        awarded += marked.marksAwarded;
+        if (answer.marksAwarded !== marked.marksAwarded) {
+          touched = true;
+          updates.push(db.answer.update({ where: { id: answer.id }, data: { isCorrect: marked.isCorrect, marksAwarded: marked.marksAwarded } }));
+        }
+      }
+      if (!touched) continue;
+      changed += 1;
+      const released = attempt.status === 'EVALUATED';
+      const scorePercent = percentOf(awarded, paperTotal);
+      await db.$transaction([
+        ...updates,
+        db.attempt.update({
+          where: { id: attempt.id },
+          data: released ? { scoreRaw: awarded, scorePercent, passed: scorePercent >= assessment.passPercent } : { scoreRaw: awarded },
+        }),
+        ...(released ? [db.submission.updateMany({ where: { attemptId: attempt.id }, data: { score: awarded } })] : []),
+      ]);
+      await recordAudit({
+        organizationId: tenant.organizationId,
+        actorId: staff.id,
+        action: 'attempt.remarked',
+        entity: 'Attempt',
+        entityId: attempt.id,
+        before: { scoreRaw: attempt.scoreRaw, scorePercent: attempt.scorePercent },
+        after: { scoreRaw: awarded, scorePercent: released ? scorePercent : null, reason: `Objective part re-marked on ${assessment.title}` },
+      });
+    }
+
+    revalidatePath('/admin/submissions');
+    revalidatePath(`/admin/submissions/bulk/${assessmentId}`);
+    revalidatePath(`/admin/assessments/${assessmentId}`);
+    return { ok: true, changed, message: changed ? `${changed} paper${changed === 1 ? '' : 's'} re-marked.` : 'Nothing changed: every objective mark already matched the key.' };
   } catch (err) {
     return fail(err);
   }

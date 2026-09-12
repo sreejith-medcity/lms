@@ -522,3 +522,86 @@ export async function gradeHandIn(_prev: ActionState, formData: FormData): Promi
     return fail(err);
   }
 }
+
+/**
+ * A whole class marked in one press. Each hand-in on the form carries
+ * `marks:<submissionId>` and `feedback:<submissionId>`; a hand-in with a
+ * blank mark is left waiting, never marked zero by silence. Only the
+ * latest attempt per learner is on the form, so nothing older can be
+ * touched from here.
+ */
+export async function bulkGradeHandIns(_prev: ActionState, formData: FormData): Promise<ActionState & { marked?: number }> {
+  try {
+    const { tenant, user } = await staff(MARK_KEY, 'edit');
+    const assignmentId = String(formData.get('assignmentId') ?? '');
+    const assignment = await db.assignment.findFirst({
+      where: { id: assignmentId, organizationId: tenant.organizationId, deletedAt: null },
+      select: { id: true, title: true, maxMarks: true, course: { select: { productId: true } } },
+    });
+    if (!assignment) throw new Error('NOT_FOUND');
+
+    const waiting = await db.assignmentSubmission.findMany({
+      where: { organizationId: tenant.organizationId, assignmentId, status: 'SUBMITTED' },
+      select: { id: true, userId: true, attemptNo: true },
+    });
+    // Only the latest hand-in per learner takes a mark.
+    const latest = new Map<string, { id: string; attemptNo: number }>();
+    for (const w of waiting) {
+      const cur = latest.get(w.userId);
+      if (!cur || w.attemptNo > cur.attemptNo) latest.set(w.userId, { id: w.id, attemptNo: w.attemptNo });
+    }
+
+    let marked = 0;
+    for (const [userId, sub] of latest) {
+      const raw = formData.get(`marks:${sub.id}`);
+      if (typeof raw !== 'string' || raw.trim() === '') continue;
+      const marks = Number(raw);
+      if (gradeProblem(Number.isFinite(marks) ? marks : null, assignment.maxMarks)) continue;
+      const feedback = String(formData.get(`feedback:${sub.id}`) ?? '').trim() || null;
+
+      await db.assignmentSubmission.update({
+        where: { id: sub.id },
+        data: { status: 'GRADED', marks, feedback, gradedAt: new Date(), gradedById: user.id },
+      });
+      marked += 1;
+
+      const percent = marksPercent(marks, assignment.maxMarks);
+      await happened({
+        organizationId: tenant.organizationId,
+        key: 'assignment.graded',
+        userId,
+        subjectId: sub.id,
+        productId: assignment.course.productId,
+        data: { assignmentId, submissionId: sub.id, item: assignment.title, marks, maxMarks: assignment.maxMarks, percent, returned: false, passed: percent >= 40 },
+      });
+      await notifyLearner({
+        organizationId: tenant.organizationId,
+        eventKey: 'assignment.graded',
+        userId,
+        subjectId: `${sub.id}:GRADE`,
+        context: { item: assignment.title, score: `${trimNumber(marks)} out of ${trimNumber(assignment.maxMarks)}`, url: `/learn/assignments/${assignmentId}` },
+      });
+    }
+
+    if (marked === 0) return { error: 'Type a mark for at least one hand-in.' };
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: 'assignment.bulk_graded',
+      entity: 'Assignment',
+      entityId: assignmentId,
+      after: { marked, waiting: latest.size - marked },
+    });
+
+    revalidatePath('/admin/assignments');
+    revalidatePath(`/admin/assignments/${assignmentId}`);
+    revalidatePath(`/admin/assignments/${assignmentId}/mark-all`);
+    revalidatePath('/learn/assignments');
+    revalidatePath(`/learn/assignments/${assignmentId}`);
+    const left = latest.size - marked;
+    return { ok: true, marked, message: `${marked} marked${left ? `; ${left} still waiting` : ''}.` };
+  } catch (err) {
+    return fail(err);
+  }
+}
