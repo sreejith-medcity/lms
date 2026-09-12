@@ -42,6 +42,7 @@ export function smtpSender(values: Credentials): Sender {
         subject: message.subject || '(no subject)',
         text: message.body,
         html: message.html ?? asHtml(message.body),
+        attachments: message.attachments?.map((a) => ({ filename: a.fileName, content: Buffer.from(a.base64, 'base64'), contentType: a.mimeType })),
       });
 
       return sent(info.messageId, 0);
@@ -68,6 +69,7 @@ export function resendSender(values: Credentials): Sender {
         subject: message.subject || '(no subject)',
         text: message.body,
         html: message.html ?? asHtml(message.body),
+        attachments: message.attachments?.map((a) => ({ filename: a.fileName, content: a.base64, content_type: a.mimeType })),
       }),
     });
 
@@ -100,6 +102,7 @@ export function sendgridSender(values: Credentials): Sender {
           { type: 'text/plain', value: message.body },
           { type: 'text/html', value: message.html ?? asHtml(message.body) },
         ],
+        attachments: message.attachments?.map((a) => ({ content: a.base64, filename: a.fileName, type: a.mimeType, disposition: 'attachment' })),
       }),
     });
 
@@ -124,6 +127,7 @@ export function postmarkSender(values: Credentials): Sender {
         Subject: message.subject || '(no subject)',
         TextBody: message.body,
         HtmlBody: message.html ?? asHtml(message.body),
+        Attachments: message.attachments?.map((a) => ({ Name: a.fileName, Content: a.base64, ContentType: a.mimeType })),
         MessageStream: 'outbound',
       }),
     });
@@ -165,6 +169,9 @@ export function sesSender(values: Credentials): Sender {
             Text: { Data: message.body, Charset: 'UTF-8' },
             Html: { Data: message.html ?? asHtml(message.body), Charset: 'UTF-8' },
           },
+          ...(message.attachments?.length
+            ? { Attachments: message.attachments.map((a) => ({ FileName: a.fileName, ContentType: a.mimeType, RawContent: a.base64 })) }
+            : {}),
         },
       },
     });

@@ -200,6 +200,7 @@ export async function recordFeePayment(_prev: ReceiptState, formData: FormData):
         item: enrollment.product.title,
         organization: tenant.name,
         receiptUrl: `/learn/receipts/${receiptNo}`,
+        attachReceipt: receiptNo,
       },
     }).catch((err: unknown) => console.error('[fees] receipt message not queued', err));
 

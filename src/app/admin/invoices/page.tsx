@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
@@ -78,8 +79,15 @@ export default async function InvoicesPage() {
               return (
                 <Row key={i.id}>
                   <Cell>
-                    <span className="font-mono text-xs font-medium">{i.invoiceNo}</span>
-                    <span className="t-small faint block">{i.order.orderNo}</span>
+                    <Link href={`/learn/invoices/${i.invoiceNo}`} className="font-mono text-xs font-medium hover:underline">
+                      {i.invoiceNo}
+                    </Link>
+                    <span className="t-small faint block">
+                      {i.order.orderNo} ·{' '}
+                      <a href={`/api/invoices/${encodeURIComponent(i.invoiceNo)}/pdf`} className="underline">
+                        PDF
+                      </a>
+                    </span>
                   </Cell>
                   <Cell className="t-small faint">
                     {i.issuedAt.toLocaleDateString('en-IN', {

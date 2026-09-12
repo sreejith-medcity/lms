@@ -362,6 +362,6 @@ async function announceCertificate(input: {
     eventKey: 'certificate.issued',
     userId: input.userId,
     subjectId: input.certificateId,
-    context: { item: input.item, url: `/verify/${input.verifyToken}`, code: input.serialNo },
+    context: { item: input.item, url: `/verify/${input.verifyToken}`, code: input.serialNo, attachCertificate: input.certificateId },
   });
 }

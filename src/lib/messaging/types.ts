@@ -20,6 +20,14 @@ export interface OutboundMessage {
   templateName?: string;
   /** Ordered template variables, which is how most Indian providers take them. */
   variables?: string[];
+  /** Email only. A receipt, an invoice, a certificate: small files, base64. */
+  attachments?: OutboundAttachment[];
+}
+
+export interface OutboundAttachment {
+  fileName: string;
+  mimeType: string;
+  base64: string;
 }
 
 export interface SendResult {

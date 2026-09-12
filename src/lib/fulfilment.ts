@@ -753,6 +753,7 @@ async function tellTheWorld(input: {
         item: what,
         organization: organization?.name ?? '',
         receiptUrl: input.invoiceNo ? `/learn/invoices/${input.invoiceNo}` : '/learn',
+        ...(input.invoiceNo ? { attachInvoice: input.invoiceNo } : {}),
       },
     });
   }

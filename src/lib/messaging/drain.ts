@@ -1,5 +1,6 @@
 import type { $Enums, Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
+import type { OutboundAttachment } from './types';
 import { senderFor } from './index';
 import { render } from './render';
 import { estimatedCostPaise } from './pricing';
@@ -173,6 +174,11 @@ export async function drain(organizationId: string, limit = 100): Promise<DrainR
       });
     }
 
+    // The file the message is about, drawn now rather than stored in the
+    // queue: a receipt is a few kilobytes to render and a few hundred to
+    // keep per row for every learner who ever paid.
+    const attachments = row.channel === 'EMAIL' ? await attachmentsFor(organizationId, context) : undefined;
+
     const outcome = await resolution.sender
       .send({
         to: row.target,
@@ -180,6 +186,7 @@ export async function drain(organizationId: string, limit = 100): Promise<DrainR
         body: rendered.body,
         templateName: template.templateName ?? undefined,
         variables: template.orderedVariables?.(context),
+        attachments,
       })
       .catch((err: unknown) => ({
         ok: false as const,
@@ -310,4 +317,32 @@ async function unsubscribeTokenFor(organizationId: string, userId: string): Prom
   const token = randomBytes(18).toString('base64url');
   await db.user.update({ where: { id: userId }, data: { unsubscribeToken: token } });
   return token;
+}
+
+
+/**
+ * Context keys that name a document to attach: `attachInvoice` and
+ * `attachReceipt` carry a number, `attachCertificate` a certificate id.
+ * A document that cannot be found or drawn is simply not attached; the
+ * message still carries its link.
+ */
+async function attachmentsFor(organizationId: string, context: Record<string, string>): Promise<OutboundAttachment[] | undefined> {
+  const out: OutboundAttachment[] = [];
+  try {
+    if (context.attachInvoice || context.attachReceipt) {
+      const { moneyPdf } = await import('@/lib/money-pdf-serve');
+      const pdf = context.attachInvoice
+        ? await moneyPdf(organizationId, 'INVOICE', context.attachInvoice)
+        : await moneyPdf(organizationId, 'RECEIPT', context.attachReceipt);
+      if (pdf) out.push({ fileName: pdf.fileName, mimeType: 'application/pdf', base64: Buffer.from(pdf.bytes).toString('base64') });
+    }
+    if (context.attachCertificate) {
+      const { certificatePdfFor } = await import('@/lib/certificate-issue');
+      const pdf = await certificatePdfFor(context.attachCertificate, organizationId);
+      if (pdf) out.push({ fileName: pdf.fileName, mimeType: 'application/pdf', base64: Buffer.from(pdf.bytes).toString('base64') });
+    }
+  } catch (err) {
+    console.error('[drain] attachment', err instanceof Error ? err.message : err);
+  }
+  return out.length ? out : undefined;
 }

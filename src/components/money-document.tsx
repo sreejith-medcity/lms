@@ -47,6 +47,8 @@ export interface MoneyDocumentProps {
   /** Where the learner goes back to. */
   backHref: string;
   backLabel: string;
+  /** The file version. Defaults to the API route for the kind. */
+  pdfHref?: string;
 }
 
 const dateLabel = (d: Date) =>
@@ -70,7 +72,12 @@ export function MoneyDocument(props: MoneyDocumentProps) {
         <Link href={props.backHref} className="t-small underline">
           {props.backLabel}
         </Link>
-        <PrintButton label={`Print ${title.toLowerCase()}`} />
+        <span className="flex items-center gap-2">
+          <a href={props.pdfHref ?? `/api/${props.kind === 'INVOICE' ? 'invoices' : 'receipts'}/${encodeURIComponent(props.number)}/pdf`} className="inline-flex h-9 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3.5 text-sm font-medium print:hidden">
+            Download PDF
+          </a>
+          <PrintButton label={`Print ${title.toLowerCase()}`} />
+        </span>
       </div>
 
       <div className="print-doc rounded-[var(--radius)] border bg-white p-6 text-[#111] sm:p-8">
