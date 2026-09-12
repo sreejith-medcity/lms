@@ -509,9 +509,9 @@ export const SETTINGS: SettingDef[] = [
     key: 'website.reviewBadgeOnLight',
     group: 'website',
     label: 'That badge needs a white background',
-    help: 'Reviews badges arrive with their own colours and only you know which one you picked. If the badge in the hero looks like stars with no numbers, its text is white and this should stay off. If the text is dark and hard to read on the purple panel, turn this on and it sits on a white chip instead.',
+    help: 'Reviews badges arrive with their own colours and only you know which one you picked. Most ship dark text, so the badge sits on a white chip by default. If it looks like stars with no numbers, its text is white: switch this off and it sits straight on the purple panel.',
     kind: 'boolean',
-    default: false,
+    default: true,
     live: true,
     effect: (value) =>
       value

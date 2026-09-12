@@ -542,7 +542,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             <div className="lg:sticky lg:top-[7.75rem] lg:max-h-[calc(100vh-8.5rem)] lg:overflow-y-auto lg:overscroll-contain">
               <div className="overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--surface)] shadow-[var(--shadow)]">
                 <div className="hidden lg:block">
-                  <CourseMedia title={product.title} assetId={course.thumbnailAssetId} priority />
+                  <CourseMedia title={product.title} assetId={course.thumbnailAssetId} priority fit="natural" ratio="aspect-video" />
                 </div>
                 <div className="p-5 sm:p-6">{purchase}</div>
               </div>

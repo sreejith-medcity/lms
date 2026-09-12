@@ -289,3 +289,17 @@ body {
     );
   }
 }
+
+/* A reviews provider's badge in the hero. The provider scales its widget by
+   a "size" chosen in its own dashboard and paints the text in its own
+   colour, and neither knows about this page. So the badge is held to the
+   hero's own type size whatever the dashboard says, and where it sits
+   straight on the purple panel its text is forced light. */
+.review-embed .ti-widget,
+.review-embed .ti-widget .ti-widget-container {
+  font-size: 14px !important;
+}
+.review-embed--dark .ti-widget,
+.review-embed--dark .ti-widget * {
+  color: var(--shell-ink) !important;
+}

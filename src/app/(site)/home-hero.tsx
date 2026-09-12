@@ -130,11 +130,13 @@ export function HomeHero({
                 was designed for instead of arguing with its stylesheet.
               */}
               {badgeOnLight ? (
-                <span className="inline-flex max-w-full items-center rounded-full bg-[var(--surface)] px-3 py-1.5 shadow-sm">
+                <span className="review-embed inline-flex max-w-full items-center rounded-full bg-[var(--surface)] px-3 py-1.5 shadow-sm">
                   <ReviewWidget html={badgeHtml} />
                 </span>
               ) : (
-                <ReviewWidget html={badgeHtml} />
+                <span className="review-embed review-embed--dark inline-flex max-w-full items-center">
+                  <ReviewWidget html={badgeHtml} />
+                </span>
               )}
             </div>
           ) : (

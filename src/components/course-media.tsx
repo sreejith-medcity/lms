@@ -7,6 +7,14 @@
  * is designed rather than empty: the course initials on a wash derived from its
  * own title, which gives every card a distinct, stable colour without anybody
  * uploading anything. Same title, same colour, on every page and every reload.
+ *
+ * The frame never cuts the artwork. Course banners carry words ("A1",
+ * "BEGINNER", a price), and an academy's library is a mix of the square art
+ * it made for the old system and the 16:9 art it makes now. So inside a
+ * fixed frame the picture is fitted whole, and the strip it leaves on either
+ * side is filled with a blurred copy of itself rather than a flat bar. At the
+ * top of a course page there is no frame at all: the card takes the shape
+ * of the picture, landscape or square, as it was uploaded.
  */
 
 /** A stable hue per title. Not random: a card must not change colour on reload. */
@@ -33,6 +41,7 @@ export function CourseMedia({
   className = '',
   rounded = '',
   ratio = 'aspect-square',
+  fit = 'frame',
 }: {
   title: string;
   assetId?: string | null;
@@ -41,32 +50,46 @@ export function CourseMedia({
   className?: string;
   rounded?: string;
   /**
-   * Square by default, because the artwork an academy already has is square
-   * and cropping it would cut the words off somebody's course banner. A small
-   * teaser can ask for a shorter box.
+   * The frame's shape, as a Tailwind aspect class. Used for the fallback
+   * art always, and for the picture when `fit` is `frame`.
    */
   ratio?: string;
+  /**
+   * `frame`: the picture sits whole inside the frame, letterboxed with a
+   * blur of itself. `natural`: no frame; the box is as tall as the picture
+   * is, capped so a portrait upload cannot push the buy button off screen.
+   */
+  fit?: 'frame' | 'natural';
 }) {
-  const shell = `relative block ${ratio} w-full overflow-hidden bg-[var(--surface-2)] ${rounded} ${className}`;
-
   if (assetId) {
+    const src = `/api/assets/${assetId}`;
+    const loading = priority ? ('eager' as const) : ('lazy' as const);
+    const fetchPriority = priority ? ('high' as const) : ('low' as const);
+
+    if (fit === 'natural') {
+      return (
+        <span className={`relative block w-full overflow-hidden bg-[var(--surface-2)] ${rounded} ${className}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" loading={loading} decoding="async" fetchPriority={fetchPriority} className="block h-auto max-h-[26rem] w-full object-cover" />
+        </span>
+      );
+    }
+
     return (
-      <span className={shell}>
+      <span className={`relative block ${ratio} w-full overflow-hidden bg-[var(--surface-2)] ${rounded} ${className}`}>
         {/* Plain img, not next/image: these come from a signed redirect whose
-            destination changes, which the optimiser cannot cache usefully. */}
+            destination changes, which the optimiser cannot cache usefully.
+            The same file twice costs one request; the browser serves the
+            second from the first. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/api/assets/${assetId}`}
-          alt=""
-          loading={priority ? 'eager' : 'lazy'}
-          decoding="async"
-          fetchPriority={priority ? 'high' : 'low'}
-          className="h-full w-full object-cover"
-        />
+        <img src={src} alt="" aria-hidden loading={loading} decoding="async" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-xl" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" loading={loading} decoding="async" fetchPriority={fetchPriority} className="relative h-full w-full object-contain" />
       </span>
     );
   }
 
+  const shell = `relative block ${ratio} w-full overflow-hidden bg-[var(--surface-2)] ${rounded} ${className}`;
   const hue = hueOf(title);
 
   return (
