@@ -141,6 +141,12 @@ export default async function MyLearning({
     },
   });
 
+  const reportCards = await db.reportCard.findMany({
+    where: { organizationId: tenant.organizationId, userId: user.id, sentAt: { not: null } },
+    orderBy: { issuedAt: 'desc' },
+    select: { id: true, title: true, issuedAt: true, enrollment: { select: { product: { select: { title: true } } } } },
+  });
+
   return (
     <div className="mx-auto max-w-5xl px-5 py-7">
       <div className="space-y-8">
@@ -329,6 +335,26 @@ export default async function MyLearning({
             <CourseGrid items={done} cta="Revisit" />
           </Section>
         </div>
+      )}
+
+      {reportCards.length > 0 && (
+        <Section title="Report cards">
+          <ul className="divide-y rounded-[var(--radius)] border bg-[var(--surface)]">
+            {reportCards.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{c.title}</p>
+                  <p className="t-small faint">
+                    {c.enrollment.product.title} · {c.issuedAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+                <a href={`/api/report-cards/${c.id}/pdf`} target="_blank" rel="noreferrer noopener" className="inline-flex h-9 shrink-0 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3.5 text-sm font-medium">
+                  Open PDF
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Section>
       )}
 
       {certificates.length > 0 && (

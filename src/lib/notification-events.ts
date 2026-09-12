@@ -43,6 +43,7 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
       { key: 'assessment.marked', label: 'Their paper was marked', who: 'The learner', live: true },
       { key: 'assignment.set', label: 'Homework was set for them', who: 'Every learner it was set for', live: true },
       { key: 'assignment.graded', label: 'Their homework was marked', who: 'The learner', live: true },
+      { key: 'report_card.issued', label: 'A report card was sent', who: 'The learner, and the parent on file', live: true },
     ],
   },
   {

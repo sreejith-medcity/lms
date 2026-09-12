@@ -106,6 +106,10 @@ const DEFAULTS: Record<string, Default> = {
     subject: '{{item}} has been marked',
     body: 'Hello {{name}}, your work on {{item}} has been marked: {{score}}. Read the feedback at {{url}}.',
   },
+  'report_card.issued': {
+    subject: '{{item}} for {{course}}',
+    body: 'Hello {{name}}, the {{item}} for {{course}} is attached. You can also open it at {{url}}.',
+  },
   'announcement.published': {
     subject: '{{title}}',
     body: '{{body}}',

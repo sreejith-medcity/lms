@@ -336,6 +336,11 @@ async function attachmentsFor(organizationId: string, context: Record<string, st
         : await moneyPdf(organizationId, 'RECEIPT', context.attachReceipt);
       if (pdf) out.push({ fileName: pdf.fileName, mimeType: 'application/pdf', base64: Buffer.from(pdf.bytes).toString('base64') });
     }
+    if (context.attachReportCard) {
+      const { reportCardPdf } = await import('@/lib/report-card-serve');
+      const pdf = await reportCardPdf(organizationId, context.attachReportCard);
+      if (pdf) out.push({ fileName: pdf.fileName, mimeType: 'application/pdf', base64: Buffer.from(pdf.bytes).toString('base64') });
+    }
     if (context.attachCertificate) {
       const { certificatePdfFor } = await import('@/lib/certificate-issue');
       const pdf = await certificatePdfFor(context.attachCertificate, organizationId);

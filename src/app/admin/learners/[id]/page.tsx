@@ -8,6 +8,9 @@ import { Badge, Card, Cell, EmptyState, Row, Table, ProgressRing } from '@/compo
 import { Stat, StatGrid } from '@/components/stat';
 import { ResetPassword, SignInAs } from './controls';
 import { LearnerTests } from './tests';
+import { ReportCards } from './report-cards';
+import { readReportCard } from '@/lib/report-card';
+import { dayKey, formatDayLabel } from '@/lib/clock';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -31,6 +34,7 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
       tags: true,
       emailOptOut: true,
       smsOptOut: true,
+      learnerProfile: { select: { parentEmail: true, parentPhone: true } },
       whatsappOptOut: true,
       createdAt: true,
       lastSeenAt: true,
@@ -69,6 +73,12 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
     },
   });
   if (!learner) notFound();
+
+  const reportCards = await db.reportCard.findMany({
+    where: { organizationId: tenant.organizationId, userId: learner.id },
+    orderBy: { issuedAt: 'desc' },
+    select: { id: true, title: true, issuedAt: true, sentAt: true, data: true, enrollment: { select: { product: { select: { title: true } } } } },
+  });
 
   const partnerResults = await db.partnerResult.findMany({
     where: { organizationId: tenant.organizationId, userId: learner.id },
@@ -298,6 +308,27 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
             />
           </section>
         )}
+
+        <section>
+          <h2 className="t-heading mb-3">Report cards</h2>
+          <ReportCards
+            learnerId={learner.id}
+            canEdit={canEdit}
+            parentOnFile={Boolean(learner.learnerProfile?.parentEmail || learner.learnerProfile?.parentPhone)}
+            enrolments={learner.enrollments.filter((e) => e.status !== 'CANCELLED').map((e) => ({ id: e.id, label: `${e.product.title}${e.batch ? ` · ${e.batch.name}` : ''}` }))}
+            cards={reportCards.map((c) => {
+              const data = readReportCard(c.data);
+              return {
+                id: c.id,
+                title: c.title,
+                course: c.enrollment.product.title,
+                issuedOn: formatDayLabel(dayKey(c.issuedAt, tenant.timezone), tenant.timezone),
+                sentOn: c.sentAt ? formatDayLabel(dayKey(c.sentAt, tenant.timezone), tenant.timezone) : null,
+                overall: data?.overall.percent != null ? `${data.overall.percent}%${data.overall.grade ? ` ${data.overall.grade}` : ''}` : 'nothing to average',
+              };
+            })}
+          />
+        </section>
 
         {learner.certificates.length > 0 && (
           <section>
