@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useRef, useState, useTransition } from 'react';
-import { removeAvatar, saveDetails, uploadAvatar } from '@/server/account';
+import { confirmEmailChange, removeAvatar, saveDetails, uploadAvatar } from '@/server/account';
 import { saveConsent } from '@/server/consent';
 import type { ActionState } from '@/server/courses';
 import { Button, Checkbox, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
@@ -72,7 +72,7 @@ export function DetailsForm({
   can: { name: boolean; email: boolean; phone: boolean };
   custom: CustomField[];
 }) {
-  const [state, action, pending] = useActionState(saveDetails, initial);
+  const [state, action, pending] = useActionState(saveDetails, initial as ActionState & { pendingEmail?: string });
   const [more, setMore] = useState(Boolean(account.parentName || account.permanentAddress || account.alternatePhone || account.parentPhone));
 
   return (
@@ -174,7 +174,33 @@ export function DetailsForm({
       <Button type="submit" disabled={pending}>
         {pending ? 'Saving...' : 'Save details'}
       </Button>
+      {state.pendingEmail && <EmailCodeForm email={state.pendingEmail} />}
     </form>
+  );
+}
+
+function EmailCodeForm({ email }: { email: string }) {
+  const [state, action, pending] = useActionState(confirmEmailChange, initial);
+  // Its own form, nested by position rather than by markup: a form inside a
+  // form is not allowed, so this one submits through formAction.
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-[var(--brand-line)] bg-[var(--brand-soft)] p-4">
+      <p className="text-sm font-medium">Confirm your new email</p>
+      <p className="t-small faint mt-0.5">A six-digit code was sent to {email}. It is good for a few minutes.</p>
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <Field label="Code">
+          <Input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={8} className="w-36" />
+        </Field>
+        <input type="hidden" name="pendingEmail" value={email} />
+        <Button type="submit" size="sm" formAction={action} disabled={pending || state.ok}>
+          {pending ? 'Checking...' : state.ok ? 'Changed' : 'Confirm'}
+        </Button>
+      </div>
+      <div className="mt-2">
+        <FormError message={state.error} />
+        <FormSuccess message={state.ok ? state.message : undefined} />
+      </div>
+    </div>
   );
 }
 

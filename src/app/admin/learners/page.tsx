@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Avatar } from '@/components/avatar';
 import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
@@ -119,7 +120,8 @@ export default async function LearnersPage({
             return (
               <Row key={l.id}>
                 <Cell>
-                  <Link href={`/admin/learners/${l.id}`} className="font-medium hover:underline">
+                  <Link href={`/admin/learners/${l.id}`} className="flex items-center gap-2 font-medium hover:underline">
+                    <Avatar name={l.name} src={l.avatarUrl} size={28} />
                     {l.name}
                   </Link>
                 </Cell>

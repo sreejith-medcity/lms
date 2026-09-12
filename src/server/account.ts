@@ -13,6 +13,8 @@ import { profileCompletion } from '@/lib/profile-completion';
 import { buildObjectKey, putObject, sanitiseFileName } from '@/lib/storage';
 import { IMAGE_MIME_TYPES } from '@/lib/image-formats';
 import { recordAudit } from '@/lib/audit';
+import { sendOtp } from '@/lib/otp-delivery';
+import { checkOtp } from '@/lib/otp';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -56,7 +58,7 @@ const detailsShape = z.object({
   alternatePhone: z.string().trim().max(20).optional(),
 });
 
-export async function saveDetails(_prev: ActionState, formData: FormData): Promise<ActionState> {
+export async function saveDetails(_prev: ActionState, formData: FormData): Promise<ActionState & { pendingEmail?: string }> {
   try {
     const { tenant, user } = await me();
     const [canName, canEmail, canPhone] = await Promise.all([
@@ -82,13 +84,17 @@ export async function saveDetails(_prev: ActionState, formData: FormData): Promi
     };
     if (canName && d.name !== undefined) account.name = d.name;
     if (canPhone && d.phone !== undefined) account.phone = d.phone || null;
-    if (canEmail && d.email !== undefined && d.email !== '') {
+    // A new email is not written until a code sent to it comes back: the
+    // address is how they sign in and where receipts go, and a typo there
+    // locks them out. The rest of the form is saved regardless.
+    let pendingEmail: string | undefined;
+    if (canEmail && d.email !== undefined && d.email !== '' && d.email !== (user.email ?? '').toLowerCase()) {
       const taken = await db.user.findFirst({
         where: { organizationId: tenant.organizationId, email: d.email, id: { not: user.id } },
         select: { id: true },
       });
       if (taken) return { error: 'That email address is already on another account.' };
-      account.email = d.email;
+      pendingEmail = d.email;
     }
     if (account.dateOfBirth instanceof Date && Number.isNaN(account.dateOfBirth.getTime())) return { error: 'That date of birth does not look right.' };
 
@@ -128,7 +134,38 @@ export async function saveDetails(_prev: ActionState, formData: FormData): Promi
 
     await refreshCompletion(tenant.organizationId, user.id);
     revalidatePath('/learn/account');
+
+    if (pendingEmail) {
+      const sent = await sendOtp({ organizationId: tenant.organizationId, target: pendingEmail, purpose: 'email_change', userId: user.id });
+      if (!sent.ok) return { ok: true, message: `Saved, but the email was not changed: ${sent.error ?? 'the code could not be sent.'}` };
+      return { ok: true, pendingEmail, message: `Saved. To switch your email, enter the code we sent to ${sent.sentTo ?? pendingEmail}.` };
+    }
     return { ok: true, message: 'Saved.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** The code from the new address comes back, and only then does the email change. */
+export async function confirmEmailChange(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await me();
+    if (!(await settingBool(tenant.organizationId, 'profile.canEditEmail'))) return { error: 'Changing the email is not allowed here.' };
+    const email = String(formData.get('pendingEmail') ?? '').trim().toLowerCase();
+    const code = String(formData.get('code') ?? '').trim();
+    if (!email || !code) return { error: 'Enter the code.' };
+
+    const check = await checkOtp({ target: email, purpose: 'email_change', code });
+    if (!check.ok) return { error: check.error ?? 'That code is wrong or has expired.' };
+    if (check.userId !== user.id) return { error: 'That code was not sent for this account.' };
+
+    const taken = await db.user.findFirst({ where: { organizationId: tenant.organizationId, email, id: { not: user.id } }, select: { id: true } });
+    if (taken) return { error: 'That email address is already on another account.' };
+
+    await db.user.update({ where: { id: user.id }, data: { email, emailVerifiedAt: new Date() } });
+    await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: 'account.email_changed', entity: 'User', entityId: user.id, after: { email } });
+    revalidatePath('/learn/account');
+    return { ok: true, message: 'Your email has been changed.' };
   } catch (err) {
     return fail(err);
   }

@@ -24,7 +24,7 @@ const MAX_ATTEMPTS = 5;
 /** Stops somebody using the send button as a way to bill the academy. */
 const RESEND_SECONDS = 60;
 
-export type Purpose = 'signup' | 'login' | 'reset' | 'secondary_validation';
+export type Purpose = 'signup' | 'login' | 'reset' | 'secondary_validation' | 'email_change';
 
 function hash(code: string, target: string): string {
   const pepper = process.env.AUTH_SECRET ?? 'insecure-development-secret';

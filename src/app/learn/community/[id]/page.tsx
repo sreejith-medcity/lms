@@ -5,6 +5,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { productIdOfCourseCommunity, toPlainText } from '@/lib/community';
 import { dayKey, formatDayLabel } from '@/lib/clock';
+import { Avatar } from '@/components/avatar';
 import { Badge, Card, EmptyState } from '@/components/ui';
 import { PostBox, ReplyBox, PostMenu } from './boxes';
 
@@ -49,14 +50,14 @@ export default async function Room({ params }: { params: Promise<{ id: string }>
       isPinned: true,
       isFlagged: true,
       createdAt: true,
-      author: { select: { id: true, name: true } },
+      author: { select: { id: true, name: true, avatarUrl: true } },
       comments: {
         orderBy: { createdAt: 'asc' },
         select: {
           id: true,
           bodyHtml: true,
           createdAt: true,
-          author: { select: { id: true, name: true } },
+          author: { select: { id: true, name: true, avatarUrl: true } },
         },
       },
     },
@@ -85,11 +86,14 @@ export default async function Room({ params }: { params: Promise<{ id: string }>
             {posts.map((post) => (
               <Card key={post.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    {post.title && <p className="font-medium">{post.title}</p>}
-                    <p className="t-micro faint">
-                      {post.author.name} · {formatDayLabel(dayKey(post.createdAt, tz), tz)}
-                    </p>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Avatar name={post.author.name} src={post.author.avatarUrl} size={36} />
+                    <div className="min-w-0">
+                      {post.title && <p className="font-medium">{post.title}</p>}
+                      <p className="t-micro faint">
+                        {post.author.name} · {formatDayLabel(dayKey(post.createdAt, tz), tz)}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {post.isPinned && <Badge tone="brand">pinned</Badge>}
@@ -104,11 +108,14 @@ export default async function Room({ params }: { params: Promise<{ id: string }>
                 {post.comments.length > 0 && (
                   <ul className="mt-4 space-y-3 border-l pl-4">
                     {post.comments.map((c) => (
-                      <li key={c.id}>
-                        <p className="t-micro faint">
-                          {c.author.name} · {formatDayLabel(dayKey(c.createdAt, tz), tz)}
-                        </p>
-                        <p className="t-small whitespace-pre-wrap">{toPlainText(c.bodyHtml)}</p>
+                      <li key={c.id} className="flex items-start gap-2">
+                        <Avatar name={c.author.name} src={c.author.avatarUrl} size={24} />
+                        <div className="min-w-0">
+                          <p className="t-micro faint">
+                            {c.author.name} · {formatDayLabel(dayKey(c.createdAt, tz), tz)}
+                          </p>
+                          <p className="t-small whitespace-pre-wrap">{toPlainText(c.bodyHtml)}</p>
+                        </div>
                       </li>
                     ))}
                   </ul>
