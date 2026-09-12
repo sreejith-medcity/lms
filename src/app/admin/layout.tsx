@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Sidebar } from '@/components/nav';
+import { MobileAdminNav } from '@/components/admin-nav';
 import { getSessionUser } from '@/lib/auth';
 import { getTenantContext } from '@/lib/tenant';
 
@@ -33,6 +34,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-4 border-b bg-[var(--surface)]/85 px-5 backdrop-blur">
           <div className="flex items-center gap-3">
+            <MobileAdminNav features={tenant.features} orgName={tenant.name} />
             <Link href="/admin" className="t-heading lg:hidden">
               {tenant.name}
             </Link>
