@@ -229,6 +229,7 @@ model User {
   posts             CommunityPost[]
   comments          CommunityComment[]
 
+  assignmentSubmissions AssignmentSubmission[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -622,6 +623,7 @@ model Course {
   memberships  MembershipCourse[]
   landingPage  StorefrontPage?
 
+  assignments  Assignment[]
   @@index([organizationId])
   @@map("courses")
 }
@@ -930,6 +932,8 @@ model Asset {
   recordings Recording[]
   transcript Transcript?
 
+  assignmentAttachments AssignmentAttachment[]
+  assignmentFiles       AssignmentFile[]
   @@index([organizationId, type])
   @@map("assets")
 }
@@ -963,6 +967,7 @@ model Batch {
   sessions      LiveSession[]
   announcements AnnouncementTarget[]
 
+  assignments   Assignment[]
   @@index([organizationId, status])
   @@index([courseId])
   @@map("batches")
@@ -1229,6 +1234,7 @@ model Enrollment {
   certificates IssuedCertificate[]
   instalments  Instalment[]
 
+  assignmentSubmissions AssignmentSubmission[]
   @@unique([userId, productId, batchId])
   @@index([organizationId, status])
   @@index([batchId])
@@ -1621,6 +1627,116 @@ model GradeScale {
   isActive       Boolean @default(false)
 
   @@map("grade_scales")
+}
+
+// ---------------------------------------------------------------------------
+// ASSIGNMENTS
+// ---------------------------------------------------------------------------
+
+/// Homework: a brief with a due date, handed in as text and files, marked by
+/// a person with feedback. Distinct from an assessment, which is a timed
+/// paper of questions with an answer key. A trainer sets one for a course,
+/// or for one batch of it, and every learner enrolled sees it in their
+/// portal from the moment it is published.
+model Assignment {
+  id             String        @id @default(cuid())
+  organizationId String
+  courseId       String
+  /// Null means every batch of the course, and self-paced learners too.
+  batchId        String?
+  title          String
+  /// The brief, as plain text. Files that go with it are attachments.
+  instructions   String?
+  maxMarks       Float         @default(100)
+  dueAt          DateTime?
+  /// Hand-ins after the due date are taken and flagged late, or refused.
+  acceptLate     Boolean       @default(true)
+  /// The learner may hand in again after a grade or a return for rework.
+  allowResubmit  Boolean       @default(true)
+  requireText    Boolean       @default(false)
+  requireFile    Boolean       @default(false)
+  status         PublishStatus @default(DRAFT)
+  publishedAt    DateTime?
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  course      Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  batch       Batch?                 @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  attachments AssignmentAttachment[]
+  submissions AssignmentSubmission[]
+
+  @@index([organizationId, courseId])
+  @@index([organizationId, status, dueAt])
+  @@index([batchId])
+  @@map("assignments")
+}
+
+/// A file that goes with the brief: a worksheet, a reading, a model answer.
+model AssignmentAttachment {
+  id           String @id @default(cuid())
+  assignmentId String
+  assetId      String
+  sortOrder    Int    @default(0)
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  asset      Asset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, assetId])
+  @@map("assignment_attachments")
+}
+
+/// One hand-in. A resubmission is a new row with the next attempt number,
+/// so the first try and its feedback stay readable after the second.
+model AssignmentSubmission {
+  id             String                     @id @default(cuid())
+  organizationId String
+  assignmentId   String
+  userId         String
+  enrollmentId   String?
+  attemptNo      Int                        @default(1)
+  status         AssignmentSubmissionStatus @default(SUBMITTED)
+  text           String?
+  submittedAt    DateTime                   @default(now())
+  isLate         Boolean                    @default(false)
+  marks          Float?
+  feedback       String?
+  gradedAt       DateTime?
+  gradedById     String?
+
+  assignment Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enrollment Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  files      AssignmentFile[]
+
+  @@unique([assignmentId, userId, attemptNo])
+  @@index([organizationId, status, submittedAt])
+  @@index([userId])
+  @@map("assignment_submissions")
+}
+
+enum AssignmentSubmissionStatus {
+  /// Handed in, waiting for a person.
+  SUBMITTED
+  /// Marked with feedback.
+  GRADED
+  /// Sent back for another go without a mark.
+  RETURNED
+}
+
+/// A file the learner handed in.
+model AssignmentFile {
+  id           String @id @default(cuid())
+  submissionId String
+  assetId      String
+  sortOrder    Int    @default(0)
+
+  submission AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  asset      Asset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, assetId])
+  @@map("assignment_files")
 }
 
 // ---------------------------------------------------------------------------
