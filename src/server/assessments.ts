@@ -6,6 +6,8 @@ import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
+import { buildObjectKey, inferType, putObject, sanitiseFileName } from '@/lib/storage';
+import { KEYED, keyProblem, parseAnswerKey } from '@/lib/question-scoring';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -92,10 +94,37 @@ export async function deleteBank(bankId: string): Promise<ActionState> {
 /* Questions --------------------------------------------------------------- */
 
 const OBJECTIVE = ['MCQ_SINGLE', 'MCQ_MULTI', 'TRUE_FALSE'] as const;
-const WRITTEN = ['SHORT_ANSWER', 'LONG_ANSWER'] as const;
-const SUPPORTED = [...OBJECTIVE, ...WRITTEN] as const;
+const SUPPORTED = ['MCQ_SINGLE', 'MCQ_MULTI', 'TRUE_FALSE', 'FILL_BLANK', 'MATCH', 'ORDERING', 'SHORT_ANSWER', 'LONG_ANSWER', 'FILE_UPLOAD', 'SPEAKING'] as const;
 
 export type SupportedQuestionType = (typeof SUPPORTED)[number];
+
+const MEDIA_MAX = 25 * 1024 * 1024;
+
+/**
+ * The key for a blank, match or ordering question, from the editor's own
+ * fields: one line per blank with accepted answers separated by |, one
+ * pair per line as left = right, one item per line in the right order.
+ */
+function keyFromForm(type: string, formData: FormData): unknown {
+  const lines = (name: string) =>
+    String(formData.get(name) ?? '')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+  if (type === 'FILL_BLANK') {
+    return { blanks: lines('blanks').map((l) => l.split('|').map((v) => v.trim()).filter(Boolean)), caseSensitive: formData.get('caseSensitive') === 'on' };
+  }
+  if (type === 'MATCH') {
+    return {
+      pairs: lines('pairs').map((l) => {
+        const at = l.indexOf('=');
+        return at < 0 ? { left: l, right: '' } : { left: l.slice(0, at).trim(), right: l.slice(at + 1).trim() };
+      }),
+    };
+  }
+  if (type === 'ORDERING') return { items: lines('items') };
+  return null;
+}
 
 const question = z.object({
   bankId: z.string().min(1),
@@ -137,6 +166,42 @@ export async function saveQuestion(_prev: ActionState, formData: FormData): Prom
     const correct = new Set(formData.getAll('correct').map((v) => String(v)));
 
     const isObjective = (OBJECTIVE as readonly string[]).includes(d.type);
+    const isKeyed = (KEYED as string[]).includes(d.type);
+    const takesNegative = isObjective || isKeyed;
+
+    let answerKey: unknown = null;
+    if (isKeyed) {
+      answerKey = keyFromForm(d.type, formData);
+      const problem = keyProblem(d.type, d.promptHtml, parseAnswerKey(d.type, answerKey));
+      if (problem) return { error: problem };
+    }
+
+    // A picture or a clip on the question. Any image, audio or video.
+    let mediaAssetId: string | null = null;
+    const media = formData.get('media');
+    if (media instanceof File && media.size > 0) {
+      if (media.size > MEDIA_MAX) return { error: 'Keep the picture or clip under 25 MB. Longer video belongs in the media library.' };
+      const kind = inferType(media.name || 'file');
+      if (!['IMAGE', 'AUDIO', 'VIDEO'].includes(kind)) return { error: 'The question can carry a picture, an audio clip or a video, not a document.' };
+      const fileName = sanitiseFileName(media.name || 'media');
+      const key = buildObjectKey(tenant.organizationId, fileName);
+      await putObject(key, new Uint8Array(await media.arrayBuffer()), media.type || 'application/octet-stream');
+      const asset = await db.asset.create({
+        data: {
+          organizationId: tenant.organizationId,
+          name: `Question media: ${fileName}`,
+          fileName,
+          type: kind,
+          storageKey: key,
+          mimeType: media.type || null,
+          sizeBytes: BigInt(media.size),
+          uploadedById: user.id,
+          transcodeStatus: 'READY',
+        },
+        select: { id: true },
+      });
+      mediaAssetId = asset.id;
+    }
 
     let options: { label: string; isCorrect: boolean; sortOrder: number }[] = [];
 
@@ -168,7 +233,9 @@ export async function saveQuestion(_prev: ActionState, formData: FormData): Prom
         explanation: d.explanation || null,
         difficulty: d.difficulty,
         marks: d.marks,
-        negativeMarks: isObjective ? d.negativeMarks : 0,
+        negativeMarks: takesNegative ? d.negativeMarks : 0,
+        answerKey: (answerKey ?? undefined) as never,
+        mediaAssetId,
         tags: d.tags ? d.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
         options: options.length ? { create: options } : undefined,
       },
@@ -471,6 +538,93 @@ export async function setAssessmentCourses(
       }),
     ]);
 
+    revalidatePath(`/admin/assessments/${assessmentId}`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* Sections ---------------------------------------------------------------- */
+
+async function ownedAssessment(assessmentId: string, organizationId: string) {
+  return db.assessment.findFirst({
+    where: { id: assessmentId, organizationId },
+    select: { id: true, _count: { select: { attempts: true, sections: true } } },
+  });
+}
+
+const sectionShape = z.object({
+  assessmentId: z.string().min(1),
+  id: z.string().max(60).optional(),
+  title: z.string().trim().min(1, 'Give the section a name.').max(120),
+  instructions: z.string().trim().max(4000).optional().or(z.literal('')),
+  durationMinutes: z.coerce.number().int().min(0).max(600),
+});
+
+/** Create or rename a section, with or without a clock of its own. */
+export async function saveSection(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('courses.assessments');
+    const parsed = sectionShape.safeParse({
+      assessmentId: formData.get('assessmentId'),
+      id: formData.get('id') || undefined,
+      title: formData.get('title'),
+      instructions: formData.get('instructions') || '',
+      durationMinutes: formData.get('durationMinutes') || 0,
+    });
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+    const d = parsed.data;
+
+    const owned = await ownedAssessment(d.assessmentId, tenant.organizationId);
+    if (!owned) return { error: 'Assessment not found.' };
+    if (owned._count.attempts > 0 && !d.id) return { error: 'Learners have already sat this, so its sections are fixed.' };
+
+    const data = { title: d.title, instructions: d.instructions || null, durationMinutes: d.durationMinutes > 0 ? d.durationMinutes : null };
+    if (d.id) {
+      const section = await db.assessmentSection.findFirst({ where: { id: d.id, assessmentId: d.assessmentId }, select: { id: true } });
+      if (!section) return { error: 'Section not found.' };
+      await db.assessmentSection.update({ where: { id: d.id }, data });
+    } else {
+      await db.assessmentSection.create({ data: { assessmentId: d.assessmentId, sortOrder: owned._count.sections, ...data } });
+    }
+    revalidatePath(`/admin/assessments/${d.assessmentId}`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function deleteSection(assessmentId: string, sectionId: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('courses.assessments');
+    const owned = await ownedAssessment(assessmentId, tenant.organizationId);
+    if (!owned) return { error: 'Assessment not found.' };
+    if (owned._count.attempts > 0) return { error: 'Learners have already sat this, so its sections are fixed.' };
+    // Questions in it fall back to the paper's own time; nothing is lost.
+    await db.assessmentSection.deleteMany({ where: { id: sectionId, assessmentId } });
+    revalidatePath(`/admin/assessments/${assessmentId}`);
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Put a question in a section, or take it out (sectionId null). */
+export async function setQuestionSection(assessmentId: string, questionId: string, sectionId: string | null): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('courses.assessments');
+    const owned = await ownedAssessment(assessmentId, tenant.organizationId);
+    if (!owned) return { error: 'Assessment not found.' };
+    if (owned._count.attempts > 0) return { error: 'Learners have already sat this, so the paper is fixed.' };
+    if (sectionId) {
+      const section = await db.assessmentSection.findFirst({ where: { id: sectionId, assessmentId }, select: { id: true } });
+      if (!section) return { error: 'Section not found.' };
+    }
+    await db.assessmentQuestion.update({
+      where: { assessmentId_questionId: { assessmentId, questionId } },
+      data: { sectionId },
+    });
     revalidatePath(`/admin/assessments/${assessmentId}`);
     return { ok: true };
   } catch (err) {

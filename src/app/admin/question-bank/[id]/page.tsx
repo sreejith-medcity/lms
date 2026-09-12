@@ -6,17 +6,13 @@ import { requireStaff } from '@/lib/auth';
 import type { $Enums } from '@prisma/client';
 import { Badge, Card, EmptyState, LinkButton } from '@/components/ui';
 import { QuestionForm, DeleteQuestion } from './editors';
+import { QUESTION_TYPES, parseAnswerKey } from '@/lib/question-scoring';
+import { QuestionKey } from '@/components/question-key';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
 
-const TYPE_LABELS: Record<string, string> = {
-  MCQ_SINGLE: 'Single answer',
-  MCQ_MULTI: 'Multiple answers',
-  TRUE_FALSE: 'True or false',
-  SHORT_ANSWER: 'Short written',
-  LONG_ANSWER: 'Long written',
-};
+const TYPE_LABELS: Record<string, string> = Object.fromEntries(QUESTION_TYPES.map((t) => [t.value, t.label]));
 
 const PAGE = 50;
 
@@ -63,6 +59,8 @@ export default async function BankPage({
           marks: true,
           negativeMarks: true,
           tags: true,
+          answerKey: true,
+          mediaAssetId: true,
           options: { orderBy: { sortOrder: 'asc' }, select: { id: true, label: true, isCorrect: true } },
           _count: { select: { answers: true, items: true } },
         },
@@ -209,6 +207,8 @@ export default async function BankPage({
                     </div>
 
                     <p className="mt-2 text-sm">{q.promptHtml}</p>
+                    {q.mediaAssetId && <p className="t-micro faint mt-1">Has a picture or clip</p>}
+                    <QuestionKey answerKey={parseAnswerKey(q.type, q.answerKey)} />
 
                     {q.options.length > 0 && (
                       <ul className="mt-2 space-y-1">

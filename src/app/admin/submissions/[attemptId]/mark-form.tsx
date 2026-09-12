@@ -6,6 +6,7 @@ import type { ActionState } from '@/server/courses';
 import { Badge, Button, Card, Field, FormError, FormSuccess, Input, Textarea } from '@/components/ui';
 import { EvaluationReport } from '@/components/evaluation-report';
 import type { Evaluation } from '@/lib/ai-evaluation';
+import { AnswerView, QuestionMedia } from '@/components/answer-view';
 
 const initial: ActionState = {};
 
@@ -17,6 +18,10 @@ interface Item {
   marksAwarded: number | null;
   isCorrect: boolean | null;
   response: unknown;
+  answerKey?: unknown;
+  media?: { url: string; kind: string } | null;
+  /** Waits for a person: written, spoken, uploaded. */
+  humanMarked: boolean;
   ai: { evaluation: Evaluation; scale: { min: number; max: number; name: string }; label: string; scoreLabel: string } | null;
   options: { id: string; label: string; isCorrect: boolean }[];
 }
@@ -39,13 +44,13 @@ export function MarkForm({
   const [marks, setMarks] = useState<Record<string, number>>(() =>
     Object.fromEntries(
       items
-        .filter((i) => i.options.length === 0)
+        .filter((i) => i.humanMarked)
         .map((i) => [i.id, i.marksAwarded ?? 0]),
     ),
   );
 
-  const written = items.filter((i) => i.options.length === 0);
-  const objective = items.reduce((n, i) => (i.options.length ? n + (i.marksAwarded ?? 0) : n), 0);
+  const written = items.filter((i) => i.humanMarked);
+  const objective = items.reduce((n, i) => (!i.humanMarked ? n + (i.marksAwarded ?? 0) : n), 0);
   const writtenAwarded = Object.values(marks).reduce((n, m) => n + m, 0);
   const total = items.reduce((n, i) => n + i.maxMarks, 0);
   const running = objective + writtenAwarded;
@@ -64,42 +69,18 @@ export function MarkForm({
               {item.isCorrect === true && <Badge tone="ok">correct</Badge>}
               {item.isCorrect === false && <Badge tone="bad">wrong</Badge>}
               <span className="t-small faint ml-2 tabular-nums">
-                {item.options.length > 0 ? `${item.marksAwarded ?? 0}/${item.maxMarks}` : `/${item.maxMarks}`}
+                {!item.humanMarked ? `${item.marksAwarded ?? 0}/${item.maxMarks}` : `/${item.maxMarks}`}
               </span>
             </span>
           </div>
 
+          <QuestionMedia media={item.media} />
           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{item.prompt}</p>
 
-          {item.options.length > 0 ? (
-            <ul className="mt-3 space-y-1">
-              {item.options.map((o) => {
-                const chosen = Array.isArray(item.response)
-                  ? (item.response as string[]).includes(o.id)
-                  : false;
-                return (
-                  <li key={o.id} className="t-small flex items-center gap-2">
-                    <span aria-hidden className={o.isCorrect ? 'text-[var(--ok)]' : 'faint'}>
-                      {o.isCorrect ? '✓' : chosen ? '✕' : '·'}
-                    </span>
-                    <span className={chosen ? 'font-medium' : 'muted'}>
-                      {o.label}
-                      {chosen && <span className="t-micro faint ml-2">their answer</span>}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <>
-              <div className="mt-3 rounded-[var(--radius-sm)] border bg-[var(--surface-2)] p-3">
-                {typeof item.response === 'string' && item.response.trim() ? (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{item.response}</p>
-                ) : (
-                  <p className="t-small faint">Left blank.</p>
-                )}
-              </div>
+          <AnswerView q={{ type: item.type, response: item.response, options: item.options, answerKey: item.answerKey }} showKey whose="their" />
 
+          {item.humanMarked && (
+            <>
               {item.ai && (
                 <details className="mt-3 rounded-[var(--radius-sm)] border border-[var(--brand-line)] bg-[var(--brand-soft)] p-3" open={!done}>
                   <summary className="cursor-pointer text-sm font-medium">

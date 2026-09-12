@@ -43,6 +43,7 @@ export async function GET(
       fileName: true,
       mimeType: true,
       sizeBytes: true,
+      uploadedById: true,
       materials: { select: { id: true, isFreePreview: true, isDownloadable: true } },
     },
   });
@@ -111,6 +112,22 @@ export async function GET(
   // Anyone, signed in or not, may see a material marked as a free preview.
   const freePreview = asset.materials.some((m) => m.isFreePreview);
   if (!allowed && freePreview) allowed = true;
+
+  // What a person uploaded themselves they may read back: a hand-in, a
+  // recorded answer, a photo of working. Staff uploads are covered above.
+  if (!allowed && user && sameOrg && asset.uploadedById === user.id) allowed = true;
+
+  // The picture or clip on a question, to anyone sitting or reviewing a
+  // paper it is on. Not to the public: a listening clip is exam material.
+  if (!allowed && user && sameOrg) {
+    const onPaper = await db.question.count({
+      where: {
+        mediaAssetId: asset.id,
+        items: { some: { assessment: { organizationId: tenant.organizationId, attempts: { some: { userId: user.id } } } } },
+      },
+    });
+    if (onPaper > 0) allowed = true;
+  }
 
   // Homework. A learner may read the files they handed in, and the files
   // of a brief that was set for them. Nobody else's hand-in: a classmate's

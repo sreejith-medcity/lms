@@ -4,35 +4,34 @@ import { useActionState, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { deleteQuestion, saveQuestion } from '@/server/assessments';
 import type { ActionState } from '@/server/courses';
-import { Button, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
+import { Button, Checkbox, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
+import { QUESTION_TYPES, blankCount } from '@/lib/question-scoring';
 
 const initial: ActionState = {};
 
-const TYPES = [
-  { value: 'MCQ_SINGLE', label: 'Single answer' },
-  { value: 'MCQ_MULTI', label: 'Multiple answers' },
-  { value: 'TRUE_FALSE', label: 'True or false' },
-  { value: 'SHORT_ANSWER', label: 'Short written answer' },
-  { value: 'LONG_ANSWER', label: 'Long written answer' },
-];
+const TYPES = QUESTION_TYPES;
 
 export function QuestionForm({ bankId }: { bankId: string }) {
   const [state, action, pending] = useActionState(saveQuestion, initial);
   const router = useRouter();
-  const [type, setType] = useState('MCQ_SINGLE');
+  const [type, setType] = useState<string>('MCQ_SINGLE');
   const [options, setOptions] = useState(['', '', '', '']);
   const [correct, setCorrect] = useState<Set<number>>(new Set());
+  const [prompt, setPrompt] = useState('');
+  const blanks = type === 'FILL_BLANK' ? blankCount(prompt) : 0;
+  const hint = TYPES.find((t) => t.value === type)?.hint ?? '';
 
   if (state.ok) {
     setTimeout(() => {
       router.refresh();
       setOptions(['', '', '', '']);
       setCorrect(new Set());
+      setPrompt('');
     }, 0);
   }
 
   const isChoice = type === 'MCQ_SINGLE' || type === 'MCQ_MULTI';
-  const isWritten = type === 'SHORT_ANSWER' || type === 'LONG_ANSWER';
+  const isWritten = ['SHORT_ANSWER', 'LONG_ANSWER', 'FILE_UPLOAD', 'SPEAKING'].includes(type);
 
   function toggleCorrect(i: number) {
     setCorrect((prev) => {
@@ -50,7 +49,7 @@ export function QuestionForm({ bankId }: { bankId: string }) {
       <FormError message={state.error} />
       <FormSuccess message={state.ok ? 'Added.' : undefined} />
 
-      <Field label="Type">
+      <Field label="Type" hint={hint || undefined}>
         <Select
           name="type"
           value={type}
@@ -67,9 +66,37 @@ export function QuestionForm({ bankId }: { bankId: string }) {
         </Select>
       </Field>
 
-      <Field label="Question">
-        <Textarea name="promptHtml" rows={3} required maxLength={4000} />
+      <Field
+        label="Question"
+        hint={type === 'FILL_BLANK' ? `Three underscores mark a blank. ${blanks === 0 ? 'None yet.' : `${blanks} blank${blanks === 1 ? '' : 's'} so far.`}` : undefined}
+      >
+        <Textarea name="promptHtml" rows={3} required maxLength={4000} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
       </Field>
+
+      <Field label="A picture or a clip with the question" hint="Optional. A chart to read, a recording to listen to, a short video. Up to 25 MB.">
+        <input name="media" type="file" accept="image/*,audio/*,video/*" className="block text-sm" />
+      </Field>
+
+      {type === 'FILL_BLANK' && (
+        <>
+          <Field label="Accepted answers, one line per blank" hint="Separate alternatives with |. The first blank is the first line.">
+            <Textarea name="blanks" rows={Math.max(2, blanks)} placeholder={'Germany | Deutschland\nBerlin'} />
+          </Field>
+          <Checkbox name="caseSensitive" label="Capitals matter" hint="Off means Berlin and berlin both count. Keep it on for German nouns and Sie." />
+        </>
+      )}
+
+      {type === 'MATCH' && (
+        <Field label="Pairs, one per line, as left = right" hint="The right-hand side is shown shuffled to the learner. At least two pairs.">
+          <Textarea name="pairs" rows={4} placeholder={'der = Mann\ndie = Frau\ndas = Kind'} />
+        </Field>
+      )}
+
+      {type === 'ORDERING' && (
+        <Field label="Items in the right order, one per line" hint="Shown shuffled; the learner puts them back. All or nothing.">
+          <Textarea name="items" rows={4} placeholder={'Wake up\nWash\nGet dressed\nLeave'} />
+        </Field>
+      )}
 
       {isChoice && (
         <div>
@@ -124,7 +151,7 @@ export function QuestionForm({ bankId }: { bankId: string }) {
         <Field label="Marks">
           <Input name="marks" type="number" step="0.25" min={0.25} max={100} defaultValue={1} />
         </Field>
-        <Field label="Negative" hint={isWritten ? 'Not used' : 'For a wrong answer'}>
+        <Field label="Negative" hint={isWritten ? 'Not used' : 'For a wrong answer; blank costs nothing'}>
           <Input
             name="negativeMarks"
             type="number"

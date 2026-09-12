@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui';
 import { evaluationFromJson } from '@/components/evaluation-report';
 import { presetFor } from '@/lib/ai-evaluation';
 import { MarkForm } from './mark-form';
+import { isHumanMarked } from '@/lib/question-scoring';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -40,6 +41,8 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
                   promptHtml: true,
                   marks: true,
                   rubric: true,
+                  answerKey: true,
+                  mediaAssetId: true,
                   options: { select: { id: true, label: true, isCorrect: true } },
                 },
               },
@@ -56,6 +59,8 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
   if (!attempt) notFound();
 
   const byQuestion = new Map(attempt.answers.map((a) => [a.questionId, a]));
+  const mediaIds = attempt.assessment.questions.map((q) => q.question.mediaAssetId).filter((id): id is string => Boolean(id));
+  const mediaKinds = mediaIds.length ? await db.asset.findMany({ where: { id: { in: mediaIds }, organizationId: tenant.organizationId }, select: { id: true, type: true } }) : [];
 
   const items = attempt.assessment.questions.map((item) => {
     const a = byQuestion.get(item.question.id);
@@ -67,6 +72,11 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
       marksAwarded: a?.marksAwarded ?? null,
       isCorrect: a?.isCorrect ?? null,
       response: (a?.response ?? null) as unknown,
+      answerKey: item.question.answerKey,
+      media: item.question.mediaAssetId && mediaKinds.some((m) => m.id === item.question.mediaAssetId)
+        ? { url: `/api/assets/${item.question.mediaAssetId}`, kind: mediaKinds.find((m) => m.id === item.question.mediaAssetId)!.type }
+        : null,
+      humanMarked: isHumanMarked(item.question.type),
       ai: aiReport(a?.aiFeedback),
       options: item.question.options.map((o) => ({
         id: o.id,
@@ -81,7 +91,7 @@ export default async function MarkPage({ params }: { params: Promise<{ attemptId
   const done = attempt.status === 'EVALUATED' && !aiDrafted;
 
   const objectiveAwarded = items
-    .filter((i) => i.options.length > 0)
+    .filter((i) => !i.humanMarked)
     .reduce((n, i) => n + (i.marksAwarded ?? 0), 0);
 
   return (

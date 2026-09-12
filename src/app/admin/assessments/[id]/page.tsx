@@ -5,7 +5,7 @@ import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { parseBlueprint } from '@/lib/paper-blueprint';
 import { Badge, Card } from '@/components/ui';
-import { SettingsForm, QuestionPicker, CoursePicker, PaperList, RedrawButton } from './editors';
+import { SettingsForm, QuestionPicker, CoursePicker, PaperList, RedrawButton, SectionsPanel } from './editors';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -29,10 +29,12 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
       showResultsImmediately: true,
       blueprint: true,
       courses: { select: { courseId: true } },
+      sections: { orderBy: { sortOrder: 'asc' }, select: { id: true, title: true, instructions: true, durationMinutes: true, _count: { select: { questions: true } } } },
       questions: {
         orderBy: { sortOrder: 'asc' },
         select: {
           marks: true,
+          sectionId: true,
           question: {
             select: {
               id: true,
@@ -67,6 +69,7 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
   const chosen = new Set(assessment.questions.map((q) => q.question.id));
   const total = assessment.questions.reduce((n, q) => n + (q.marks ?? q.question.marks), 0);
   const locked = assessment._count.attempts > 0;
+  const sectionRows = assessment.sections.map((sec) => ({ id: sec.id, title: sec.title, instructions: sec.instructions, durationMinutes: sec.durationMinutes, count: sec._count.questions }));
 
   return (
     <div>
@@ -120,7 +123,9 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
                 marks: q.marks ?? q.question.marks,
                 negative: q.question.negativeMarks,
                 bank: q.question.bank.name,
+                sectionId: q.sectionId,
               }))}
+              sections={sectionRows}
             />
           </section>
 
@@ -140,6 +145,14 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
             <h2 className="t-heading">Settings</h2>
             <div className="mt-5">
               <SettingsForm assessment={assessment} />
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="t-heading">Sections</h2>
+            <p className="t-small muted mt-1">Parts of the paper, each with a name and, if it needs one, a clock of its own.</p>
+            <div className="mt-4">
+              <SectionsPanel assessmentId={assessment.id} sections={sectionRows} locked={locked} />
             </div>
           </Card>
 

@@ -8,6 +8,8 @@ import { assessmentAccess } from '@/lib/assessment-access';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { deadlineFor } from '@/lib/attempt-clock';
+import { buildObjectKey, inferType, putObject, sanitiseFileName } from '@/lib/storage';
+import { ANSWER_FILE_MAX_BYTES, SPEAKING_MAX_SECONDS, isHumanMarked, markAuto, readSectionClock, sectionState } from '@/lib/question-scoring';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -144,7 +146,7 @@ export async function saveAnswer(
   attemptId: string,
   questionId: string,
   response: unknown,
-): Promise<ActionState & { expired?: boolean }> {
+): Promise<ActionState & { expired?: boolean; sectionClosed?: boolean }> {
   try {
     const user = await getSessionUser();
     if (!user) return { error: 'Please sign in again.' };
@@ -155,17 +157,33 @@ export async function saveAnswer(
         id: true,
         status: true,
         startedAt: true,
-        assessment: { select: { durationMinutes: true } },
+        sectionClock: true,
+        assessment: {
+          select: {
+            durationMinutes: true,
+            questions: { where: { questionId }, select: { section: { select: { id: true, durationMinutes: true } } } },
+          },
+        },
         answers: { where: { questionId }, select: { id: true } },
       },
     });
     if (!attempt) return { error: 'Attempt not found.' };
     if (attempt.status !== 'IN_PROGRESS') return { error: 'This attempt is already submitted.' };
+    if (attempt.assessment.questions.length === 0) return { error: 'That question is not on this paper.' };
 
     const { expired } = deadlineFor(attempt.startedAt, attempt.assessment.durationMinutes);
     if (expired) {
       await submitAttempt(attemptId, true);
       return { error: 'Time is up. Your paper has been submitted.', expired: true };
+    }
+
+    // A timed section takes answers only while its own clock runs.
+    const section = attempt.assessment.questions[0].section;
+    if (section?.durationMinutes) {
+      const clock = readSectionClock(attempt.sectionClock);
+      const state = sectionState({ id: section.id, durationMinutes: section.durationMinutes, startedAt: clock[section.id] ?? null });
+      if (state === 'NOT_STARTED') return { error: 'Start the section before answering.' };
+      if (state === 'CLOSED') return { error: 'This section has closed.', expired: false, sectionClosed: true };
     }
 
     await db.answer.upsert({
@@ -210,6 +228,7 @@ export async function submitAttempt(
                     type: true,
                     marks: true,
                     negativeMarks: true,
+                    answerKey: true,
                     options: { select: { id: true, isCorrect: true } },
                   },
                 },
@@ -246,7 +265,7 @@ export async function submitAttempt(
 
       const answer = byQuestion.get(q.id);
 
-      if (q.type === 'SHORT_ANSWER' || q.type === 'LONG_ANSWER') {
+      if (isHumanMarked(q.type)) {
         needsMarking = true;
         continue;
       }
@@ -254,20 +273,18 @@ export async function submitAttempt(
       objectiveTotal += marks;
       if (!answer) continue;
 
-      const chosen = new Set(
-        Array.isArray(answer.response) ? (answer.response as string[]) : [],
-      );
-      const correct = new Set(q.options.filter((o) => o.isCorrect).map((o) => o.id));
-
-      const isCorrect =
-        chosen.size === correct.size && [...chosen].every((id) => correct.has(id));
-
-      // A wrong answer costs the negative mark; leaving it blank costs nothing.
-      // That is what makes negative marking a decision rather than a punishment.
-      const marksAwarded = isCorrect ? marks : chosen.size > 0 ? -q.negativeMarks : 0;
-
-      awarded += marksAwarded;
-      updates.push({ id: answer.id, isCorrect, marksAwarded });
+      // Choice, blanks, pairs and order are all marked in one place, with
+      // the same rule for a blank answer: it costs nothing.
+      const marked = markAuto({
+        type: q.type,
+        marks,
+        negativeMarks: q.negativeMarks,
+        options: q.options,
+        answerKey: q.answerKey,
+        response: answer.response,
+      });
+      awarded += marked.marksAwarded;
+      updates.push({ id: answer.id, isCorrect: marked.isCorrect, marksAwarded: marked.marksAwarded });
     }
 
     const scoreBase = needsMarking ? objectiveTotal : paperTotal;
@@ -361,7 +378,7 @@ export async function markSubmission(
       const item = attempt.assessment.questions.find((q) => q.question.id === answer.question.id);
       const max = item?.marks ?? answer.question.marks;
 
-      if (answer.question.type === 'SHORT_ANSWER' || answer.question.type === 'LONG_ANSWER') {
+      if (isHumanMarked(answer.question.type)) {
         const raw = formData.get(`marks:${answer.question.id}`);
         if (raw == null) continue;
 
@@ -427,4 +444,85 @@ export async function markSubmission(
 async function requireStaffFor(permission: string) {
   const { requireStaff } = await import('@/lib/auth');
   return requireStaff(permission, 'edit');
+}
+
+
+/* Sections and uploads ----------------------------------------------------- */
+
+/**
+ * Opening a timed section starts its clock, once. A second press, or a
+ * reload, finds the time already written and leaves it alone, so nobody
+ * gets a fresh thirty minutes by refreshing.
+ */
+export async function startSection(attemptId: string, sectionId: string): Promise<ActionState & { startedAt?: string }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { error: 'Please sign in again.' };
+    const attempt = await db.attempt.findFirst({
+      where: { id: attemptId, userId: user.id, status: 'IN_PROGRESS' },
+      select: { id: true, sectionClock: true, assessment: { select: { sections: { where: { id: sectionId }, select: { id: true, durationMinutes: true } } } } },
+    });
+    if (!attempt) return { error: 'Attempt not found.' };
+    const section = attempt.assessment.sections[0];
+    if (!section) return { error: 'Section not found.' };
+    const clock = readSectionClock(attempt.sectionClock);
+    if (clock[section.id]) return { ok: true, startedAt: clock[section.id].toISOString() };
+    const now = new Date();
+    await db.attempt.update({
+      where: { id: attempt.id },
+      data: { sectionClock: { ...Object.fromEntries(Object.entries(clock).map(([k, v]) => [k, v.toISOString()])), [section.id]: now.toISOString() } },
+    });
+    return { ok: true, startedAt: now.toISOString() };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * A file or a recording as the answer. Stored as the learner's own asset
+ * and written into the answer as { assetId, fileName, ... }, through the
+ * same gate as a typed answer so the deadline and the section clock hold.
+ */
+export async function uploadAnswer(
+  attemptId: string,
+  questionId: string,
+  formData: FormData,
+): Promise<ActionState & { expired?: boolean; sectionClosed?: boolean; answer?: { assetId: string; fileName: string; sizeBytes: number; durationSeconds?: number } }> {
+  try {
+    const user = await getSessionUser();
+    if (!user) return { error: 'Please sign in again.' };
+    const tenant = await requireTenant();
+    const file = formData.get('file');
+    if (!(file instanceof File) || file.size === 0) return { error: 'Nothing was attached.' };
+    if (file.size > ANSWER_FILE_MAX_BYTES) return { error: 'Keep the file under 25 MB.' };
+    const seconds = Number(formData.get('durationSeconds') ?? 0) || 0;
+    if (seconds > SPEAKING_MAX_SECONDS + 5) return { error: 'A spoken answer is five minutes at most.' };
+
+    const fileName = sanitiseFileName(file.name || 'answer');
+    const key = buildObjectKey(tenant.organizationId, fileName);
+    const mime = file.type || 'application/octet-stream';
+    await putObject(key, new Uint8Array(await file.arrayBuffer()), mime);
+    const asset = await db.asset.create({
+      data: {
+        organizationId: tenant.organizationId,
+        name: `Answer by ${user.name}: ${fileName}`,
+        fileName,
+        type: seconds > 0 ? 'AUDIO' : inferType(fileName),
+        storageKey: key,
+        mimeType: mime,
+        sizeBytes: BigInt(file.size),
+        durationSeconds: seconds > 0 ? Math.round(seconds) : null,
+        uploadedById: user.id,
+        transcodeStatus: 'READY',
+      },
+      select: { id: true },
+    });
+
+    const answer = { assetId: asset.id, fileName, sizeBytes: file.size, ...(seconds > 0 ? { durationSeconds: Math.round(seconds) } : {}) };
+    const saved = await saveAnswer(attemptId, questionId, answer);
+    if (saved.error) return saved;
+    return { ok: true, answer };
+  } catch (err) {
+    return fail(err);
+  }
 }

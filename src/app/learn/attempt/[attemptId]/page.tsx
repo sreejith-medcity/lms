@@ -3,7 +3,8 @@ import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { deadlineFor } from '@/lib/attempt-clock';
-import { Paper } from './paper';
+import { displayOrder, parseAnswerKey, readSectionClock, sectionEndsAt, sectionState } from '@/lib/question-scoring';
+import { Paper, type PaperQuestion, type PaperSection } from './paper';
 import { Review } from './review';
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,7 @@ export default async function AttemptPage({
       scorePercent: true,
       passed: true,
       attemptNo: true,
+      sectionClock: true,
       assessment: {
         select: {
           id: true,
@@ -42,10 +44,12 @@ export default async function AttemptPage({
           passPercent: true,
           shuffleQuestions: true,
           showResultsImmediately: true,
+          sections: { orderBy: { sortOrder: 'asc' }, select: { id: true, title: true, instructions: true, durationMinutes: true } },
           questions: {
             orderBy: { sortOrder: 'asc' },
             select: {
               marks: true,
+              sectionId: true,
               question: {
                 select: {
                   id: true,
@@ -54,6 +58,8 @@ export default async function AttemptPage({
                   explanation: true,
                   marks: true,
                   negativeMarks: true,
+                  answerKey: true,
+                  mediaAssetId: true,
                   options: { orderBy: { sortOrder: 'asc' }, select: { id: true, label: true, isCorrect: true } },
                 },
               },
@@ -75,6 +81,17 @@ export default async function AttemptPage({
   if (!attempt) notFound();
 
   const deadline = deadlineFor(attempt.startedAt, attempt.assessment.durationMinutes);
+
+  // The kind of each picture or clip on the paper, in one query.
+  const mediaIds = attempt.assessment.questions.map((q) => q.question.mediaAssetId).filter((id): id is string => Boolean(id));
+  const mediaKinds = mediaIds.length
+    ? await db.asset.findMany({ where: { id: { in: mediaIds }, organizationId: tenant.organizationId }, select: { id: true, type: true } })
+    : [];
+  const mediaFor = (assetId: string | null) => {
+    if (!assetId) return null;
+    const kind = mediaKinds.find((m) => m.id === assetId)?.type;
+    return kind ? { url: `/api/assets/${assetId}`, kind } : null;
+  };
 
   // A finished attempt is a review, never a paper.
   if (attempt.status !== 'IN_PROGRESS') {
@@ -107,6 +124,8 @@ export default async function AttemptPage({
             marksAwarded: answer?.marksAwarded ?? null,
             isCorrect: answer?.isCorrect ?? null,
             response: (answer?.response ?? null) as unknown,
+            answerKey: item.question.answerKey,
+            media: mediaFor(item.question.mediaAssetId),
             options: item.question.options.map((o) => ({
               id: o.id,
               label: o.label,
@@ -131,21 +150,52 @@ export default async function AttemptPage({
     ? shuffle(attempt.assessment.questions, attempt.id)
     : attempt.assessment.questions;
 
+  const clock = readSectionClock(attempt.sectionClock);
+  const sections: PaperSection[] = attempt.assessment.sections.map((sec) => {
+    const startedAt = clock[sec.id] ?? null;
+    const s = { id: sec.id, durationMinutes: sec.durationMinutes, startedAt };
+    return {
+      id: sec.id,
+      title: sec.title,
+      instructions: sec.instructions,
+      durationMinutes: sec.durationMinutes,
+      startedAt: startedAt?.toISOString() ?? null,
+      endsAt: sectionEndsAt(s)?.toISOString() ?? null,
+      state: sectionState(s),
+    };
+  });
+
+  const questions: PaperQuestion[] = order.map((item) => {
+    const q = item.question;
+    const key = parseAnswerKey(q.type, q.answerKey);
+    const seed = `${attempt.id}:${q.id}`;
+    return {
+      id: q.id,
+      type: q.type,
+      prompt: q.promptHtml,
+      marks: item.marks ?? q.marks,
+      negative: q.negativeMarks,
+      sectionId: item.sectionId,
+      media: mediaFor(q.mediaAssetId),
+      options: q.options.map((o) => ({ id: o.id, label: o.label })),
+      // The key never reaches the browser: only the shapes to draw.
+      blanks: key?.kind === 'FILL_BLANK' ? key.blanks.length : 0,
+      match:
+        key?.kind === 'MATCH'
+          ? { left: key.pairs.map((p) => p.left), right: displayOrder(key.pairs.length, seed).map((index) => ({ index, label: key.pairs[index].right })) }
+          : null,
+      ordering: key?.kind === 'ORDERING' ? displayOrder(key.items.length, seed).map((index) => ({ index, label: key.items[index] })) : null,
+      saved: (attempt.answers.find((a) => a.questionId === q.id)?.response ?? null) as unknown,
+    };
+  });
+
   return (
     <Paper
       attemptId={attempt.id}
       title={attempt.assessment.title}
       endsAt={deadline.endsAt?.toISOString() ?? null}
-      questions={order.map((item) => ({
-        id: item.question.id,
-        type: item.question.type,
-        prompt: item.question.promptHtml,
-        marks: item.marks ?? item.question.marks,
-        negative: item.question.negativeMarks,
-        options: item.question.options.map((o) => ({ id: o.id, label: o.label })),
-        saved: (attempt.answers.find((a) => a.questionId === item.question.id)?.response ??
-          null) as unknown,
-      }))}
+      sections={sections}
+      questions={questions}
     />
   );
 }

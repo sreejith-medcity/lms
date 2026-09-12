@@ -4,12 +4,16 @@ import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   addQuestionsToAssessment,
+  deleteSection,
   removeQuestionFromAssessment,
+  saveSection,
   searchBankQuestions,
   setAssessmentCourses,
+  setQuestionSection,
   updateAssessment,
   type BankQuestionHit,
 } from '@/server/assessments';
+import { QUESTION_TYPES } from '@/lib/question-scoring';
 import { redrawPaper } from '@/server/papers';
 import type { ActionState } from '@/server/courses';
 import {
@@ -28,13 +32,15 @@ import { KINDS } from '../editors';
 
 const initial: ActionState = {};
 
-const TYPE_LABELS: Record<string, string> = {
-  MCQ_SINGLE: 'Single',
-  MCQ_MULTI: 'Multiple',
-  TRUE_FALSE: 'True/false',
-  SHORT_ANSWER: 'Short written',
-  LONG_ANSWER: 'Long written',
-};
+const TYPE_LABELS: Record<string, string> = Object.fromEntries(QUESTION_TYPES.map((t) => [t.value, t.label]));
+
+export interface SectionRow {
+  id: string;
+  title: string;
+  instructions: string | null;
+  durationMinutes: number | null;
+  count: number;
+}
 
 export function SettingsForm({
   assessment,
@@ -117,10 +123,12 @@ export function SettingsForm({
 export function PaperList({
   assessmentId,
   items,
+  sections = [],
   locked,
 }: {
   assessmentId: string;
-  items: { id: string; type: string; prompt: string; marks: number; negative: number; bank: string }[];
+  items: { id: string; type: string; prompt: string; marks: number; negative: number; bank: string; sectionId?: string | null }[];
+  sections?: SectionRow[];
   locked: boolean;
 }) {
   const router = useRouter();
@@ -156,22 +164,46 @@ export function PaperList({
               <p className="mt-1.5 text-sm">{q.prompt}</p>
             </div>
 
-            {!locked && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={pending}
-                onClick={() =>
-                  start(async () => {
-                    const res = await removeQuestionFromAssessment(assessmentId, q.id);
-                    setError(res.error);
-                    if (!res.error) router.refresh();
-                  })
-                }
-              >
-                Remove
-              </Button>
-            )}
+            <div className="flex shrink-0 items-center gap-2">
+              {sections.length > 0 && (
+                <select
+                  aria-label="Section"
+                  className="rounded-[var(--radius-sm)] border bg-[var(--surface)] px-2 py-1 text-xs"
+                  value={q.sectionId ?? ''}
+                  disabled={locked || pending}
+                  onChange={(e) =>
+                    start(async () => {
+                      const res = await setQuestionSection(assessmentId, q.id, e.target.value || null);
+                      setError(res.error);
+                      if (!res.error) router.refresh();
+                    })
+                  }
+                >
+                  <option value="">No section</option>
+                  {sections.map((sec) => (
+                    <option key={sec.id} value={sec.id}>
+                      {sec.title}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {!locked && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() =>
+                    start(async () => {
+                      const res = await removeQuestionFromAssessment(assessmentId, q.id);
+                      setError(res.error);
+                      if (!res.error) router.refresh();
+                    })
+                  }
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
           </div>
         </Card>
       ))}
@@ -403,6 +435,100 @@ export function RedrawButton({ assessmentId }: { assessmentId: string }) {
       </Button>
       <FormError message={state.error} />
       <FormSuccess message={state.ok ? state.message : undefined} />
+    </div>
+  );
+}
+
+
+/**
+ * Sections of the paper. Listening 30 minutes, then Reading 60: each with a
+ * name, an optional note to the learner, and optionally a clock of its own
+ * that starts when the learner opens it. Questions are put into sections
+ * from the paper list beside.
+ */
+export function SectionsPanel({ assessmentId, sections, locked }: { assessmentId: string; sections: SectionRow[]; locked: boolean }) {
+  const [state, action, pending] = useActionState(saveSection, initial);
+  const router = useRouter();
+  const [removing, startRemove] = useTransition();
+  const [editing, setEditing] = useState<SectionRow | null>(null);
+
+  useEffect(() => {
+    if (state.ok) {
+      router.refresh();
+      setEditing(null);
+    }
+  }, [state, router]);
+
+  return (
+    <div className="space-y-3">
+      {sections.length === 0 ? (
+        <p className="t-small muted">No sections. The whole paper runs on one clock. Add sections to give Listening and Writing their own.</p>
+      ) : (
+        <ul className="space-y-2">
+          {sections.map((sec, i) => (
+            <li key={sec.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-sm)] border px-3 py-2">
+              <span className="min-w-0">
+                <span className="t-small block font-medium">
+                  {i + 1}. {sec.title}
+                </span>
+                <span className="t-micro faint block">
+                  {sec.count} question{sec.count === 1 ? '' : 's'} · {sec.durationMinutes ? `${sec.durationMinutes} min of its own` : "on the paper's clock"}
+                </span>
+              </span>
+              {!locked && (
+                <span className="flex gap-1">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(sec)}>
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={removing}
+                    onClick={() =>
+                      startRemove(async () => {
+                        await deleteSection(assessmentId, sec.id);
+                        router.refresh();
+                      })
+                    }
+                  >
+                    Remove
+                  </Button>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!locked && (
+        <form action={action} key={editing?.id ?? 'new'} className="space-y-3 border-t pt-3">
+          <input type="hidden" name="assessmentId" value={assessmentId} />
+          {editing && <input type="hidden" name="id" value={editing.id} />}
+          <FormError message={state.error} />
+          <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+            <Field label={editing ? 'Rename section' : 'New section'}>
+              <Input name="title" required maxLength={120} defaultValue={editing?.title ?? ''} placeholder="Listening" />
+            </Field>
+            <Field label="Minutes" hint="0 shares the paper's">
+              <Input name="durationMinutes" type="number" min={0} max={600} defaultValue={editing?.durationMinutes ?? 0} />
+            </Field>
+          </div>
+          <Field label="A note to the learner" hint="Shown at the top of the section. Optional.">
+            <Textarea name="instructions" rows={2} maxLength={4000} defaultValue={editing?.instructions ?? ''} />
+          </Field>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={pending}>
+              {pending ? 'Saving...' : editing ? 'Save' : 'Add section'}
+            </Button>
+            {editing && (
+              <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                Cancel
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
     </div>
   );
 }

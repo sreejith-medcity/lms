@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Badge, Card } from '@/components/ui';
+import { AnswerView, QuestionMedia } from '@/components/answer-view';
 
 interface ReviewQuestion {
   id: string;
@@ -10,6 +11,8 @@ interface ReviewQuestion {
   marksAwarded: number | null;
   isCorrect: boolean | null;
   response: unknown;
+  answerKey?: unknown;
+  media?: { url: string; kind: string } | null;
   options: { id: string; label: string; isCorrect: boolean }[];
 }
 
@@ -103,9 +106,6 @@ export function Review({
       {showAnswers && (
         <ol className="mt-8 space-y-4">
           {questions.map((q, i) => {
-            const chosen = Array.isArray(q.response) ? (q.response as string[]) : [];
-            const written = typeof q.response === 'string' ? q.response : null;
-
             return (
               <li key={q.id}>
                 <Card>
@@ -120,42 +120,10 @@ export function Review({
                     </span>
                   </div>
 
+                  <QuestionMedia media={q.media} />
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{q.prompt}</p>
 
-                  {q.options.length > 0 ? (
-                    <ul className="mt-3 space-y-1.5">
-                      {q.options.map((o) => {
-                        const picked = chosen.includes(o.id);
-                        return (
-                          <li
-                            key={o.id}
-                            className={`flex items-start gap-2.5 rounded-[var(--radius-sm)] border p-2.5 text-sm ${
-                              o.isCorrect
-                                ? 'border-[var(--ok)] bg-[var(--ok-soft)]'
-                                : picked
-                                  ? 'border-[var(--bad)] bg-[var(--bad-soft)]'
-                                  : ''
-                            }`}
-                          >
-                            <span aria-hidden className="shrink-0">
-                              {o.isCorrect ? '✓' : picked ? '✕' : '·'}
-                            </span>
-                            <span>
-                              {o.label}
-                              {picked && <span className="t-micro faint ml-2">your answer</span>}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : written ? (
-                    <div className="mt-3 rounded-[var(--radius-sm)] border bg-[var(--surface-2)] p-3">
-                      <p className="t-micro faint uppercase tracking-wide">Your answer</p>
-                      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{written}</p>
-                    </div>
-                  ) : (
-                    <p className="t-small faint mt-3">You left this blank.</p>
-                  )}
+                  <AnswerView q={{ type: q.type, response: q.response, options: q.options, answerKey: q.answerKey }} showKey whose="your" />
 
                   {q.explanation && (
                     <div className="mt-3 border-t pt-3">
