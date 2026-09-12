@@ -44,6 +44,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Module library', href: '/admin/modules' },
       { label: 'Question bank', href: '/admin/question-bank' },
       { label: 'Assessments', href: '/admin/assessments' },
+      { label: 'Assignments', href: '/admin/assignments' },
       { label: 'Marking', href: '/admin/submissions' },
       { label: 'Certificates', href: '/admin/certificates' },
     ],

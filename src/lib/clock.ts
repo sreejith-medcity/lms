@@ -125,3 +125,42 @@ export function formatMonthLabel(key: string, timeZone: string): string {
 }
 
 export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/**
+ * A `datetime-local` input, read in the academy's zone.
+ *
+ * The browser hands back "2026-09-20T17:00" with no zone at all, and
+ * `new Date()` of that string means whatever the server's clock means,
+ * which on a box in Frankfurt puts a 5pm Kochi deadline at 8:30pm. So the
+ * string is taken apart and placed on the academy's own clock.
+ */
+export function fromLocalInput(value: string | null | undefined, timeZone: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec((value ?? '').trim());
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m.map(Number);
+  const guess = Date.UTC(y, mo - 1, d, h, mi, 0);
+  const once = guess - offsetMs(new Date(guess), timeZone);
+  const at = new Date(guess - offsetMs(new Date(once), timeZone));
+  return Number.isNaN(at.getTime()) ? null : at;
+}
+
+/** The inverse: an instant as the string a `datetime-local` input wants, in that zone. */
+export function toLocalInput(at: Date | null | undefined, timeZone: string): string {
+  if (!at) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(at);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00';
+  return `${get('year')}-${get('month')}-${get('day')}T${String(Number(get('hour')) % 24).padStart(2, '0')}:${get('minute')}`;
+}
+
+/** "Sat 20 Sep, 5:00 pm" in the academy's zone. */
+export function formatDateTime(at: Date, timeZone: string): string {
+  return `${formatDayLabel(dayKey(at, timeZone), timeZone)}, ${formatTime(at, timeZone)}`;
+}

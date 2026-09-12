@@ -41,6 +41,8 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
       { key: 'course.completed', label: 'They finished a course', who: 'The learner', live: true },
       { key: 'certificate.issued', label: 'A certificate was issued', who: 'The learner', live: true },
       { key: 'assessment.marked', label: 'Their paper was marked', who: 'The learner', live: true },
+      { key: 'assignment.set', label: 'Homework was set for them', who: 'Every learner it was set for', live: true },
+      { key: 'assignment.graded', label: 'Their homework was marked', who: 'The learner', live: true },
     ],
   },
   {

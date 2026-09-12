@@ -7,6 +7,7 @@ import { readUrlFor, storageConfigured } from '@/lib/storage';
 import { curriculumGate } from '@/lib/curriculum-access';
 import { settingText } from '@/lib/settings/store';
 import { redirectResponse } from '@/lib/http-headers';
+import { assignmentsWhereFor, learnerEnrolments } from '@/lib/assignment-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,6 +111,29 @@ export async function GET(
   // Anyone, signed in or not, may see a material marked as a free preview.
   const freePreview = asset.materials.some((m) => m.isFreePreview);
   if (!allowed && freePreview) allowed = true;
+
+  // Homework. A learner may read the files they handed in, and the files
+  // of a brief that was set for them. Nobody else's hand-in: a classmate's
+  // essay is not course material.
+  if (!allowed && user && sameOrg) {
+    const own = await db.assignmentFile.count({
+      where: { assetId: asset.id, submission: { userId: user.id, organizationId: tenant.organizationId } },
+    });
+    if (own > 0) allowed = true;
+  }
+  if (!allowed && user && sameOrg) {
+    const enrolments = await learnerEnrolments(tenant.organizationId, user.id);
+    const clauses = assignmentsWhereFor(enrolments);
+    if (clauses.length) {
+      const brief = await db.assignmentAttachment.count({
+        where: {
+          assetId: asset.id,
+          assignment: { organizationId: tenant.organizationId, status: 'PUBLISHED', deletedAt: null, OR: clauses },
+        },
+      });
+      if (brief > 0) allowed = true;
+    }
+  }
 
   // Otherwise the learner must be enrolled in a course that uses this file, or
   // in a batch whose recording it is.

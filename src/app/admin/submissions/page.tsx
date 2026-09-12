@@ -43,6 +43,9 @@ export default async function SubmissionsPage() {
   });
 
   const waiting = submissions.filter((s) => s.status === 'NOT_EVALUATED');
+  const homework = await db.assignmentSubmission.count({
+    where: { organizationId: tenant.organizationId, status: 'SUBMITTED' },
+  });
 
   return (
     <div>
@@ -50,6 +53,16 @@ export default async function SubmissionsPage() {
         title="Marking"
         description="Written answers waiting for a trainer. Oldest first, because the one that has waited longest is the one that matters."
       />
+
+      {homework > 0 && (
+        <p className="t-small mb-4 rounded-[var(--radius-sm)] border border-dashed p-3">
+          {homework} homework hand-in{homework === 1 ? '' : 's'} waiting too, under{' '}
+          <Link href="/admin/assignments" className="font-medium hover:underline">
+            Assignments
+          </Link>
+          .
+        </p>
+      )}
 
       {waiting.length > 0 && (
         <p className="t-small mb-4 rounded-[var(--radius-sm)] border border-dashed p-3 text-[var(--warn)]">

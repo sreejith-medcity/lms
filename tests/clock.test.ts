@@ -57,3 +57,14 @@ test('minutes of day are read in the academy timezone', () => {
   assert.equal(minutesOfDay(new Date('2026-09-10T19:00:00+05:30'), KOCHI), 19 * 60);
   assert.equal(minutesOfDay(new Date('2026-09-10T00:00:00+05:30'), KOCHI), 0);
 });
+
+test('a datetime-local string is read on the academy clock, and written back the same', async () => {
+  const { fromLocalInput, toLocalInput } = await import('../src/lib/clock');
+  const at = fromLocalInput('2026-09-20T17:00', 'Asia/Kolkata');
+  assert.equal(at?.toISOString(), '2026-09-20T11:30:00.000Z');
+  assert.equal(toLocalInput(at, 'Asia/Kolkata'), '2026-09-20T17:00');
+  assert.equal(toLocalInput(at, 'Europe/Berlin'), '2026-09-20T13:30');
+  assert.equal(fromLocalInput('', 'Asia/Kolkata'), null);
+  assert.equal(fromLocalInput('next tuesday', 'Asia/Kolkata'), null);
+  assert.equal(toLocalInput(null, 'Asia/Kolkata'), '');
+});

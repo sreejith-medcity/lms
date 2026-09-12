@@ -98,6 +98,14 @@ const DEFAULTS: Record<string, Default> = {
     subject: '{{item}} has been marked',
     body: 'Hello {{name}}, {{item}} has been marked. You scored {{score}}. See it at {{url}}.',
   },
+  'assignment.set': {
+    subject: 'New homework: {{item}}',
+    body: 'Hello {{name}}, {{item}} has been set for {{course}}. {{due}} See it at {{url}}.',
+  },
+  'assignment.graded': {
+    subject: '{{item}} has been marked',
+    body: 'Hello {{name}}, your work on {{item}} has been marked: {{score}}. Read the feedback at {{url}}.',
+  },
   'announcement.published': {
     subject: '{{title}}',
     body: '{{body}}',
