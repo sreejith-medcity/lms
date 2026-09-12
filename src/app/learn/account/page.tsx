@@ -3,9 +3,9 @@ import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { settingBool } from '@/lib/settings/store';
-import { fieldsFor } from '@/lib/custom-fields';
-import { Card, ProgressBar } from '@/components/ui';
-import { AvatarForm, ConsentForm, DetailsForm } from './forms';
+import { fieldFile, fieldsFor } from '@/lib/custom-fields';
+import { Card, Field, ProgressBar } from '@/components/ui';
+import { AvatarForm, ConsentForm, DetailsForm, DocumentField } from './forms';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Account' };
@@ -135,6 +135,25 @@ export default async function AccountPage() {
               />
             </div>
           </Card>
+
+          {custom.some((f) => f.type === 'FILE') && (
+            <Card>
+              <p className="font-semibold">Documents</p>
+              <p className="t-small muted mt-1">What the academy asks you to hand in: a clear photo or a PDF, up to 15 MB each.</p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {custom
+                  .filter((f) => f.type === 'FILE')
+                  .map((f) => {
+                    const file = fieldFile(f.value);
+                    return (
+                      <Field key={f.key} label={f.label} hint={f.required ? 'Required' : 'Optional'}>
+                        <DocumentField field={{ key: f.key, label: f.label, type: f.type, options: f.options, required: f.required, value: '', file: file ? { assetId: file.assetId, fileName: file.fileName } : null }} />
+                      </Field>
+                    );
+                  })}
+              </div>
+            </Card>
+          )}
 
           <Card>
             <p className="font-semibold">Messages from {tenant.name}</p>

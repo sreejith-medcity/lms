@@ -132,6 +132,13 @@ export async function GET(
   // recorded answer, a photo of working. Staff uploads are covered above.
   if (!allowed && user && sameOrg && asset.uploadedById === user.id) allowed = true;
 
+  // A document filed against the learner's own record by the office (an ID
+  // proof scanned at the counter, say) is theirs to read back.
+  if (!allowed && user && sameOrg) {
+    const filed = await db.customFieldValue.count({ where: { userId: user.id, value: { path: ['assetId'], equals: asset.id } } });
+    if (filed > 0) allowed = true;
+  }
+
   // The picture or clip on a question, to anyone sitting or reviewing a
   // paper it is on. Not to the public: a listening clip is exam material.
   if (!allowed && user && sameOrg) {

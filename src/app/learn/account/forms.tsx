@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useRef, useState, useTransition } from 'react';
-import { confirmEmailChange, removeAvatar, saveDetails, uploadAvatar } from '@/server/account';
+import { confirmEmailChange, removeAvatar, saveDetails, uploadAvatar, uploadDocument } from '@/server/account';
 import { saveConsent } from '@/server/consent';
 import type { ActionState } from '@/server/courses';
 import { Button, Checkbox, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
@@ -61,6 +61,34 @@ interface CustomField {
   options: string[];
   required: boolean;
   value: string;
+  /** For a FILE field: what is on record. */
+  file?: { assetId: string; fileName: string } | null;
+}
+
+/** One file field on the learner's own page: what is filed, and a way to hand one in. */
+export function DocumentField({ field }: { field: CustomField }) {
+  const [state, action, pending] = useActionState(uploadDocument, initial);
+  return (
+    <form action={action} className="space-y-1.5">
+      <input type="hidden" name="key" value={field.key} />
+      {field.file && (
+        <p className="t-small">
+          On record:{' '}
+          <a href={`/api/assets/${field.file.assetId}`} target="_blank" rel="noreferrer" className="underline">
+            {field.file.fileName}
+          </a>
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <input name="file" type="file" required className="text-sm" />
+        <Button type="submit" size="sm" variant="secondary" disabled={pending}>
+          {pending ? 'Uploading...' : field.file ? 'Replace' : 'Upload'}
+        </Button>
+      </div>
+      <FormError message={state.error} />
+      <FormSuccess message={state.ok ? state.message : undefined} />
+    </form>
+  );
 }
 
 export function DetailsForm({
@@ -136,7 +164,7 @@ export function DetailsForm({
                   <Checkbox name={`cf_${f.key}`} defaultChecked={f.value === 'true'} label="Yes" />
                 </>
               ) : f.type === 'FILE' ? (
-                <p className="t-small faint">Ask the office to attach this.</p>
+                <p className="t-small faint">Handed in below, under documents.</p>
               ) : (
                 <Input name={`cf_${f.key}`} type={f.type === 'NUMBER' ? 'number' : f.type === 'DATE' ? 'date' : 'text'} defaultValue={f.value} required={f.required} maxLength={200} />
               )}

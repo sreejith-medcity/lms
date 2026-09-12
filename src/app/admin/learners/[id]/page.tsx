@@ -9,6 +9,9 @@ import { Stat, StatGrid } from '@/components/stat';
 import { ResetPassword, SignInAs } from './controls';
 import { LearnerTests } from './tests';
 import { ReportCards } from './report-cards';
+import { LearnerDocuments, LearnerFields } from './fields';
+import { fieldFile, fieldsFor } from '@/lib/custom-fields';
+import { formatBytes } from '@/lib/storage';
 import { readReportCard } from '@/lib/report-card';
 import { dayKey, formatDayLabel } from '@/lib/clock';
 
@@ -73,6 +76,22 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
     },
   });
   if (!learner) notFound();
+
+  const customFields = await fieldsFor(tenant.organizationId, 'LEARNER', learner.id);
+  const staffFields = customFields
+    .filter((f) => f.type !== 'FILE')
+    .map((f) => ({ key: f.key, label: f.label, type: f.type, options: f.options, required: f.required, value: Array.isArray(f.value) ? f.value.join(', ') : f.value == null ? '' : String(f.value) }));
+  const documents = customFields
+    .filter((f) => f.type === 'FILE')
+    .map((f) => {
+      const file = fieldFile(f.value);
+      return {
+        key: f.key,
+        label: f.label,
+        required: f.required,
+        file: file ? { assetId: file.assetId, fileName: file.fileName, size: formatBytes(file.sizeBytes), uploadedOn: file.uploadedAt ? formatDayLabel(dayKey(new Date(file.uploadedAt), tenant.timezone), tenant.timezone) : '' } : null,
+      };
+    });
 
   const reportCards = await db.reportCard.findMany({
     where: { organizationId: tenant.organizationId, userId: learner.id },
@@ -308,6 +327,16 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
             />
           </section>
         )}
+
+        <section>
+          <h2 className="t-heading mb-3">The academy's fields</h2>
+          <LearnerFields learnerId={learner.id} fields={staffFields} canEdit={canEdit} />
+        </section>
+
+        <section>
+          <h2 className="t-heading mb-3">Documents</h2>
+          <LearnerDocuments learnerId={learner.id} documents={documents} canEdit={canEdit} />
+        </section>
 
         <section>
           <h2 className="t-heading mb-3">Report cards</h2>

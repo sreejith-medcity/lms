@@ -8,7 +8,7 @@ import { SESSION_COOKIE, getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { hashPassword, verifyPassword } from '@/lib/password';
 import { settingBool } from '@/lib/settings/store';
-import { fieldsFor, saveFieldValues } from '@/lib/custom-fields';
+import { fieldsFor, saveFieldValues, storeFieldFile } from '@/lib/custom-fields';
 import { profileCompletion } from '@/lib/profile-completion';
 import { buildObjectKey, putObject, sanitiseFileName } from '@/lib/storage';
 import { IMAGE_MIME_TYPES } from '@/lib/image-formats';
@@ -288,4 +288,22 @@ async function refreshCompletion(organizationId: string, userId: string) {
     create: { userId, profileCompletion: percent },
     update: { profileCompletion: percent },
   });
+}
+
+
+/** A document the learner hands in themselves against one of the academy's file fields. */
+export async function uploadDocument(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await me();
+    const key = String(formData.get('key') ?? '');
+    const file = formData.get('file');
+    if (!(file instanceof File)) return { error: 'Pick a file first.' };
+    const stored = await storeFieldFile({ organizationId: tenant.organizationId, entity: 'LEARNER', entityId: user.id, userId: user.id, uploaderId: user.id, key, file });
+    if (!stored.ok) return { error: stored.error };
+    await refreshCompletion(tenant.organizationId, user.id);
+    revalidatePath('/learn/account');
+    return { ok: true, message: 'Uploaded.' };
+  } catch (err) {
+    return fail(err);
+  }
 }
