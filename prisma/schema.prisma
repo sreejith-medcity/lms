@@ -170,7 +170,9 @@ model User {
   emailOptOut            Boolean    @default(false)
   smsOptOut              Boolean    @default(false)
   whatsappOptOut         Boolean    @default(false)
-  unsubscribeToken       String     @unique @default(cuid())
+  /// Minted the first time it is needed, so existing rows did not have to be
+  /// filled in by hand when the column arrived.
+  unsubscribeToken       String?    @unique
   timezone               String     @default("Asia/Calcutta")
   locale                 String     @default("en")
   kind                   UserKind   @default(LEARNER)

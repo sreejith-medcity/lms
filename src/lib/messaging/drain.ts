@@ -5,6 +5,9 @@ import { render } from './render';
 import { estimatedCostPaise } from './pricing';
 import { canSpend, spend, refund } from './wallet';
 import { templateForRow } from './templates';
+import { isMarketing, unsubscribeFooter } from '@/lib/consent';
+import { randomBytes } from 'node:crypto';
+import { organizationOrigin } from '@/lib/org-origin';
 import { recordIntegrationEvent } from '@/lib/integration-events';
 
 /**
@@ -76,6 +79,9 @@ export async function drain(organizationId: string, limit = 100): Promise<DrainR
 
   if (!due.length) return result;
 
+  // Looked up once per run, and only if a marketing email needs it.
+  let origin: string | null = null;
+
   // One sender per channel per run, not one per message. Resolving a provider
   // reads and decrypts credentials, and doing that four hundred times to send
   // four hundred reminders is most of the work for none of the benefit.
@@ -116,6 +122,15 @@ export async function drain(organizationId: string, limit = 100): Promise<DrainR
     }
 
     const rendered = render(template, context);
+    // A marketing email carries the way out. The law in most places asks
+    // for it, and so does anyone who has been on the wrong end of a list.
+    if (row.channel === 'EMAIL' && row.userId && isMarketing(row.eventKey)) {
+      const token = await unsubscribeTokenFor(organizationId, row.userId);
+      if (token) {
+        origin ??= await organizationOrigin(organizationId);
+        if (origin) rendered.body += unsubscribeFooter(`${origin}/unsubscribe/${token}?c=email`);
+      }
+    }
     if (rendered.missing.length) {
       await fail(
         row.id,
@@ -286,3 +301,13 @@ export async function outboxSummary(organizationId: string): Promise<{
 }
 
 export type { Prisma };
+
+/** The learner's unsubscribe token, minted on first use. */
+async function unsubscribeTokenFor(organizationId: string, userId: string): Promise<string | null> {
+  const person = await db.user.findFirst({ where: { id: userId, organizationId }, select: { unsubscribeToken: true } });
+  if (!person) return null;
+  if (person.unsubscribeToken) return person.unsubscribeToken;
+  const token = randomBytes(18).toString('base64url');
+  await db.user.update({ where: { id: userId }, data: { unsubscribeToken: token } });
+  return token;
+}
