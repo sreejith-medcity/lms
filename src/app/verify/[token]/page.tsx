@@ -105,6 +105,12 @@ export default async function VerifyPage({ params }: { params: Promise<{ token: 
         />
       </div>
 
+      <p className="t-small mt-4">
+        <a href={`/verify/${token}/pdf`} className="font-medium underline">
+          Download as PDF
+        </a>
+      </p>
+
       <p className="t-small faint mt-5">
         This page is the record. It shows the holder, the course and the date, and nothing else
         about them.{' '}

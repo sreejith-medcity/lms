@@ -7,6 +7,9 @@ import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { happened, notifyLearner } from '@/lib/events';
+import { buildObjectKey, inferType, putObject, sanitiseFileName } from '@/lib/storage';
+import { isHex, readDesign } from '@/lib/certificate';
+import { forgetCertificatePdfs } from '@/lib/certificate-issue';
 import type { Prisma } from '@prisma/client';
 import type { ActionState } from '@/server/courses';
 
@@ -52,22 +55,66 @@ const template = z.object({
   signatoryRole: z.string().trim().max(80).optional().or(z.literal('')),
   validityMonths: z.coerce.number().min(0).max(600).optional(),
   autoIssueOn: z.enum(['MANUAL', 'COURSE_COMPLETION']),
+  accent: z.string().trim().max(7).optional().or(z.literal('')),
+  font: z.enum(['serif', 'sans']).optional(),
 });
+
+const PICTURE_MAX = 12 * 1024 * 1024;
+
+/** A background or a signature, as a PNG or JPG asset. */
+async function storePicture(organizationId: string, uploaderId: string, file: FormDataEntryValue | null, label: string): Promise<string | null | { error: string }> {
+  if (!(file instanceof File) || file.size === 0) return null;
+  if (file.size > PICTURE_MAX) return { error: `${label}: keep it under 12 MB.` };
+  const kind = inferType(file.name || 'picture');
+  const mime = (file.type || '').toLowerCase();
+  if (kind !== 'IMAGE' || !(mime.includes('png') || mime.includes('jpeg') || mime.includes('jpg'))) {
+    return { error: `${label}: a PNG or JPG, please. The PDF cannot place other formats.` };
+  }
+  const fileName = sanitiseFileName(file.name || 'picture');
+  const key = buildObjectKey(organizationId, fileName);
+  await putObject(key, new Uint8Array(await file.arrayBuffer()), mime);
+  const asset = await db.asset.create({
+    data: { organizationId, name: `${label}: ${fileName}`, fileName, type: 'IMAGE', storageKey: key, mimeType: mime, sizeBytes: BigInt(file.size), uploadedById: uploaderId, transcodeStatus: 'READY' },
+    select: { id: true },
+  });
+  return asset.id;
+}
 
 export async function saveTemplate(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user } = await guard();
 
-    const parsed = template.safeParse(Object.fromEntries(formData));
+    const fields = Object.fromEntries([...formData.entries()].filter(([, v]) => typeof v === 'string'));
+    const parsed = template.safeParse(fields);
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
     const d = parsed.data;
+    if (d.accent && !isHex(d.accent)) return { error: 'The accent colour needs to be a hex value like #087447.' };
+
+    // What the template already carries, so a save without a new upload keeps the old picture.
+    const previous = d.id
+      ? readDesign((await db.certificateTemplate.findFirst({ where: { id: d.id, organizationId: tenant.organizationId }, select: { designJson: true } }))?.designJson)
+      : null;
+
+    const background = await storePicture(tenant.organizationId, user.id, formData.get('background'), 'Background');
+    if (background && typeof background === 'object') return background;
+    const signature = await storePicture(tenant.organizationId, user.id, formData.get('signature'), 'Signature');
+    if (signature && typeof signature === 'object') return signature;
+
+    const on = (name: string) => formData.get(name) === 'on';
     const designJson = {
       headline: d.headline,
       body: d.body,
       signatoryName: d.signatoryName || '',
       signatoryRole: d.signatoryRole || '',
-      accent: '',
+      accent: d.accent || '',
+      backgroundAssetId: on('clearBackground') ? '' : (background ?? previous?.backgroundAssetId ?? ''),
+      signatureAssetId: on('clearSignature') ? '' : (signature ?? previous?.signatureAssetId ?? ''),
+      showLogo: on('showLogo'),
+      showQr: on('showQr'),
+      showSerial: on('showSerial'),
+      showFrame: on('showFrame'),
+      font: d.font ?? 'serif',
     } as Prisma.InputJsonValue;
 
     const data = {
@@ -94,6 +141,8 @@ export async function saveTemplate(_prev: ActionState, formData: FormData): Prom
       }
 
       await db.certificateTemplate.update({ where: { id: d.id }, data });
+      // The wording or the picture changed, so the kept PDFs are stale.
+      await forgetCertificatePdfs(tenant.organizationId, { templateId: d.id });
     } else {
       await db.certificateTemplate.create({
         data: { ...data, organizationId: tenant.organizationId },
@@ -209,7 +258,7 @@ export async function revokeCertificate(id: string, reason: string): Promise<Act
     if (!cert) return { error: 'Certificate not found.' };
     if (cert.revokedAt) return { error: 'Already revoked.' };
 
-    await db.issuedCertificate.update({ where: { id }, data: { revokedAt: new Date() } });
+    await db.issuedCertificate.update({ where: { id }, data: { revokedAt: new Date(), pdfAssetId: null } });
 
     await recordAudit({
       organizationId: tenant.organizationId,

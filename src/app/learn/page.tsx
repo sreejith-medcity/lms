@@ -350,14 +350,24 @@ export default async function MyLearning({
                     })}
                   </p>
                 </div>
-                <a
-                  href={`/verify/${c.verifyToken}`}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex h-9 shrink-0 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3.5 text-sm font-medium"
-                >
-                  Open and share
-                </a>
+                <span className="flex shrink-0 gap-2">
+                  <a
+                    href={`/api/certificates/${c.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex h-9 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3.5 text-sm font-medium"
+                  >
+                    PDF
+                  </a>
+                  <a
+                    href={`/verify/${c.verifyToken}`}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex h-9 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3.5 text-sm font-medium"
+                  >
+                    Open and share
+                  </a>
+                </span>
               </li>
             ))}
           </ul>

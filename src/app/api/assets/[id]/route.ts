@@ -90,6 +90,20 @@ export async function GET(
     select: { id: true },
   });
 
+  // A certificate's background and signature. A certificate is a public
+  // document by design (the verify page shows it to anyone with the code),
+  // so the artwork on it is public too.
+  const onCertificate = await db.certificateTemplate.count({
+    where: {
+      organizationId: tenant.organizationId,
+      OR: [
+        { backgroundAssetId: asset.id },
+        { designJson: { path: ['backgroundAssetId'], equals: asset.id } },
+        { designJson: { path: ['signatureAssetId'], equals: asset.id } },
+      ],
+    },
+  });
+
   const user = await getSessionUser();
   const sameOrg = user?.organizationId === tenant.organizationId;
 
@@ -106,6 +120,7 @@ export async function GET(
     Boolean(artwork) ||
     Boolean(categoryArt) ||
     heroImage ||
+    onCertificate > 0 ||
     Boolean(portrait) ||
     Boolean(user && sameOrg && user.kind === 'STAFF');
 

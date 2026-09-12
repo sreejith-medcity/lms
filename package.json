@@ -31,8 +31,10 @@
     "date-fns": "^4.1.0",
     "next": "^15.3.0",
     "nodemailer": "^6.9.16",
+    "pdf-lib": "^1.17.1",
     "postcss": "^8.5.3",
     "prisma": "^6.7.0",
+    "qrcode": "^1.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwindcss": "^3.4.17",
@@ -40,6 +42,7 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "tsx": "^4.19.3"
   },
   "engines": {

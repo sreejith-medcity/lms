@@ -14,7 +14,21 @@ export interface CertificateDesign {
   body: string;
   signatoryName: string;
   signatoryRole: string;
+  /** A hex colour for the rule and the headline; blank means the academy's brand colour. */
   accent: string;
+  /** A full-page picture behind everything, A4 landscape. Blank means the plain typeset page. */
+  backgroundAssetId: string;
+  /** A picture of the signature, drawn above the signatory's name. */
+  signatureAssetId: string;
+  /** The academy's mark at the top. */
+  showLogo: boolean;
+  /** A QR code to the public verify page. */
+  showQr: boolean;
+  /** The serial in the corner. Off only when the background already carries its own numbering. */
+  showSerial: boolean;
+  /** The border and top rule. Off when the background is a finished design of its own. */
+  showFrame: boolean;
+  font: 'serif' | 'sans';
 }
 
 export const DEFAULT_DESIGN: CertificateDesign = {
@@ -23,18 +37,44 @@ export const DEFAULT_DESIGN: CertificateDesign = {
   signatoryName: '',
   signatoryRole: 'Director',
   accent: '',
+  backgroundAssetId: '',
+  signatureAssetId: '',
+  showLogo: true,
+  showQr: true,
+  showSerial: true,
+  showFrame: true,
+  font: 'serif',
 };
 
 export function readDesign(value: Prisma.JsonValue | null | undefined): CertificateDesign {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return DEFAULT_DESIGN;
   const v = value as Record<string, unknown>;
+  const str = (k: keyof CertificateDesign) => (typeof v[k] === 'string' ? (v[k] as string) : (DEFAULT_DESIGN[k] as string));
+  const bool = (k: keyof CertificateDesign) => (typeof v[k] === 'boolean' ? (v[k] as boolean) : (DEFAULT_DESIGN[k] as boolean));
   return {
-    headline: typeof v.headline === 'string' ? v.headline : DEFAULT_DESIGN.headline,
-    body: typeof v.body === 'string' ? v.body : DEFAULT_DESIGN.body,
+    headline: str('headline'),
+    body: str('body'),
     signatoryName: typeof v.signatoryName === 'string' ? v.signatoryName : '',
     signatoryRole: typeof v.signatoryRole === 'string' ? v.signatoryRole : '',
-    accent: typeof v.accent === 'string' ? v.accent : '',
+    accent: isHex(v.accent) ? (v.accent as string) : '',
+    backgroundAssetId: str('backgroundAssetId'),
+    signatureAssetId: str('signatureAssetId'),
+    showLogo: bool('showLogo'),
+    showQr: bool('showQr'),
+    showSerial: bool('showSerial'),
+    showFrame: bool('showFrame'),
+    font: v.font === 'sans' ? 'sans' : 'serif',
   };
+}
+
+export function isHex(v: unknown): v is string {
+  return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
+}
+
+/** "#087447" to the 0..1 triple pdf-lib wants. */
+export function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = isHex(hex) ? hex : '#322046';
+  return { r: parseInt(h.slice(1, 3), 16) / 255, g: parseInt(h.slice(3, 5), 16) / 255, b: parseInt(h.slice(5, 7), 16) / 255 };
 }
 
 export interface MergeValues {

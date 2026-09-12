@@ -16,21 +16,22 @@ export function Certificate({
   values: MergeValues;
   revoked?: boolean;
 }) {
+  const accent = design.accent || 'var(--brand)';
   return (
     <div
-      className="relative mx-auto w-full max-w-3xl overflow-hidden bg-white text-[#111]"
+      className={`relative mx-auto w-full max-w-3xl overflow-hidden bg-white text-[#111] ${design.font === 'sans' ? 'font-sans' : 'font-serif'}`}
       style={{ aspectRatio: '297 / 210' }}
     >
-      <div
-        aria-hidden
-        className="absolute inset-3 border"
-        style={{ borderColor: 'var(--brand)', opacity: 0.35 }}
-      />
-      <div
-        aria-hidden
-        className="absolute inset-x-0 top-0 h-1.5"
-        style={{ background: 'var(--brand)' }}
-      />
+      {design.backgroundAssetId && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/api/assets/${design.backgroundAssetId}`} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
+      )}
+      {design.showFrame && (
+        <>
+          <div aria-hidden className="absolute inset-3 border" style={{ borderColor: accent, opacity: 0.35 }} />
+          <div aria-hidden className="absolute inset-x-0 top-0 h-1.5" style={{ background: accent }} />
+        </>
+      )}
 
       {revoked && (
         <div
@@ -51,7 +52,7 @@ export function Certificate({
 
         <h1
           className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl"
-          style={{ color: 'var(--brand)' }}
+          style={{ color: accent }}
         >
           {design.headline}
         </h1>
@@ -62,12 +63,20 @@ export function Certificate({
 
         <div className="mt-auto flex w-full items-end justify-between pb-[6%] pt-8 text-left">
           <div>
-            <p className="text-[0.65rem] uppercase tracking-widest text-[#666]">Certificate no.</p>
-            <p className="font-mono text-sm">{values.serial}</p>
+            {design.showSerial && (
+              <>
+                <p className="text-[0.65rem] uppercase tracking-widest text-[#666]">Certificate no.</p>
+                <p className="font-mono text-sm">{values.serial}</p>
+              </>
+            )}
           </div>
 
           {(design.signatoryName || design.signatoryRole) && (
             <div className="text-right">
+              {design.signatureAssetId && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={`/api/assets/${design.signatureAssetId}`} alt="" className="ml-auto mb-1 h-10 w-auto max-w-40 object-contain" />
+              )}
               <div className="mb-1 ml-auto h-px w-40 bg-[#999]" />
               {design.signatoryName && (
                 <p className="text-sm font-medium">{design.signatoryName}</p>

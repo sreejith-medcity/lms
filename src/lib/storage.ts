@@ -2,7 +2,7 @@ import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto
 import { createReadStream, createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import type { $Enums } from '@prisma/client';
@@ -376,6 +376,28 @@ export async function putObject(key: string, body: Uint8Array, mimeType: string)
 
   if (!response.ok) {
     throw new Error(`STORAGE_PUT_FAILED: ${response.status}`);
+  }
+}
+
+/** The whole object, for something small: a background, a signature, a logo. */
+export async function getObject(key: string, maxBytes = 25 * 1024 * 1024): Promise<Uint8Array | null> {
+  if (storageDriver() === 'local') {
+    try {
+      const info = await stat(localPathFor(key));
+      if (!info.isFile() || info.size > maxBytes) return null;
+      return new Uint8Array(await readFile(localPathFor(key)));
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const res = await fetch(presign('GET', key, 300));
+    if (!res.ok) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    return buf.byteLength > maxBytes ? null : buf;
+  } catch (err) {
+    console.error('[storage] get failed', err);
+    return null;
   }
 }
 

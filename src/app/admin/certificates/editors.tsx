@@ -6,7 +6,7 @@ import { issueCertificate, revokeCertificate, saveTemplate } from '@/server/cert
 import type { ActionState } from '@/server/courses';
 import { DEFAULT_DESIGN, MERGE_FIELDS, type CertificateDesign } from '@/lib/certificate';
 import { Certificate } from '@/components/certificate';
-import { Button, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
+import { Button, Checkbox, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
 
 const initial: ActionState = {};
 
@@ -33,6 +33,9 @@ export function TemplateForm({
   const [body, setBody] = useState(design.body);
   const [signatoryName, setSignatoryName] = useState(design.signatoryName);
   const [signatoryRole, setSignatoryRole] = useState(design.signatoryRole);
+  const [accent, setAccent] = useState(design.accent);
+  const [font, setFont] = useState<'serif' | 'sans'>(design.font);
+  const [showFrame, setShowFrame] = useState(design.showFrame);
   const [showPreview, setShowPreview] = useState(false);
 
   if (state.ok) setTimeout(() => router.refresh(), 0);
@@ -102,6 +105,41 @@ export function TemplateForm({
         </Field>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Accent colour" hint="Blank uses the academy's brand colour.">
+          <div className="flex items-center gap-2">
+            <input type="color" value={accent || '#322046'} onChange={(e) => setAccent(e.target.value)} aria-label="Pick a colour" className="h-9 w-12 rounded border" />
+            <Input name="accent" value={accent} onChange={(e) => setAccent(e.target.value)} maxLength={7} placeholder="#087447" />
+          </div>
+        </Field>
+        <Field label="Typeface">
+          <Select name="font" value={font} onChange={(e) => setFont(e.target.value as 'serif' | 'sans')}>
+            <option value="serif">Serif, the classic look</option>
+            <option value="sans">Sans, plainer</option>
+          </Select>
+        </Field>
+        <Field label="Background" hint={design.backgroundAssetId ? 'A picture is set. Choose another to replace it.' : 'PNG or JPG, A4 landscape (297 by 210). Optional.'}>
+          <input name="background" type="file" accept="image/png,image/jpeg" className="block text-sm" />
+        </Field>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Signature picture" hint={design.signatureAssetId ? 'A signature is set. Choose another to replace it.' : 'PNG with a transparent background looks best. Optional.'}>
+          <input name="signature" type="file" accept="image/png,image/jpeg" className="block text-sm" />
+        </Field>
+        <div className="grid gap-2 pt-1">
+          {design.backgroundAssetId && <Checkbox name="clearBackground" label="Remove the background picture" />}
+          {design.signatureAssetId && <Checkbox name="clearSignature" label="Remove the signature picture" />}
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Checkbox name="showLogo" label="The academy's mark at the top" defaultChecked={design.showLogo} />
+        <Checkbox name="showQr" label="A QR code to the verify page" hint="Anyone with the paper can scan it to check it is real." defaultChecked={design.showQr} />
+        <Checkbox name="showSerial" label="The serial number in the corner" defaultChecked={design.showSerial} />
+        <Checkbox name="showFrame" label="Border and top rule" hint="Switch off when the background is a finished design." checked={showFrame} onChange={(e) => setShowFrame(e.target.checked)} />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Valid for" hint="Months. 0 = never expires.">
           <Input
@@ -128,10 +166,16 @@ export function TemplateForm({
         {showPreview ? 'Hide the preview' : 'Preview it'}
       </button>
 
+      {showPreview && template && (
+        <a href={`/api/certificates/preview/${template.id}`} target="_blank" rel="noreferrer" className="t-small ml-3 underline">
+          Open the PDF as it will print
+        </a>
+      )}
+
       {showPreview && (
         <div className="overflow-hidden rounded-[var(--radius)] border">
           <Certificate
-            design={{ headline, body, signatoryName, signatoryRole, accent: '' }}
+            design={{ ...design, headline, body, signatoryName, signatoryRole, accent, font, showFrame }}
             values={{
               learner: 'Aparna Menon',
               course: 'German Language - A1',
