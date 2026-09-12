@@ -164,6 +164,13 @@ model User {
   /// Free labels the office and the automations put on a learner: "needs a
   /// call", "B1 batch October", whatever the academy uses to sort people.
   tags                   String[]   @default([])
+  /// Marketing consent, per channel. Service messages (a receipt, a class
+  /// reminder, a sign-in code) are unaffected; campaigns, automations and
+  /// cart nudges honour these. The token is what an unsubscribe link carries.
+  emailOptOut            Boolean    @default(false)
+  smsOptOut              Boolean    @default(false)
+  whatsappOptOut         Boolean    @default(false)
+  unsubscribeToken       String     @unique @default(cuid())
   timezone               String     @default("Asia/Calcutta")
   locale                 String     @default("en")
   kind                   UserKind   @default(LEARNER)
