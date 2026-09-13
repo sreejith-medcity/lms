@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { getTenantContext } from '@/lib/tenant';
+import { getLocale } from '@/lib/i18n/server';
 import { trackingTags } from '@/lib/tracking-config';
 import { Tracking } from '@/components/tracking';
 
@@ -43,7 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     : undefined;
 
   return (
-    <html lang="en" className={sans.variable}>
+    <html lang={await getLocale()} className={sans.variable}>
       {tenant?.faviconUrl && (
         <head>
           <link rel="icon" href={tenant.faviconUrl} />

@@ -8,6 +8,10 @@ import { learnerNav } from '@/lib/learner-nav';
 import { BrandLockup } from '@/components/brand-lockup';
 import { LearnerNav } from './learner-nav';
 import { Bell } from './bell';
+import { getLocale, offeredForTenant } from '@/lib/i18n/server';
+import { dictionaryFor, translatorFor } from '@/lib/i18n';
+import { I18nProvider } from '@/components/i18n-provider';
+import { LanguageSwitch } from '@/components/language-switch';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,12 +23,15 @@ export default async function LearnLayout({ children }: { children: React.ReactN
   if (!tenant) redirect('/');
   if (!user) redirect('/login');
 
-  const nav = await learnerNav(tenant.organizationId);
+  const [locale, offered] = await Promise.all([getLocale(), offeredForTenant()]);
+  const t = translatorFor(locale);
+  const nav = (await learnerNav(tenant.organizationId)).map((item) => ({ ...item, label: t(item.label) }));
   const initial = user.name.trim().slice(0, 1).toUpperCase() || '?';
   const avatar = (await db.user.findUnique({ where: { id: user.id }, select: { avatarUrl: true } }))?.avatarUrl ?? null;
   const unread = await db.notificationLog.count({ where: { organizationId: tenant.organizationId, userId: user.id, channel: 'IN_APP', status: 'SENT' } });
 
   return (
+    <I18nProvider locale={locale} dict={dictionaryFor(locale)}>
     <div className="min-h-screen bg-[var(--canvas)]">
       <ImpersonationBanner learnerName={user.name} />
       <header className="sticky top-0 z-10 bg-[var(--surface)] shadow-[0_1px_0_var(--line),0_2px_8px_rgb(50_32_70/0.06)]">
@@ -36,6 +43,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
           <LearnerNav items={nav} isStaff={user.kind === 'STAFF'} />
 
           <div className="ml-auto flex items-center gap-3">
+            <LanguageSwitch current={locale} offered={offered} compact />
             <Bell unread={unread} />
             <Link href="/learn/account" className="flex items-center gap-2" title="Account">
               <span className="t-small faint hidden sm:inline">{user.name}</span>
@@ -53,7 +61,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
               )}
             </Link>
             <a href="/logout" className="t-small muted hover:text-[var(--ink)]">
-              Sign out
+              {t('Sign out')}
             </a>
           </div>
         </div>
@@ -63,5 +71,6 @@ export default async function LearnLayout({ children }: { children: React.ReactN
           Pages that want a reading measure add their own. */}
       <main className="rise">{children}</main>
     </div>
+    </I18nProvider>
   );
 }

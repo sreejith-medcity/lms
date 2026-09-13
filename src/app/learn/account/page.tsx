@@ -7,6 +7,9 @@ import { fieldFile, fieldsFor } from '@/lib/custom-fields';
 import { Card, Field, ProgressBar } from '@/components/ui';
 import { AvatarForm, ConsentForm, DetailsForm, DocumentField } from './forms';
 
+import { getLocale, offeredForTenant } from '@/lib/i18n/server';
+import { translatorFor } from '@/lib/i18n';
+import { LanguageSwitch } from '@/components/language-switch';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Account' };
 
@@ -63,13 +66,15 @@ export default async function AccountPage() {
   if (!account) return null;
 
   const completion = account.learnerProfile?.profileCompletion ?? 0;
+  const [locale, offered] = await Promise.all([getLocale(), offeredForTenant()]);
+  const t = translatorFor(locale);
   const isPartner = (await db.affiliate.count({ where: { organizationId: tenant.organizationId, userId: user.id } })) > 0;
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-7">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Account</h1>
+          <h1 className="text-xl font-semibold">{t('Account')}</h1>
           <p className="t-small faint mt-1">
             {account.registrationNo ? `Registration ${account.registrationNo} · ` : ''}
             with {tenant.name} since {account.createdAt.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
@@ -95,6 +100,14 @@ export default async function AccountPage() {
           <Card>
             <AvatarForm name={account.name} avatarUrl={account.avatarUrl} />
           </Card>
+          {offered.length > 1 && (
+            <Card>
+              <p className="t-eyebrow faint">{t('Language')}</p>
+              <div className="mt-2">
+                <LanguageSwitch current={locale} offered={offered} />
+              </div>
+            </Card>
+          )}
           <Card>
             <p className="t-eyebrow faint">Profile</p>
             <div className="mt-2 flex items-baseline justify-between">

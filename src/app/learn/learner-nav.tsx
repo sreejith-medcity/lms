@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useT } from '@/components/i18n-provider';
 
 /** The learner's tabs, with the current one underlined. Scrolls sideways on a phone. */
 export function LearnerNav({
@@ -12,7 +13,8 @@ export function LearnerNav({
   isStaff: boolean;
 }) {
   const pathname = usePathname() ?? '/learn';
-  const all = isStaff ? [...items, { key: 'admin', label: 'Admin', href: '/admin' }] : items;
+  const { t } = useT();
+  const all = isStaff ? [...items, { key: 'admin', label: t('Admin'), href: '/admin' }] : items;
 
   return (
     <nav className="rail -mb-px flex min-w-0 flex-1 items-stretch gap-1 self-stretch" aria-label="Learner">

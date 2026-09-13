@@ -7,6 +7,7 @@ import { balanceOf, daysOverdue, summariseAccount } from '@/lib/dues';
 import { feeStatusLabel } from '@/lib/misc-fees';
 import { Badge, Card, EmptyState } from '@/components/ui';
 import { PayInstalment } from './pay-instalment';
+import { getTranslator } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Fees' };
@@ -23,6 +24,7 @@ export default async function FeesPage() {
   const tenant = await requireTenant();
   const user = await getSessionUser();
   if (!user) return null;
+  const t = await getTranslator();
 
   const plans = await db.enrollment.findMany({
     where: { organizationId: tenant.organizationId, userId: user.id, instalments: { some: {} } },
@@ -56,16 +58,15 @@ export default async function FeesPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-7">
-      <h1 className="text-xl font-semibold">Fees</h1>
+      <h1 className="text-xl font-semibold">{t('Fees')}</h1>
       <p className="t-small faint mt-1">
-        Your instalment plans, what is paid and what is coming up. Pay online here, or at the academy and
-        the receipt appears below.
+        {t('Your instalment plans, what is paid and what is coming up. Pay online here, or at the academy and the receipt appears below.')}
       </p>
 
       <div className="mt-6 space-y-4">
         {plans.length === 0 && charges.length === 0 ? (
           <EmptyState
-            title="No instalment plans"
+            title={t('No instalment plans')}
             hint="Everything you have bought was paid in full. Purchases and invoices are under Purchases."
           />
         ) : plans.length === 0 ? null : (
@@ -79,9 +80,9 @@ export default async function FeesPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium">{plan.product.title}</p>
                       {summary.settled ? (
-                        <Badge tone="ok">paid up</Badge>
+                        <Badge tone="ok">{t('paid up')}</Badge>
                       ) : summary.overduePaise > 0 ? (
-                        <Badge tone="bad">overdue</Badge>
+                        <Badge tone="bad">{t('overdue')}</Badge>
                       ) : null}
                     </div>
                     <p className="t-small faint mt-1 tabular-nums">
@@ -92,7 +93,7 @@ export default async function FeesPage() {
                   {next && (
                     <PayInstalment
                       instalmentId={next.id}
-                      label={`Pay ${formatMoney(balanceOf(next), tenant.currency)} now`}
+                      label={t('Pay {{amount}} now', { amount: formatMoney(balanceOf(next), tenant.currency) })}
                     />
                   )}
                 </div>
@@ -116,9 +117,9 @@ export default async function FeesPage() {
                           ) : i.paidPaise > 0 ? (
                             <span>{formatMoney(balance, tenant.currency)} left</span>
                           ) : late > 0 ? (
-                            <Badge tone="bad">{late} {late === 1 ? 'day' : 'days'} late</Badge>
+                            <Badge tone="bad">{late === 1 ? t('{{n}} day late', { n: late }) : t('{{n}} days late', { n: late })}</Badge>
                           ) : (
-                            <span className="faint">upcoming</span>
+                            <span className="faint">{t('upcoming')}</span>
                           )}
                         </div>
                       </li>
@@ -132,7 +133,7 @@ export default async function FeesPage() {
 
         {charges.length > 0 && (
           <Card>
-            <h2 className="t-heading">Other charges</h2>
+            <h2 className="t-heading">{t('Other charges')}</h2>
             <p className="t-small faint mt-1">Exam fees, materials and the like, added by the academy. Pay here or at the counter.</p>
             <ul className="mt-3 divide-y rounded-[var(--radius-sm)] border">
               {charges.map((c) => {
@@ -152,7 +153,7 @@ export default async function FeesPage() {
                       {c.status === 'PENDING' ? (
                         <>
                           <Badge tone={s.tone}>{s.text}</Badge>
-                          <PayInstalment instalmentId={c.id} kind="fee" label="Pay now" />
+                          <PayInstalment instalmentId={c.id} kind="fee" label={t('Pay now')} />
                         </>
                       ) : (
                         <Badge tone={s.tone}>{s.text}</Badge>
@@ -167,7 +168,7 @@ export default async function FeesPage() {
 
         {receipts.length > 0 && (
           <Card>
-            <h2 className="t-heading">Receipts</h2>
+            <h2 className="t-heading">{t('Receipts')}</h2>
             <ul className="mt-3 divide-y">
               {receipts.map((r) => {
                 const raw = (r.raw ?? {}) as { item?: string };

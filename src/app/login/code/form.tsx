@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { requestCode, signInWithCode, type CodeState } from '@/server/sign-in';
 import { Button, Field, FormError, Input } from '@/components/ui';
+import { useT } from '@/components/i18n-provider';
 
 const initial: CodeState = {};
 
@@ -17,6 +18,7 @@ const initial: CodeState = {};
 export function CodeForm() {
   const [asked, askAction, asking] = useActionState(requestCode, initial);
   const [used, useAction, using] = useActionState(signInWithCode, initial);
+  const { t } = useT();
 
   const target = used.target ?? asked.target;
   const stage = asked.sent || used.sent ? 'enter' : 'ask';
@@ -33,7 +35,7 @@ export function CodeForm() {
 
         <FormError message={used.error} />
 
-        <Field label="Your code">
+        <Field label={t('Your code')}>
           <Input
             name="code"
             inputMode="numeric"
@@ -45,12 +47,12 @@ export function CodeForm() {
         </Field>
 
         <Button type="submit" disabled={using} size="lg" className="w-full">
-          {using ? 'Checking...' : 'Sign in'}
+          {using ? t('Checking...') : t('Sign in')}
         </Button>
 
         <p className="t-small faint text-center">
           <Link href="/login/code" className="underline">
-            Use a different number
+            {t('Use a different number')}
           </Link>
         </p>
       </form>
@@ -62,19 +64,19 @@ export function CodeForm() {
       <FormError message={asked.error} />
 
       <Field
-        label="Mobile number or email"
+        label={t('Mobile number or email')}
         hint="We send a code rather than asking for a password."
       >
         <Input name="identifier" autoComplete="username" required autoFocus />
       </Field>
 
       <Button type="submit" disabled={asking} size="lg" className="w-full">
-        {asking ? 'Sending...' : 'Send me a code'}
+        {asking ? t('Sending...') : t('Send me a code')}
       </Button>
 
       <p className="t-small faint text-center">
         <Link href="/login" className="underline">
-          Use a password instead
+          {t('Use a password instead')}
         </Link>
       </p>
     </form>

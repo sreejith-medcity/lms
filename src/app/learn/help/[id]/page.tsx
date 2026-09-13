@@ -8,6 +8,7 @@ import { STATUS_LABEL, categoryLabel, statusTone, type HelpStatus } from '@/lib/
 import { Badge, Card } from '@/components/ui';
 import { Thread } from '../thread';
 import { CloseTicketButton, LearnerReplyForm } from '../forms';
+import { getTranslator } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Help' };
@@ -17,6 +18,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const tenant = await requireTenant();
   const user = await getSessionUser();
   if (!user) return null;
+  const tr = await getTranslator();
 
   const t = await db.helpTicket.findFirst({
     where: { id, organizationId: tenant.organizationId, userId: user.id },
@@ -38,14 +40,14 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-7">
-      <Link href="/learn/help" className="t-small faint hover:underline">Help</Link>
+      <Link href="/learn/help" className="t-small faint hover:underline">{tr('Help')}</Link>
       <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{t.subject}</h1>
-          <p className="t-small faint mt-1">{categoryLabel(t.category)}</p>
+          <p className="t-small faint mt-1">{tr(categoryLabel(t.category))}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge tone={statusTone(t.status)}>{STATUS_LABEL[t.status as HelpStatus] ?? t.status}</Badge>
+          <Badge tone={statusTone(t.status)}>{tr(STATUS_LABEL[t.status as HelpStatus] ?? t.status)}</Badge>
           {t.status !== 'CLOSED' && <CloseTicketButton ticketId={t.id} />}
         </div>
       </div>

@@ -120,6 +120,15 @@ export const SETTINGS: SettingDef[] = [
     live: true,
   },
   {
+    key: 'learning.languages',
+    group: 'learning',
+    label: 'Languages the learner side is offered in',
+    help: 'Besides English. Codes separated by commas: ml for Malayalam, hi for Hindi. A learner picks from the menu in their portal and on the sign-in page; what they pick is remembered on their account.',
+    kind: 'text',
+    default: 'ml, hi',
+    live: true,
+  },
+  {
     key: 'learning.reviewAfterPercent',
     group: 'learning',
     label: 'Ask for a review once a learner is this far through',

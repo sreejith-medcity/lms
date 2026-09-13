@@ -14,6 +14,7 @@ import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { assessmentsForLearner } from '@/lib/assessment-access';
 import { feeNoticeFor } from '@/lib/dues';
 import { TrackEvent } from '@/components/track-event';
+import { getTranslator } from '@/lib/i18n/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,7 @@ export default async function MyLearning({
   searchParams?: Promise<{ welcome?: string; practice?: string }>;
 }) {
   const { welcome, practice } = (await searchParams) ?? {};
+  const t = await getTranslator();
   const tenant = await requireTenant();
   const user = await getSessionUser();
   if (!user) return null;
@@ -151,19 +153,21 @@ export default async function MyLearning({
     <div className="mx-auto max-w-5xl px-5 py-7">
       <div className="space-y-8">
       <div>
-        <h1 className="t-display">My learning</h1>
+        <h1 className="t-display">{t('My learning')}</h1>
         <p className="t-small muted mt-1">
           {enrollments.length === 0
-            ? `Hello, ${user.name.split(' ')[0]}. Nothing on your shelf yet.`
-            : `Hello, ${user.name.split(' ')[0]}. ${enrollments.length} course${enrollments.length === 1 ? '' : 's'} on your shelf.`}
+            ? t('Hello, {{name}}. Nothing on your shelf yet.', { name: user.name.split(' ')[0] })
+            : enrollments.length === 1
+              ? t('Hello, {{name}}. {{count}} course on your shelf.', { name: user.name.split(' ')[0], count: 1 })
+              : t('Hello, {{name}}. {{count}} courses on your shelf.', { name: user.name.split(' ')[0], count: enrollments.length })}
         </p>
         {enrollments.length > 0 && (
           <nav aria-label="Sections" className="rail -mx-5 mt-4 flex gap-1 border-b px-5">
             {[
-              ['#in-progress', 'In progress', inProgress.length],
-              ['#not-started', 'Not started', notStarted.length],
-              ['#completed', 'Completed', done.length],
-              ['#certificates', 'Certificates', certificates.length],
+              ['#in-progress', t('In progress'), inProgress.length],
+              ['#not-started', t('Not started'), notStarted.length],
+              ['#completed', t('Completed'), done.length],
+              ['#certificates', t('Certificates'), certificates.length],
             ]
               .filter(([, , n]) => (n as number) > 0)
               .map(([href, label, n]) => (
@@ -188,12 +192,12 @@ export default async function MyLearning({
           }`}
         >
           <span className="font-medium">{feeNotice.text}</span>
-          <span className="underline">Pay now</span>
+          <span className="underline">{t('Pay now')}</span>
         </Link>
       )}
 
       {extraTests.length > 0 && (
-        <Section title="Set for you">
+        <Section title={t('Set for you')}>
           <Card padded={false}>
             <ul className="divide-y">
               {extraTests.map((t) => (
@@ -219,7 +223,7 @@ export default async function MyLearning({
       )}
 
       {todayClasses.length > 0 && (
-        <Section title="Today">
+        <Section title={t('Today')}>
           <Card padded={false}>
             <ul className="divide-y">
               {todayClasses.map((s) => {
@@ -272,39 +276,39 @@ export default async function MyLearning({
         <Card className="flex flex-wrap items-center gap-5 border-[var(--brand-line)] bg-[var(--brand-soft)]">
           <ProgressRing value={resume.progressPercent} size={52} />
           <div className="min-w-0 flex-1">
-            <p className="t-micro faint">Pick up where you left off</p>
+            <p className="t-micro faint">{t('Pick up where you left off')}</p>
             <p className="t-title mt-0.5 truncate">{resume.product.title}</p>
           </div>
-          <LinkButton href={`/learn/${resume.productId}`}>Continue</LinkButton>
+          <LinkButton href={`/learn/${resume.productId}`}>{t('Continue')}</LinkButton>
         </Card>
       )}
 
       {enrollments.length === 0 && (
         <EmptyState
-          title="You are not enrolled in anything yet"
-          hint="Browse the catalogue and enrol to get started."
-          action={<LinkButton href="/">Explore courses</LinkButton>}
+          title={t('You are not enrolled in anything yet')}
+          hint={t('Browse the catalogue and enrol to get started.')}
+          action={<LinkButton href="/">{t('Explore courses')}</LinkButton>}
         />
       )}
 
       {inProgress.length > 0 && (
         <div id="in-progress" className="scroll-mt-20">
-          <Section title="Continue learning">
-            <CourseGrid items={inProgress} cta="Continue" />
+          <Section title={t('Continue learning')}>
+            <CourseGrid items={inProgress} cta={t('Continue')} />
           </Section>
         </div>
       )}
 
       {notStarted.length > 0 && (
         <div id="not-started" className="scroll-mt-20">
-          <Section title="Not started">
-            <CourseGrid items={notStarted} cta="Start" />
+          <Section title={t('Not started')}>
+            <CourseGrid items={notStarted} cta={t('Start')} />
           </Section>
         </div>
       )}
 
       {announcements.length > 0 && (
-        <Section title="Notices">
+        <Section title={t('Notices')}>
           <ul className="space-y-2">
             {announcements.map((a) => (
               <li
@@ -331,14 +335,14 @@ export default async function MyLearning({
 
       {done.length > 0 && (
         <div id="completed" className="scroll-mt-20">
-          <Section title="Completed">
+          <Section title={t('Completed')}>
             <CourseGrid items={done} cta="Revisit" />
           </Section>
         </div>
       )}
 
       {reportCards.length > 0 && (
-        <Section title="Report cards">
+        <Section title={t('Report cards')}>
           <ul className="divide-y rounded-[var(--radius)] border bg-[var(--surface)]">
             {reportCards.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
@@ -359,7 +363,7 @@ export default async function MyLearning({
 
       {certificates.length > 0 && (
         <div id="certificates" className="scroll-mt-20">
-        <Section title="Certificates">
+        <Section title={t('Certificates')}>
           <ul className="divide-y rounded-[var(--radius)] border bg-[var(--surface)]">
             {certificates.map((c) => (
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">

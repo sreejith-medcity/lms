@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { login, type LoginState } from '@/server/session';
 import { Button, Field, FormError, Input } from '@/components/ui';
+import { useT } from '@/components/i18n-provider';
 
 const initial: LoginState = {};
 
@@ -22,32 +23,33 @@ const SSO_PROBLEMS: Record<string, string> = {
 
 export function LoginForm({ sso, problem }: { sso: string[]; problem?: string }) {
   const [state, action, pending] = useActionState(login, initial);
+  const { t } = useT();
 
   return (
     <>
       <form action={action} className="mt-7 space-y-4">
         <FormError message={state.error ?? (problem ? SSO_PROBLEMS[problem] : undefined)} />
 
-        <Field label="Email or mobile">
+        <Field label={t('Email or mobile number')}>
           <Input name="identifier" autoComplete="username" required autoFocus />
         </Field>
 
-        <Field label="Password">
+        <Field label={t('Password')}>
           <Input name="password" type="password" autoComplete="current-password" required />
         </Field>
 
         <Button type="submit" disabled={pending} size="lg" className="w-full">
-          {pending ? 'Signing in...' : 'Sign in'}
+          {pending ? t('Signing in...') : t('Sign in')}
         </Button>
       </form>
 
       <p className="t-small faint mt-4 text-center">
         <Link href="/login/code" className="underline">
-          Send me a code instead
+          {t('Sign in with a code instead')}
         </Link>
         {' · '}
         <Link href="/forgot" className="underline">
-          Forgotten your password?
+          {t('Forgot your password?')}
         </Link>
       </p>
 
