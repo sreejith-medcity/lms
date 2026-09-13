@@ -235,6 +235,7 @@ model User {
   lessonQuestions      LessonQuestion[]
   dataRequests         DataRequest[]
   miscFees             MiscFee[]
+  payouts              InstructorPayout[]
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
   @@unique([organizationId, email])
@@ -418,6 +419,9 @@ model InstructorProfile {
   bio             String?
   expertise       String[]
   hourlyRatePaise Int?
+  /// Set when the trainer is paid per class rather than per hour; wins over
+  /// the hourly rate when both are set.
+  perSessionPaise Int?
   isMentor        Boolean  @default(false)
   hideNameOnCards Boolean  @default(false)
 
@@ -425,6 +429,49 @@ model InstructorProfile {
   sessions SessionInstructor[]
 
   @@map("instructor_profiles")
+}
+
+/// What a trainer is owed for a period: the classes they took, at their
+/// rate, plus an adjustment with a reason. Figures are copied in when the
+/// payout is drawn up, so a rate changed next month does not move this one.
+/// Drawn up, approved, then marked paid with the bank reference.
+model InstructorPayout {
+  id              String       @id @default(cuid())
+  organizationId  String
+  userId          String
+  periodFrom      DateTime
+  periodTo        DateTime
+  sessions        Int          @default(0)
+  minutes         Int          @default(0)
+  /// The rate applied, in paise, and whether it was per hour or per class.
+  ratePaise       Int          @default(0)
+  rateBasis       String       @default("HOUR")
+  earnedPaise     Int          @default(0)
+  adjustmentPaise Int          @default(0)
+  adjustmentNote  String?
+  totalPaise      Int          @default(0)
+  /// [{ sessionId, title, startsAt, minutes, batch }]
+  lines           Json
+  status          PayoutStatus @default(DRAFT)
+  approvedAt      DateTime?
+  approvedById    String?
+  paidAt          DateTime?
+  paidReference   String?
+  createdById     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, periodFrom])
+  @@index([organizationId, status, periodFrom])
+  @@map("instructor_payouts")
+}
+
+enum PayoutStatus {
+  DRAFT
+  APPROVED
+  PAID
 }
 
 /// Edmingle's Custom Fields, generalised. 25 learner fields ship as seed data.
