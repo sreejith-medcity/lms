@@ -240,6 +240,8 @@ model User {
   helpTickets          HelpTicket[]
   badges               BadgeAward[]
   scormAttempts        ScormAttempt[]
+  apiTokens            ApiToken[]
+  deviceTokens         DeviceToken[]
   streaks              LearnerStreak[]
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
@@ -504,6 +506,42 @@ model EmailDomain {
 
   @@index([domain])
   @@map("email_domains")
+}
+
+/// A refresh token for the mobile app, one per signed-in device. Only the
+/// hash is kept; the short-lived access token is signed and never stored.
+model ApiToken {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  tokenHash      String    @unique
+  device         String?
+  expiresAt      DateTime
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId])
+  @@map("api_tokens")
+}
+
+/// A phone's push token (FCM or APNs), so the app can be told what the
+/// bell is told.
+model DeviceToken {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  platform       String
+  token          String   @unique
+  lastSeenAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId])
+  @@map("device_tokens")
 }
 
 model OtpToken {
