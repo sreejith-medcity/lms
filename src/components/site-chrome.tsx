@@ -4,6 +4,7 @@ import { BrandLockup } from '@/components/brand-lockup';
 import { exploreMenu, getSiteContext } from '@/lib/site';
 import { AccountButtons, ExploreMenu, MobileMenu, MobileSearch, SearchBox } from '@/components/site-nav';
 import { CartLink } from '@/components/cart-link';
+import { WishLink } from '@/components/wish-link';
 
 /**
  * The public shell, in the shape people already know from the big course
@@ -60,6 +61,7 @@ export async function SiteHeader() {
           <Suspense>
             <MobileSearch />
           </Suspense>
+          <WishLink />
           <CartLink />
           <div className="hidden sm:block">
             <AccountButtons />

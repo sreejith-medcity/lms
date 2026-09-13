@@ -9,6 +9,8 @@ import {
 } from '@/lib/site';
 import { CourseMedia } from '@/components/course-media';
 import { AddonToggle } from '@/components/addon-toggle';
+import { SaveButton } from '@/components/save-button';
+import { CompareToggle } from '@/components/compare';
 import { Rating } from '@/components/rating';
 
 /**
@@ -54,6 +56,9 @@ export function CourseCard({
       <Link href={href} className="block overflow-hidden rounded-[var(--radius-sm)] border">
         <CourseMedia title={card.title} assetId={card.course?.thumbnailAssetId} priority={priority} ratio="aspect-video" />
       </Link>
+      <div className="absolute right-2 top-2 z-10">
+        <SaveButton productId={card.id} compact />
+      </div>
 
       <div className="flex flex-1 flex-col pt-2.5">
         <h3 className="text-[0.9375rem] font-bold leading-snug line-clamp-2">
@@ -200,9 +205,13 @@ export function CourseListRow({
           {saving && <span className="t-small font-semibold" style={{ color: 'var(--ok)' }}>{saving}% off</span>}
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {card.isFeatured && <Tag tone="gold">Popular</Tag>}
           {saving && <Tag tone="plain" className="hidden sm:inline-flex">{saving}% off</Tag>}
+          <span className="relative z-10 ml-auto flex items-center gap-3">
+            <CompareToggle productId={card.id} title={card.title} />
+            <SaveButton productId={card.id} compact />
+          </span>
         </div>
       </div>
     </article>

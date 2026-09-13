@@ -21,6 +21,7 @@ export const LEARNER_NAV_ITEMS = [
   { key: 'assignments', label: 'Assignments', href: '/learn/assignments' },
   { key: 'calendar', label: 'Calendar', href: '/learn/calendar' },
   { key: 'revise', label: 'Revise', href: '/learn/revise' },
+  { key: 'wishlist', label: 'Saved', href: '/learn/wishlist' },
   { key: 'account', label: 'Account', href: '/learn/account' },
   { key: 'explore', label: 'Explore', href: '/' },
 ] as const;

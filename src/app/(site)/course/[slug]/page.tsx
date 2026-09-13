@@ -15,6 +15,7 @@ import { prerequisitesFor } from '@/lib/learning-paths-data';
 import { prerequisiteLabel } from '@/lib/learning-paths';
 import { bundlesContaining } from '@/lib/bundles-data';
 import { BundleCard } from '@/components/bundle-card';
+import { SaveButton } from '@/components/save-button';
 import { NoTenantNotice } from '@/components/tenant-notices';
 import { addonsFor } from '@/lib/addons';
 import { settingText } from '@/lib/settings/store';
@@ -437,6 +438,10 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           />
         </div>
       )}
+
+      <div className="mt-2.5 flex justify-center">
+        <SaveButton productId={product.id} />
+      </div>
 
       <p className="t-small faint mt-2.5 text-center">
         Secure checkout. A coupon can be applied before you pay.

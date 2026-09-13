@@ -4,6 +4,7 @@ import { courseCardSelect, learningFormat, ratingsFor, type CourseCard as Card }
 import { settingText } from '@/lib/settings/store';
 import { CourseListRow } from '@/components/course-card';
 import { BundleCard } from '@/components/bundle-card';
+import { CompareBar } from '@/components/compare';
 import { publishedBundles } from '@/lib/bundles-data';
 import { SortSelect } from './sort-select';
 
@@ -200,6 +201,7 @@ export async function Catalogue({
 
   return (
     <div className="grid gap-8 lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <CompareBar />
       {/* Filters: a column on a desktop, a fold-out on a phone. */}
       <aside className="lg:sticky lg:top-[7.5rem] lg:self-start">
         <details className="rounded-[var(--radius-sm)] border lg:hidden">
