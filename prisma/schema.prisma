@@ -3893,6 +3893,9 @@ model TenantSubscription {
   cancelledAt           DateTime?
   gateway               String? // razorpay subscriptions / stripe billing
   gatewaySubscriptionId String?
+  /// A plan change asked for mid-period takes effect at the next renewal.
+  nextPlanId            String?
+  nextBillingCycle      BillingCycle?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
@@ -3931,6 +3934,10 @@ model TenantInvoice {
   paidAt        DateTime?
   lineItems     Json
   pdfAssetId    String?
+  /// The gateway order raised for this invoice, and the payment that settled it.
+  gatewayOrderId   String?
+  gatewayPaymentId String?
+  paidReference    String?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
