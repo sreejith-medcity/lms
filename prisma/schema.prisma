@@ -535,10 +535,40 @@ model Product {
   testimonials Testimonial[]
   addons       ProductAddon[]     @relation("addonParent")
   offeredWith  ProductAddon[]     @relation("addonChild")
+  bundle       Bundle?
+  inBundles    BundleItem[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, type, status])
   @@map("products")
+}
+
+/// Several courses sold as one product at one price. Buying it enrols the
+/// learner in each course inside; the bundle itself is never "learned".
+model Bundle {
+  id               String  @id @default(cuid())
+  productId        String  @unique
+  organizationId   String
+  description      String?
+  thumbnailAssetId String?
+
+  product Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  items   BundleItem[]
+
+  @@index([organizationId])
+  @@map("bundles")
+}
+
+model BundleItem {
+  bundleId  String
+  productId String
+  sortOrder Int    @default(0)
+
+  bundle  Bundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([bundleId, productId])
+  @@map("bundle_items")
 }
 
 /// One product offered as a tick box on another.
@@ -581,6 +611,7 @@ enum ProductType {
   EBOOK
   TEST_SERIES
   PLAYLIST
+  BUNDLE
 }
 
 enum PublishStatus {
@@ -626,9 +657,31 @@ model Course {
   memberships  MembershipCourse[]
   landingPage  StorefrontPage?
 
-  assignments  Assignment[]
+  assignments   Assignment[]
+  prerequisites CoursePrerequisite[] @relation("prerequisiteOf")
+  unlocks       CoursePrerequisite[] @relation("unlocks")
+
   @@index([organizationId])
   @@map("courses")
+}
+
+/// "Finish A1 to unlock A2": a course the learner must have got through
+/// before this one is sold to them. The office can still enrol anyone.
+model CoursePrerequisite {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  courseId           String
+  requiredCourseId   String
+  /// How far through the required course they must be; 100 means finished.
+  minProgressPercent Int      @default(100)
+  createdAt          DateTime @default(now())
+
+  course   Course @relation("prerequisiteOf", fields: [courseId], references: [id], onDelete: Cascade)
+  required Course @relation("unlocks", fields: [requiredCourseId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, requiredCourseId])
+  @@index([organizationId])
+  @@map("course_prerequisites")
 }
 
 model CourseCategory {
