@@ -212,10 +212,30 @@ export async function fulfilPaidOrder(input: {
    * nobody is enrolled. Reading first leaves the transaction holding writes
    * only, which is what it is for.
    */
+  /*
+   * A bundle is one order line and several enrolments: the line is expanded
+   * here into one entitlement per course inside, all pointing back at the
+   * same order item. The bundle product itself is never enrolled in, since
+   * there is nothing to learn on it.
+   */
+  const expanded: { item: (typeof order.items)[number]; productId: string; first: boolean }[] = [];
+  for (const item of order.items) {
+    const bundle = await db.product.findFirst({
+      where: { id: item.productId, organizationId: input.organizationId, type: 'BUNDLE' },
+      select: { bundle: { select: { items: { orderBy: { sortOrder: 'asc' }, select: { productId: true } } } } },
+    });
+    const inside = bundle?.bundle?.items ?? [];
+    if (inside.length === 0) {
+      expanded.push({ item, productId: item.productId, first: true });
+    } else {
+      inside.forEach((part, i) => expanded.push({ item, productId: part.productId, first: i === 0 }));
+    }
+  }
+
   const context = await Promise.all(
-    order.items.map(async (item) => {
+    expanded.map(async ({ item, productId, first }) => {
       const product = await db.product.findFirst({
-        where: { id: item.productId, organizationId: input.organizationId },
+        where: { id: productId, organizationId: input.organizationId },
         select: {
           course: { select: { id: true } },
           // A one-to-one product does not grant a curriculum: it grants a
@@ -262,10 +282,13 @@ export async function fulfilPaidOrder(input: {
 
       return {
         item,
+        productId,
         batchId: batch?.id ?? null,
         validityDays: plan?.validityDays ?? null,
         mentorship: product?.mentorship ?? null,
-        schedule,
+        // One fee plan per order line: for a bundle, the first course inside
+        // carries the schedule and the rest are simply enrolled.
+        schedule: first ? schedule : null,
       };
     }),
   );
@@ -344,7 +367,7 @@ export async function fulfilPaidOrder(input: {
     //    (user, product, batch) is what makes a second delivery harmless.
     const branchId = order.branchId;
 
-    for (const { item, batchId: itemBatchId, validityDays, mentorship, schedule } of context) {
+    for (const { item, productId, batchId: itemBatchId, validityDays, mentorship, schedule } of context) {
       /**
        * The fee plan behind an enrolment bought in parts. The first part is
        * what this order took, so it is written as paid against this
@@ -409,7 +432,7 @@ export async function fulfilPaidOrder(input: {
             data: {
               organizationId: input.organizationId,
               userId: order.userId,
-              productId: item.productId,
+              productId,
               orderItemId: item.id,
               sessionsTotal: Math.max(1, mentorship.sessionsIncluded),
               minutesPerSession: Math.max(15, mentorship.durationMinutes),
@@ -424,7 +447,7 @@ export async function fulfilPaidOrder(input: {
       const existing = await tx.enrollment.findFirst({
         where: {
           userId: order.userId,
-          productId: item.productId,
+          productId,
           batchId: itemBatchId,
         },
         select: { id: true, status: true },
@@ -454,7 +477,7 @@ export async function fulfilPaidOrder(input: {
           organizationId: input.organizationId,
           branchId,
           userId: order.userId,
-          productId: item.productId,
+          productId,
           batchId: itemBatchId,
           pricingPlanId: item.pricingPlanId,
           orderItemId: item.id,

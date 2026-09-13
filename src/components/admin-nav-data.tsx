@@ -24,6 +24,7 @@ export const ADMIN_NAV: NavGroup[] = [
     icon: 'box',
     children: [
       { label: 'Courses', href: '/admin/courses' },
+      { label: 'Bundles', href: '/admin/bundles' },
       { label: 'Events', href: '/admin/events', feature: 'events' },
       { label: 'Memberships', href: '/admin/memberships', feature: 'memberships' },
       { label: 'Categories', href: '/admin/categories' },

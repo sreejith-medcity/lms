@@ -4,6 +4,9 @@ import { requireTenant } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
 import { DetailsForm, type OverviewBlock } from './details-form';
 import { AddonsForm } from './addons-form';
+import { PrerequisitesForm } from './prerequisites-form';
+import { requireStaff } from '@/lib/auth';
+import { prerequisitesFor } from '@/lib/learning-paths-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +31,10 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
     select: { pricePaise: true, currency: true },
   } as const;
 
-  const [attachedRows, candidateRows] = await Promise.all([
+  const me = await requireStaff('courses.course_management', 'view');
+  const canEdit = me.permissions['courses.course_management']?.edit ?? false;
+
+  const [attachedRows, candidateRows, prerequisites, unlocks, courseOptions] = await Promise.all([
     db.productAddon.findMany({
       where: { organizationId: tenant.organizationId, productId: product.id },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -53,6 +59,16 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
       orderBy: { title: 'asc' },
       take: 200,
       select: { id: true, title: true, pricingPlans: planSelect },
+    }),
+    prerequisitesFor(tenant.organizationId, product.course.id),
+    db.coursePrerequisite.findMany({
+      where: { organizationId: tenant.organizationId, requiredCourseId: product.course.id },
+      select: { course: { select: { productId: true, product: { select: { title: true } } } } },
+    }),
+    db.course.findMany({
+      where: { organizationId: tenant.organizationId, product: { deletedAt: null, isAddonOnly: false } },
+      orderBy: { product: { title: 'asc' } },
+      select: { id: true, product: { select: { title: true } } },
     }),
   ]);
 
@@ -83,6 +99,14 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
           milestoneCelebrations: product.course.milestoneCelebrations,
           accessAfterCompletion: product.course.accessAfterCompletion,
         }}
+      />
+
+      <PrerequisitesForm
+        courseId={product.course.id}
+        prerequisites={prerequisites}
+        unlocks={unlocks.map((u) => ({ title: u.course.product.title, href: `/admin/courses/${u.course.productId}` }))}
+        candidates={courseOptions.map((c) => ({ courseId: c.id, title: c.product.title }))}
+        canEdit={canEdit}
       />
 
       <AddonsForm

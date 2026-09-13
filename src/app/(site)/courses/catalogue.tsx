@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { courseCardSelect, learningFormat, ratingsFor, type CourseCard as Card } from '@/lib/site';
 import { settingText } from '@/lib/settings/store';
 import { CourseListRow } from '@/components/course-card';
+import { BundleCard } from '@/components/bundle-card';
+import { publishedBundles } from '@/lib/bundles-data';
 import { SortSelect } from './sort-select';
 
 export interface CatalogueFilters {
@@ -90,7 +92,11 @@ export async function Catalogue({
   const page = Math.min(pages, Math.max(1, Number.parseInt(filters.page ?? '1', 10) || 1));
   const shown = cards.slice((page - 1) * PAGE, page * PAGE);
 
-  const [levels, languages, ratings, googleRating, googleCount] = await Promise.all([
+  // Bundles sit above the list on the plain catalogue, where somebody is
+  // browsing rather than searching; a filter or a search hides them.
+  const showBundles = basePath === '/courses' && !q && !filters.category && !filters.level && !filters.format && !filters.language && !filters.price && page === 1;
+
+  const [levels, languages, ratings, googleRating, googleCount, bundles] = await Promise.all([
     db.course.findMany({
       where: { organizationId, level: { not: null }, product: { status: 'PUBLISHED', deletedAt: null } },
       distinct: ['level'],
@@ -104,6 +110,7 @@ export async function Catalogue({
     ratingsFor(organizationId, shown.map((c) => c.id)),
     settingText(organizationId, 'website.googleRating'),
     settingText(organizationId, 'website.googleReviewCount'),
+    showBundles ? publishedBundles(organizationId, 6) : Promise.resolve([]),
   ]);
 
   const google =
@@ -216,6 +223,19 @@ export async function Catalogue({
           </p>
           <SortSelect value={filters.sort ?? ''} hrefFor={sortHrefs} />
         </div>
+
+        {bundles.length > 0 && (
+          <section className="mt-5" aria-labelledby="bundles-heading">
+            <h2 id="bundles-heading" className="t-heading">Bundles</h2>
+            <p className="t-small muted mt-0.5">Courses that follow on from each other, at one price for the set.</p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {bundles.map((b, i) => (
+                <BundleCard key={b.id} bundle={b} priority={i < 3} />
+              ))}
+            </div>
+            <h2 className="t-heading mt-8">Courses</h2>
+          </section>
+        )}
 
         {shown.length === 0 ? (
           <div className="mt-5 rounded-[var(--radius-lg)] border border-dashed bg-[var(--surface)] p-12 text-center">

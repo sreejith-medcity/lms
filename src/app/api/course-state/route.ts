@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { getSessionUser } from '@/lib/auth';
 import { loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
+import { prerequisiteBlock } from '@/lib/learning-paths-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
     signedIn: false,
     enrolled: false,
     pointsWorthPaise: 0,
+    blocked: null as string | null,
   };
 
   const headers = { 'Cache-Control': 'private, no-store' };
@@ -39,7 +41,7 @@ export async function GET(request: Request) {
   });
   if (!product) return NextResponse.json({ ...nothing, signedIn: true }, { headers });
 
-  const [enrollment, loyalty] = await Promise.all([
+  const [enrollment, loyalty, blocked] = await Promise.all([
     db.enrollment.findFirst({
       where: {
         organizationId: tenant.organizationId,
@@ -50,6 +52,8 @@ export async function GET(request: Request) {
       select: { id: true },
     }),
     loyaltyConfig(tenant.organizationId),
+    // "Finish A1 first": the one thing about buying that depends on who is asking.
+    prerequisiteBlock(tenant.organizationId, user.id, [product.id]),
   ]);
 
   const plan = product.pricingPlans[0];
@@ -71,6 +75,7 @@ export async function GET(request: Request) {
       pointsWorthPaise: plan
         ? pointsToPaise(redeemablePoints(balance, plan.pricePaise, loyalty), loyalty)
         : 0,
+      blocked: enrollment ? null : blocked,
     },
     { headers },
   );

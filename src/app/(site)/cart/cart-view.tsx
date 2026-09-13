@@ -73,7 +73,7 @@ export function CartView({
 
               <div className="min-w-0 flex-1">
                 <h2 className="t-heading">
-                  <Link href={`/course/${line.slug}`} className="hover:text-[var(--brand)]">
+                  <Link href={line.href} className="hover:text-[var(--brand)]">
                     {line.title}
                   </Link>
                 </h2>

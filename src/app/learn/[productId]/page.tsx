@@ -103,7 +103,21 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
 
   // Asked once they are far enough in to have an opinion worth reading; the
   // academy sets how far. Anyone who already wrote one keeps seeing it.
-  const reviewAfter = await settingNumber(tenant.organizationId, 'learning.reviewAfterPercent');
+  const [reviewAfter, nextOnPath] = await Promise.all([
+    settingNumber(tenant.organizationId, 'learning.reviewAfterPercent'),
+    // Where the path goes from here: the courses that list this one as a
+    // prerequisite, shown once this one is done.
+    enrollment.progressPercent >= 100
+      ? db.coursePrerequisite.findMany({
+          where: {
+            organizationId: tenant.organizationId,
+            requiredCourseId: enrollment.product.course.id,
+            course: { product: { status: 'PUBLISHED', deletedAt: null, isAddonOnly: false } },
+          },
+          select: { course: { select: { product: { select: { id: true, title: true, slug: true } } } } },
+        })
+      : Promise.resolve([]),
+  ]);
   const finished = canReview(enrollment.progressPercent, reviewAfter);
   const myTestimonial = finished
     ? await db.testimonial.findFirst({
@@ -163,6 +177,26 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
 
       {materials.length === 0 && recordings.length === 0 && assessments.length === 0 && (
         <EmptyState title="No content yet" hint="Your academy is still preparing this course." />
+      )}
+
+      {nextOnPath.length > 0 && (
+        <Card>
+          <h2 className="t-heading">Next on your path</h2>
+          <p className="t-small muted mt-1">You have finished this course, which unlocks:</p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {nextOnPath.map((n) => (
+              <li key={n.course.product.id}>
+                <Link
+                  href={`/course/${n.course.product.slug}`}
+                  className="inline-flex h-9 items-center rounded-[var(--radius-sm)] px-3.5 text-sm font-semibold text-[var(--brand-ink)]"
+                  style={{ background: 'var(--brand)' }}
+                >
+                  {n.course.product.title} →
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       {finished && (

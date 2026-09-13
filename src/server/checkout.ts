@@ -16,6 +16,7 @@ import { headers } from 'next/headers';
 import { authAttemptKeys, checkAll, tooManyAttemptsMessage } from '@/lib/rate-limit';
 import { credit, loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wallet';
 import { scheduleFromPlan } from '@/lib/dues';
+import { prerequisiteBlock } from '@/lib/learning-paths-data';
 import { attributionJson, requestAttribution } from '@/lib/attribution-server';
 
 /**
@@ -108,6 +109,11 @@ export async function startCheckout(
     const buyingCourse = !existing;
     if (existing && addons.length === 0) {
       return { ok: false, error: 'You are already enrolled in this course.' };
+    }
+    // "Finish A1 first." Checked here, where the money is, not only on the page.
+    if (buyingCourse) {
+      const blocked = await prerequisiteBlock(tenant.organizationId, user.id, [product.id]);
+      if (blocked) return { ok: false, error: blocked };
     }
     if (buyingCourse && plan.pricePaise <= 0 && addons.length === 0) {
       return { ok: false, error: 'This course is free. Use Enrol rather than checkout.' };
@@ -440,6 +446,15 @@ export async function startCartCheckout(input: {
     }
 
     const userId = buyerId as string;
+
+    // A course with a prerequisite is refused until it is met, for a guest
+    // too: their new account has done nothing yet.
+    const blocked = await prerequisiteBlock(
+      tenant.organizationId,
+      userId,
+      basket.lines.map((l) => l.productId),
+    );
+    if (blocked) return { ok: false, error: blocked };
 
     const branch = await db.branch.findFirst({
       where: { organizationId: tenant.organizationId, isActive: true },

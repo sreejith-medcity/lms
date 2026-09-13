@@ -226,7 +226,10 @@ export async function setCourseStatus(productId: string, publish: boolean): Prom
 
     revalidatePath(`/admin/courses/${productId}`);
     revalidatePath('/admin/courses');
+    revalidatePath(`/admin/bundles/${productId}`);
+    revalidatePath('/admin/bundles');
     revalidatePath('/');
+    revalidatePath('/courses');
     return { ok: true };
   } catch (err) {
     return fail(err);
@@ -343,6 +346,7 @@ export async function addPricingPlan(_prev: ActionState, formData: FormData): Pr
     });
 
     revalidatePath(`/admin/courses/${d.productId}/pricing`);
+    revalidatePath(`/admin/bundles/${d.productId}`);
     return { ok: true };
   } catch (err) {
     return fail(err);
@@ -376,6 +380,7 @@ export async function deletePricingPlan(planId: string, productId: string): Prom
     });
 
     revalidatePath(`/admin/courses/${productId}/pricing`);
+    revalidatePath(`/admin/bundles/${productId}`);
     return { ok: true };
   } catch (err) {
     return fail(err);

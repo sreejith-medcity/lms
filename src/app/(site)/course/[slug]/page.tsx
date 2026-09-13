@@ -11,6 +11,10 @@ import { CourseMedia } from '@/components/course-media';
 import { Rating } from '@/components/rating';
 import { Reviews, type ReviewCardData } from '@/components/reviews';
 import { reviewSummary, reviewerBadge } from '@/lib/reviews';
+import { prerequisitesFor } from '@/lib/learning-paths-data';
+import { prerequisiteLabel } from '@/lib/learning-paths';
+import { bundlesContaining } from '@/lib/bundles-data';
+import { BundleCard } from '@/components/bundle-card';
 import { NoTenantNotice } from '@/components/tenant-notices';
 import { addonsFor } from '@/lib/addons';
 import { settingText } from '@/lib/settings/store';
@@ -197,7 +201,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
     settingText(site.organizationId, 'website.reviewWidgetHtml'),
   ]);
 
-  const [instructors, related, addons, ratingRows] = await Promise.all([
+  const [instructors, related, addons, ratingRows, prerequisites, unlocks, bundles] = await Promise.all([
     // Named only where a trainer is actually assigned to a running batch.
     db.user.findMany({
       where: { id: { in: course.batches.flatMap((b) => b.staff.map((s) => s.userId)) } },
@@ -243,7 +247,19 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
       where: { organizationId: site.organizationId, productId: product.id, isPublished: true },
       _count: { _all: true },
     }),
+    // The path: what comes before this course, and what it opens the door to.
+    prerequisitesFor(site.organizationId, course.id),
+    db.coursePrerequisite.findMany({
+      where: {
+        organizationId: site.organizationId,
+        requiredCourseId: course.id,
+        course: { product: { status: 'PUBLISHED', deletedAt: null, isAddonOnly: false } },
+      },
+      select: { course: { select: { product: { select: { title: true, slug: true } } } } },
+    }),
+    bundlesContaining(site.organizationId, product.id),
   ]);
+  const hasPath = prerequisites.length > 0 || unlocks.length > 0;
 
   const [googleRating, googleCount, reviewWidgetHtml] = await siteBits;
   const hasReviewWidget = reviewWidgetHtml.trim().length > 0;
@@ -335,6 +351,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
     course.batches.length > 0 ? { id: 'batches', label: 'Batches' } : null,
     shownInstructors.length > 0 ? { id: 'trainers', label: 'Trainers' } : null,
     reviews.length > 0 || hasReviewWidget ? { id: 'reviews', label: 'Reviews' } : null,
+    hasPath || bundles.length > 0 ? { id: 'path', label: 'Learning path' } : null,
     { id: 'faq', label: 'Before you enrol' },
   ].filter((i): i is { id: string; label: string } => Boolean(i));
 
@@ -765,6 +782,77 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             <Section id="reviews" eyebrow="Learner reviews" title="What learners say">
               {hasReviewWidget && <ReviewWidget html={reviewWidgetHtml} className="mb-5" />}
               <Reviews summary={summary} reviews={reviews} academyName={site.organization.name} />
+            </Section>
+          )}
+
+          {/* The path: before, this, after; and the bundles it comes in ----- */}
+          {(hasPath || bundles.length > 0) && (
+            <Section
+              id="path"
+              eyebrow="Learning path"
+              title={hasPath ? 'Where this course sits' : 'Buy it as part of a bundle'}
+            >
+              {hasPath && (
+                <div className="rounded-[var(--radius)] border bg-[var(--surface)] p-4">
+                  {prerequisites.length > 0 && (
+                    <div className="mb-3">
+                      <p className="t-small font-semibold">Before you start</p>
+                      <ul className="mt-1 space-y-1">
+                        {prerequisites.map((p) => (
+                          <li key={p.requiredCourseId} className="t-small">
+                            {p.requiredPublished ? (
+                              <Link href={`/course/${p.requiredSlug}`} className="underline" style={{ color: 'var(--brand)' }}>
+                                {prerequisiteLabel(p)}
+                              </Link>
+                            ) : (
+                              prerequisiteLabel(p)
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="t-small faint mt-1">
+                        Checkout opens once that is done. If you have already done it elsewhere, the academy can enrol you directly.
+                      </p>
+                    </div>
+                  )}
+                  <ol className="flex flex-wrap items-center gap-2">
+                    {prerequisites.map((p) => (
+                      <li key={p.requiredCourseId} className="flex items-center gap-2">
+                        <span className="t-small rounded-full border px-3 py-1">{p.requiredTitle}</span>
+                        <span aria-hidden className="faint">→</span>
+                      </li>
+                    ))}
+                    <li>
+                      <span className="t-small rounded-full px-3 py-1 font-semibold" style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}>
+                        {product.title}
+                      </span>
+                    </li>
+                    {unlocks.map((u) => (
+                      <li key={u.course.product.slug} className="flex items-center gap-2">
+                        <span aria-hidden className="faint">→</span>
+                        <Link href={`/course/${u.course.product.slug}`} className="t-small rounded-full border px-3 py-1 hover:border-[var(--brand)]">
+                          {u.course.product.title}
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                  {unlocks.length > 0 && (
+                    <p className="t-small faint mt-2">
+                      Finishing this course unlocks {unlocks.map((u) => u.course.product.title).join(unlocks.length === 2 ? ' and ' : ', ')}.
+                    </p>
+                  )}
+                </div>
+              )}
+              {bundles.length > 0 && (
+                <div className={hasPath ? 'mt-5' : ''}>
+                  {hasPath && <p className="t-small font-semibold mb-3">Or take the whole path at once</p>}
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {bundles.map((b) => (
+                      <BundleCard key={b.id} bundle={b} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </Section>
           )}
 

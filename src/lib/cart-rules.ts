@@ -31,6 +31,8 @@ export interface BasketRow {
   /** The academy enrols this one by hand; it is not sold online. */
   onDemandOnly: boolean;
   thumbnailAssetId?: string | null;
+  /** Where the line links back to: a course page, or a bundle page. */
+  href?: string;
 }
 
 /** Why a row was taken out, in words a buyer can act on. */
@@ -53,6 +55,7 @@ export interface KeptLine {
   currency: string;
   isAddon: boolean;
   thumbnailAssetId?: string | null;
+  href: string;
 }
 
 export interface DroppedLine {
@@ -178,6 +181,7 @@ export function reviewBasket(
       currency: row.currency,
       isAddon: row.isAddonOnly,
       thumbnailAssetId: row.thumbnailAssetId ?? null,
+      href: row.href ?? `/course/${row.slug}`,
     });
   }
 

@@ -24,6 +24,8 @@ export interface CourseState {
   signedIn: boolean;
   enrolled: boolean;
   pointsWorthPaise: number;
+  /** Why this learner cannot buy yet ("finish A1 first"), or null. */
+  blocked?: string | null;
 }
 
 /**
@@ -90,6 +92,17 @@ export function CourseCta({
       cancelled = true;
     };
   }, [productId]);
+
+  if (state.blocked && !state.enrolled) {
+    return (
+      <div
+        className={`rounded-[var(--radius-sm)] border px-3 py-2.5 text-sm ${fullWidth ? 'w-full' : 'max-w-xs'}`}
+        style={{ background: 'var(--warn-soft)', borderColor: 'var(--warn)' }}
+      >
+        {state.blocked}
+      </div>
+    );
+  }
 
   if (state.enrolled && addonProductIds.length === 0) {
     return (

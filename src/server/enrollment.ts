@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
+import { prerequisiteBlock } from '@/lib/learning-paths-data';
 import { happened, notifyLearner } from '@/lib/events';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
@@ -55,6 +56,8 @@ export async function enrol(productId: string, pricingPlanId?: string): Promise<
     if (existing) {
       destination = `/learn/${productId}`;
     } else {
+      const blocked = await prerequisiteBlock(tenant.organizationId, user.id, [productId]);
+      if (blocked) return { error: blocked };
       const plan =
         product.pricingPlans.find((p) => p.id === pricingPlanId) ?? product.pricingPlans[0];
 

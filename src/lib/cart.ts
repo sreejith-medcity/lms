@@ -232,7 +232,9 @@ export async function basketRows(organizationId: string): Promise<BasketRow[]> {
           status: true,
           isAddonOnly: true,
           deletedAt: true,
+          type: true,
           course: { select: { onDemandOnly: true, thumbnailAssetId: true } },
+          bundle: { select: { thumbnailAssetId: true } },
           pricingPlans: {
             where: { isActive: true },
             orderBy: { sortOrder: 'asc' },
@@ -266,7 +268,8 @@ export async function basketRows(organizationId: string): Promise<BasketRow[]> {
       parentProductIds: p.offeredWith.map((o) => o.productId),
       status: p.deletedAt ? 'ARCHIVED' : (p.status as BasketRow['status']),
       onDemandOnly: p.course?.onDemandOnly ?? false,
-      thumbnailAssetId: p.course?.thumbnailAssetId ?? null,
+      thumbnailAssetId: p.course?.thumbnailAssetId ?? p.bundle?.thumbnailAssetId ?? null,
+      href: p.type === 'BUNDLE' ? `/bundle/${p.slug}` : `/course/${p.slug}`,
     });
   }
 

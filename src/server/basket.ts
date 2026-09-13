@@ -110,6 +110,8 @@ export interface CartQuoteLine {
   productId: string;
   title: string;
   slug: string;
+  /** The page the line came from: a course, or a bundle. */
+  href: string;
   pricePaise: number;
   isAddon: boolean;
   thumbnailAssetId: string | null;
@@ -240,6 +242,7 @@ export async function quoteCart(options: {
       productId: l.productId,
       title: l.title,
       slug: l.slug,
+      href: l.href,
       pricePaise: l.pricePaise,
       isAddon: l.isAddon,
       thumbnailAssetId: l.thumbnailAssetId ?? null,
