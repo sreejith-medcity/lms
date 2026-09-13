@@ -58,12 +58,20 @@ export default async function ReportPage({
           </p>
         </div>
 
-        <a
-          href={exportHref}
-          className="rounded-[var(--radius-sm)] border px-3.5 py-2 text-sm hover:bg-[var(--surface-2)]"
-        >
-          Export CSV
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/admin/analytics/reports/schedules?report=${report.id}`}
+            className="rounded-[var(--radius-sm)] border px-3.5 py-2 text-sm hover:bg-[var(--surface-2)]"
+          >
+            Email on a schedule
+          </Link>
+          <a
+            href={exportHref}
+            className="rounded-[var(--radius-sm)] border px-3.5 py-2 text-sm hover:bg-[var(--surface-2)]"
+          >
+            Export CSV
+          </a>
+        </div>
       </div>
 
       {result.stats && result.stats.length > 0 && (

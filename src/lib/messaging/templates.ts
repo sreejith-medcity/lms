@@ -118,6 +118,10 @@ const DEFAULTS: Record<string, Default> = {
     subject: 'Your question on {{item}} has an answer',
     body: 'Hello {{name}}, {{trainer}} has answered the question on {{item}} ({{course}}). Read it at {{url}}.',
   },
+  'report.scheduled': {
+    subject: '{{schedule}}: {{covers}}',
+    body: 'Hello {{name}}, the {{item}} report from {{academy}} is attached, covering {{covers}} ({{rows}} rows). The live version is at {{url}}.',
+  },
   'announcement.published': {
     subject: '{{title}}',
     body: '{{body}}',

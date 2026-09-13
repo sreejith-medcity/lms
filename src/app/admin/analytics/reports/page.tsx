@@ -26,6 +26,11 @@ export default async function ReportsIndex() {
       <PageHeader
         title="Reports"
         description={`${count} reports open to you, each one printing what it counts and exporting as it stands.`}
+        action={
+          <Link href="/admin/analytics/reports/schedules" className="rounded-[var(--radius-sm)] border px-3.5 py-2 text-sm hover:bg-[var(--surface-2)]">
+            Scheduled reports
+          </Link>
+        }
       />
 
       {categories.length === 0 && (

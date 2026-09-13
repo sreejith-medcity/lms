@@ -4,6 +4,7 @@ import { authorizeCron } from '@/lib/cron';
 import { provisionMeetings } from '@/lib/zoom-sessions';
 import { dispatchWebhooks } from '@/lib/webhooks';
 import { sweepScheduledTriggers } from '@/lib/workflows';
+import { runDueReportSchedules } from '@/lib/report-schedules-run';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
 
   const meetings: Record<string, unknown> = {};
   const sweeps: Record<string, unknown> = {};
+  const reports: Record<string, unknown> = {};
   for (const organization of organizations) {
     if (Date.now() - started > 40_000) {
       meetings[organization.name] = 'skipped, out of time this run';
@@ -36,9 +38,12 @@ export async function GET(request: Request) {
     // The triggers nothing raises on its own: quiet learners, absentees,
     // cold carts. Looked for hourly, which is as often as any of them changes.
     sweeps[organization.name] = await sweepScheduledTriggers(organization.id);
+    // The reports somebody asked to have emailed at an hour: run the ones
+    // whose hour has come and hand the file to the email queue.
+    reports[organization.name] = await runDueReportSchedules(organization.id);
   }
 
   const webhooks = await dispatchWebhooks(50);
 
-  return NextResponse.json({ ok: true, ms: Date.now() - started, meetings, sweeps, webhooks });
+  return NextResponse.json({ ok: true, ms: Date.now() - started, meetings, sweeps, reports, webhooks });
 }

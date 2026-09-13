@@ -338,7 +338,8 @@ async function unsubscribeTokenFor(organizationId: string, userId: string): Prom
 
 /**
  * Context keys that name a document to attach: `attachInvoice` and
- * `attachReceipt` carry a number, `attachCertificate` a certificate id.
+ * `attachReceipt` carry a number, `attachCertificate` a certificate id,
+ * `attachReportRun` the id of a scheduled report's file.
  * A document that cannot be found or drawn is simply not attached; the
  * message still carries its link.
  */
@@ -361,6 +362,10 @@ async function attachmentsFor(organizationId: string, context: Record<string, st
       const { certificatePdfFor } = await import('@/lib/certificate-issue');
       const pdf = await certificatePdfFor(context.attachCertificate, organizationId);
       if (pdf) out.push({ fileName: pdf.fileName, mimeType: 'application/pdf', base64: Buffer.from(pdf.bytes).toString('base64') });
+    }
+    if (context.attachReportRun) {
+      const run = await db.reportRun.findFirst({ where: { id: context.attachReportRun, organizationId }, select: { fileName: true, csv: true } });
+      if (run) out.push({ fileName: run.fileName, mimeType: 'text/csv', base64: Buffer.from(run.csv, 'utf8').toString('base64') });
     }
   } catch (err) {
     console.error('[drain] attachment', err instanceof Error ? err.message : err);
