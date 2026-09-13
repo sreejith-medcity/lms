@@ -10,6 +10,7 @@ import { hashPassword } from '@/lib/password';
 import { recordAudit } from '@/lib/audit';
 import { allPermissionKeys } from '@/lib/permissions';
 import type { ActionState } from '@/server/courses';
+import { planAllows } from '@/lib/platform/limits';
 
 async function guard(action: 'view' | 'edit' | 'delete' = 'edit') {
   const [tenant, user] = await Promise.all([
@@ -52,6 +53,8 @@ export async function addTeamMember(
 ): Promise<ActionState & { temporaryPassword?: string }> {
   try {
     const { tenant, user } = await guard();
+    const room = await planAllows(tenant.tenantId, 'STAFF_SEATS');
+    if (!room.ok) return { error: room.message };
 
     const parsed = member.safeParse(Object.fromEntries(formData));
     if (!parsed.success) return { error: parsed.error.issues[0].message };

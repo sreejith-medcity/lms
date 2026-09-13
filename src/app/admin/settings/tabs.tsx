@@ -18,6 +18,7 @@ const TABS = [
   { href: '/admin/settings/integrations', label: 'Integrations' },
   { href: '/admin/settings/messaging', label: 'Messaging' },
   { href: '/admin/settings/migration', label: 'Migration' },
+  { href: '/admin/settings/billing', label: 'Billing' },
 ];
 
 export function SettingsTabs() {

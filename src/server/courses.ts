@@ -11,6 +11,7 @@ import { slugify, uniqueSlug } from '@/lib/slug';
 import { toPaise } from '@/lib/money';
 import { recordAudit } from '@/lib/audit';
 import { scheduleFromTemplate } from '@/lib/pricing-templates';
+import { planAllows } from '@/lib/platform/limits';
 
 export interface ActionState {
   error?: string;
@@ -45,6 +46,8 @@ export async function createCourse(_prev: ActionState, formData: FormData): Prom
 
   try {
     const { tenant, user } = await guard('courses.course_management');
+    const room = await planAllows(tenant.tenantId, 'COURSES');
+    if (!room.ok) return { error: room.message };
 
     const parsed = courseCreate.safeParse({
       title: formData.get('title'),

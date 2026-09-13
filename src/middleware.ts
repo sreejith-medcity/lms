@@ -65,6 +65,7 @@ export function middleware(req: NextRequest) {
 
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set(HOST_HEADER, hostname);
+  requestHeaders.set('x-pathname', req.nextUrl.pathname);
 
   if (hostname === platformHost) {
     requestHeaders.set('x-platform', '1');

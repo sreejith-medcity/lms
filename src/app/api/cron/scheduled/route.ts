@@ -5,6 +5,7 @@ import { provisionMeetings } from '@/lib/zoom-sessions';
 import { dispatchWebhooks } from '@/lib/webhooks';
 import { sweepScheduledTriggers } from '@/lib/workflows';
 import { runDueReportSchedules } from '@/lib/report-schedules-run';
+import { runPlatformBilling } from '@/lib/platform/billing';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -45,5 +46,9 @@ export async function GET(request: Request) {
 
   const webhooks = await dispatchWebhooks(50);
 
-  return NextResponse.json({ ok: true, ms: Date.now() - started, meetings, sweeps, reports, webhooks });
+  // Tenant billing: usage counted and renewals, trial ends and pauses decided.
+  // Cheap when nothing is due, and safe to run every time this does.
+  const billing = await runPlatformBilling().catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }));
+
+  return NextResponse.json({ ok: true, ms: Date.now() - started, meetings, sweeps, reports, webhooks, billing });
 }

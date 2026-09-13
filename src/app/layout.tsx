@@ -3,6 +3,8 @@ import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 import { getTenantContext } from '@/lib/tenant';
 import { getLocale } from '@/lib/i18n/server';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { trackingTags } from '@/lib/tracking-config';
 import { Tracking } from '@/components/tracking';
 
@@ -36,6 +38,14 @@ export async function generateViewport() {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const tenant = await getTenantContext();
   const tags = tenant ? await trackingTags(tenant.organizationId) : {};
+
+  // A paused or closed academy shows one page to everyone except the office,
+  // who still need to sign in and settle the bill.
+  if (tenant && (tenant.status === 'SUSPENDED' || tenant.status === 'CANCELLED')) {
+    const path = (await headers()).get('x-pathname') ?? '/';
+    const allowed = path === '/paused' || path.startsWith('/login') || path.startsWith('/logout') || path.startsWith('/admin') || path.startsWith('/api/') || path.startsWith('/platform');
+    if (!allowed) redirect('/paused');
+  }
 
   // The tenant's accent is injected here and nowhere else, which is what makes
   // white labelling a data change rather than a rebuild.
