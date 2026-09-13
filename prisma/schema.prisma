@@ -231,6 +231,7 @@ model User {
 
   assignmentSubmissions AssignmentSubmission[]
   reportCards          ReportCard[]
+  pushSubscriptions    PushSubscription[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -2638,6 +2639,26 @@ model NotificationSetting {
 
   @@unique([organizationId, eventKey, productId])
   @@map("notification_settings")
+}
+
+/// A browser or phone that asked to be told. One row per subscription,
+/// several per person (the laptop and the phone), dropped the moment the
+/// push service says the subscription is gone.
+model PushSubscription {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  endpoint       String    @unique
+  p256dh         String
+  auth           String
+  userAgent      String?
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId])
+  @@map("push_subscriptions")
 }
 
 model NotificationLog {
