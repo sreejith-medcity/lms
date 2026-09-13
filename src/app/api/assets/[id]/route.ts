@@ -8,6 +8,7 @@ import { curriculumGate } from '@/lib/curriculum-access';
 import { settingText } from '@/lib/settings/store';
 import { redirectResponse } from '@/lib/http-headers';
 import { assignmentsWhereFor, learnerEnrolments } from '@/lib/assignment-access';
+import { playbackFor } from '@/lib/video';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,10 @@ export async function GET(
       mimeType: true,
       sizeBytes: true,
       uploadedById: true,
+      streamProvider: true,
+      streamId: true,
+      streamPlaybackId: true,
+      streamStatus: true,
       materials: { select: { id: true, isFreePreview: true, isDownloadable: true } },
     },
   });
@@ -275,7 +280,21 @@ export async function GET(
     });
   }
 
-  const wantsDownload = new URL(request.url).searchParams.get('download') === '1';
+  const query = new URL(request.url).searchParams;
+
+  // The player asking for the encoded copy: an expiring HLS link from the
+  // video platform, minted only once the same entitlement check has passed.
+  // 404 when there is none, and the player falls back to the file.
+  if (query.get('stream') === '1') {
+    const playback = await playbackFor(tenant.organizationId, asset);
+    if (!playback) return new NextResponse('No stream', { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
+    return NextResponse.json(
+      { hls: playback.hlsUrl, thumbnail: playback.thumbnailUrl, expiresAt: playback.expiresAt.toISOString() },
+      { headers: { 'Cache-Control': 'private, no-store' } },
+    );
+  }
+
+  const wantsDownload = query.get('download') === '1';
   const downloadAllowed = asset.materials.some((m) => m.isDownloadable);
 
   // A ninety-minute class outlives a five-minute link, and the player would stall

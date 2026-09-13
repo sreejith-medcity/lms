@@ -11,6 +11,8 @@ import { Rail, type RailModule } from './rail';
 import { Stage } from './stage';
 import type { QuestionRow } from './questions';
 import { learnerOrder, visibleBatches } from '@/lib/lesson-qa';
+import { refreshStream } from '@/lib/video';
+import { dueForCheck } from '@/lib/video/tokens';
 import { PlayerShell } from './shell';
 
 export const dynamic = 'force-dynamic';
@@ -102,6 +104,7 @@ export default async function MaterialPage({
                   bodyHtml: true,
                   isDownloadable: true,
                   durationSeconds: true,
+                  asset: { select: { streamStatus: true, streamCheckedAt: true } },
                 },
               },
             },
@@ -122,6 +125,13 @@ export default async function MaterialPage({
 
   const material = ordered[index];
   const lock = gate.lockOf(material.id, material.sectionId);
+
+  // A video still encoding: ask the platform on the way past, no more than
+  // once a minute, so the stream appears without anyone pressing anything.
+  let streamStatus = material.asset?.streamStatus ?? null;
+  if (material.assetId && dueForCheck(streamStatus, material.asset?.streamCheckedAt ?? null)) {
+    streamStatus = await refreshStream(tenant.organizationId, material.assetId);
+  }
 
   // Skip past locked lessons rather than offering a next that refuses to open.
   const prev = ordered.slice(0, index).reverse().find((m) => !gate.lockOf(m.id, m.sectionId)) ?? null;
@@ -300,6 +310,7 @@ export default async function MaterialPage({
           bodyHtml: material.bodyHtml,
           isDownloadable: material.isDownloadable && !blockDownload,
           durationSeconds: material.durationSeconds,
+          streamReady: streamStatus === 'READY',
         }}
         position={index + 1}
         total={ordered.length}

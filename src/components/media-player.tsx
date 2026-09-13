@@ -15,6 +15,8 @@ import { savePosition } from '@/server/notes';
 export function MediaPlayer({
   kind,
   src,
+  streamUrl = null,
+  captions = [],
   materialId,
   startAt,
   durationSeconds,
@@ -24,6 +26,12 @@ export function MediaPlayer({
 }: {
   kind: 'video' | 'audio';
   src: string;
+  /**
+   * Where to ask for an adaptive stream (the asset route with ?stream=1).
+   * Asked once on mount; a 404 means there is none and the file plays.
+   */
+  streamUrl?: string | null;
+  captions?: { src: string; label: string; language: string }[];
   materialId: string;
   startAt: number;
   durationSeconds: number | null;
@@ -36,6 +44,86 @@ export function MediaPlayer({
   const lastSaved = useRef(0);
   const [resumed, setResumed] = useState(startAt < 5);
   const [corner, setCorner] = useState(0);
+  // 'asking' until the stream question is answered, so the file is not
+  // loaded and then swapped out under the viewer.
+  const [source, setSource] = useState<{ kind: 'file' } | { kind: 'hls'; url: string } | { kind: 'asking' }>(
+    streamUrl && kind === 'video' ? { kind: 'asking' } : { kind: 'file' },
+  );
+
+  useEffect(() => {
+    if (!streamUrl || kind !== 'video') return;
+    let cancelled = false;
+    fetch(streamUrl, { cache: 'no-store' })
+      .then(async (res) => (res.ok ? ((await res.json()) as { hls?: string }) : null))
+      .then((data) => {
+        if (cancelled) return;
+        setSource(data?.hls ? { kind: 'hls', url: data.hls } : { kind: 'file' });
+      })
+      .catch(() => {
+        if (!cancelled) setSource({ kind: 'file' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [streamUrl, kind]);
+
+  // Attach the stream: Safari plays HLS natively; everyone else through hls.js,
+  // loaded only when there is a stream to play. An expired link mid-lesson is
+  // met by asking for a fresh one once, at the same position.
+  useEffect(() => {
+    const el = ref.current as HTMLVideoElement | null;
+    if (!el || source.kind !== 'hls') return;
+    const url = source.url;
+    let hls: { destroy: () => void } | null = null;
+    let cancelled = false;
+
+    if (el.canPlayType('application/vnd.apple.mpegurl')) {
+      el.src = url;
+      return;
+    }
+
+    import('hls.js').then(({ default: Hls }) => {
+      if (cancelled || !Hls.isSupported()) {
+        if (!cancelled) setSource({ kind: 'file' });
+        return;
+      }
+      const instance = new Hls({ enableWorker: true, maxBufferLength: 60 });
+      hls = instance;
+      instance.loadSource(url);
+      instance.attachMedia(el);
+      let refreshed = false;
+      instance.on(Hls.Events.ERROR, (_event: unknown, data: { fatal?: boolean; type?: string }) => {
+        if (!data.fatal) return;
+        if (data.type === 'networkError' && streamUrl && !refreshed) {
+          refreshed = true;
+          const at = el.currentTime;
+          fetch(streamUrl, { cache: 'no-store' })
+            .then(async (res) => (res.ok ? ((await res.json()) as { hls?: string }) : null))
+            .then((fresh) => {
+              if (fresh?.hls && !cancelled) {
+                instance.loadSource(fresh.hls);
+                instance.once(Hls.Events.MANIFEST_PARSED, () => {
+                  el.currentTime = at;
+                  void el.play().catch(() => {});
+                });
+              } else {
+                setSource({ kind: 'file' });
+              }
+            });
+          return;
+        }
+        // Anything else fatal: give up on the stream and play the file.
+        instance.destroy();
+        hls = null;
+        setSource({ kind: 'file' });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      hls?.destroy();
+    };
+  }, [source, streamUrl]);
 
   // The mark moves every half minute. A fixed corner is cropped out in one cut;
   // one that wanders has to be tracked through the whole recording, which is
@@ -76,7 +164,8 @@ export function MediaPlayer({
 
   const common = {
     ref: ref as never,
-    src,
+    // The file only when that is what plays; a stream is attached above.
+    src: source.kind === 'file' ? src : undefined,
     controls: true,
     controlsList: 'nodownload',
     onLoadedMetadata: () => {
@@ -102,8 +191,11 @@ export function MediaPlayer({
           className="relative overflow-hidden rounded-[var(--radius)] border bg-black"
           onContextMenu={blockContextMenu ? (e) => e.preventDefault() : undefined}
         >
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video {...common} playsInline className="aspect-video w-full" />
+          <video {...common} playsInline className="aspect-video w-full">
+            {captions.map((c, i) => (
+              <track key={c.language} kind="subtitles" src={c.src} label={c.label} srcLang={c.language} default={i === 0} />
+            ))}
+          </video>
 
           {watermark && (
             <span

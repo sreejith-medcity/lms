@@ -149,6 +149,42 @@ export const SETTINGS: SettingDef[] = [
 
   /* The player -------------------------------------------------------------- */
   {
+    key: 'video.provider',
+    group: 'player',
+    label: 'Video platform',
+    help: 'Where uploaded videos are sent to be encoded for adaptive streaming and served with expiring links. Add the platform’s keys under Integrations first; until then videos play straight from the bucket.',
+    kind: 'select',
+    default: 'none',
+    options: [
+      { value: 'none', label: 'None: play from the bucket' },
+      { value: 'bunny', label: 'Bunny Stream' },
+      { value: 'cloudflare_stream', label: 'Cloudflare Stream' },
+      { value: 'mux', label: 'Mux' },
+    ],
+    live: true,
+  },
+  {
+    key: 'video.sendOnUpload',
+    group: 'player',
+    label: 'Send every new video for encoding',
+    help: 'Off means each video is sent by hand from the media library, which is useful while trying a platform out.',
+    kind: 'boolean',
+    default: true,
+    live: true,
+  },
+  {
+    key: 'video.playbackMinutes',
+    group: 'player',
+    label: 'A playback link lives for',
+    help: 'Long enough to watch a class in one sitting, short enough that a copied link dies. The player asks for a fresh one each time it opens a lesson, and again if one expires mid-way.',
+    kind: 'number',
+    default: 240,
+    min: 30,
+    max: 1440,
+    unit: 'minutes',
+    live: true,
+  },
+  {
     key: 'player.watermark',
     group: 'player',
     label: 'Watermark video with the viewer',

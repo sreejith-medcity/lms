@@ -17,6 +17,8 @@ import {
   uploadTargetFor,
 } from '@/lib/storage';
 import type { ActionState } from '@/server/courses';
+import { forgetStream, queueTranscode, refreshStream } from '@/lib/video';
+import { settingBool } from '@/lib/settings/store';
 
 /**
  * Uploads never pass through this server. The browser asks for a signed URL,
@@ -125,7 +127,7 @@ export async function completeUpload(assetId: string): Promise<ActionState & { a
 
     const asset = await db.asset.findFirst({
       where: { id: assetId, organizationId: tenant.organizationId },
-      select: { id: true, storageKey: true, sizeBytes: true, mimeType: true },
+      select: { id: true, type: true, storageKey: true, sizeBytes: true, mimeType: true },
     });
     if (!asset) return { error: 'That upload is no longer available.' };
 
@@ -144,6 +146,12 @@ export async function completeUpload(assetId: string): Promise<ActionState & { a
     });
 
     await meter(tenant.tenantId, 'STORAGE_BYTES', head.size);
+
+    // A video goes to the platform the moment it lands, when one is set up.
+    // A failure here is recorded on the asset, never thrown at the uploader.
+    if (asset.type === 'VIDEO' && (await settingBool(tenant.organizationId, 'video.sendOnUpload'))) {
+      await queueTranscode(tenant.organizationId, asset.id);
+    }
 
     revalidatePath('/admin/library');
     return { ok: true, assetId: asset.id };
@@ -198,6 +206,8 @@ export async function deleteAsset(assetId: string): Promise<ActionState> {
         id: true,
         storageKey: true,
         sizeBytes: true,
+        streamProvider: true,
+        streamId: true,
         _count: { select: { materials: true, recordings: true } },
       },
     });
@@ -214,11 +224,36 @@ export async function deleteAsset(assetId: string): Promise<ActionState> {
     }
 
     await deleteObject(asset.storageKey);
+    await forgetStream(tenant.organizationId, asset);
     await db.asset.delete({ where: { id: asset.id } });
     await meter(tenant.tenantId, 'STORAGE_BYTES', -Number(asset.sizeBytes));
 
     revalidatePath('/admin/library');
     return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Send a video to the platform by hand, or send it again after a failure. */
+export async function sendForEncoding(assetId: string, again = false): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+    const result = await queueTranscode(tenant.organizationId, assetId, { again });
+    revalidatePath('/admin/library');
+    return result.ok ? { ok: true, message: 'Sent. Encoding takes a few minutes; the card updates when you refresh.' } : { error: result.error };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Ask the platform how the encode is going. */
+export async function checkEncoding(assetId: string): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+    const state = await refreshStream(tenant.organizationId, assetId, { force: true });
+    revalidatePath('/admin/library');
+    return { ok: true, message: state ? `Now ${state.toLowerCase()}.` : 'Not sent anywhere yet.' };
   } catch (err) {
     return fail(err);
   }

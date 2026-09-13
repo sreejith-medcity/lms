@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/auth';
 import { formatBytes, localRoot, storageDriver } from '@/lib/storage';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
+import { settingText } from '@/lib/settings/store';
 import { AssetGrid, LibraryUploader, StorageStatus } from './panels';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,9 @@ export default async function LibraryPage() {
         sizeBytes: true,
         createdAt: true,
         transcodeStatus: true,
+        streamProvider: true,
+        streamStatus: true,
+        streamError: true,
         _count: { select: { materials: true, recordings: true } },
       },
     }),
@@ -54,7 +58,12 @@ export default async function LibraryPage() {
     createdAt: a.createdAt.toISOString(),
     pending: a.transcodeStatus === 'UPLOADING',
     usedBy: a._count.materials + a._count.recordings,
+    streamStatus: a.streamStatus,
+    streamError: a.streamError,
   }));
+
+  const streaming = (await settingText(tenant.organizationId, 'video.provider')).trim();
+  const streamingOn = Boolean(streaming) && streaming !== 'none';
 
   return (
     <div>
@@ -83,7 +92,7 @@ export default async function LibraryPage() {
             hint="Drop a class recording or a workbook above. Uploads run in the background, so the page stays responsive."
           />
         ) : (
-          <AssetGrid assets={rows} />
+          <AssetGrid assets={rows} streamingOn={streamingOn} />
         )}
       </div>
     </div>

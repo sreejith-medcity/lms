@@ -19,6 +19,8 @@ interface Material {
   bodyHtml: string | null;
   isDownloadable: boolean;
   durationSeconds: number | null;
+  /** The video platform has an encoded copy: the player asks for a stream first. */
+  streamReady?: boolean;
 }
 
 type Tab = 'overview' | 'notes' | 'announcements' | 'qa' | 'resources';
@@ -126,6 +128,7 @@ export function Stage({
               <MediaPlayer
                 kind={material.type === 'VIDEO' ? 'video' : 'audio'}
                 src={src}
+                streamUrl={material.streamReady ? `${src}?stream=1` : null}
                 watermark={watermark}
                 blockContextMenu={blockContextMenu}
                 materialId={material.id}

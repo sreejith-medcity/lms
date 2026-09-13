@@ -485,11 +485,18 @@ export const INTEGRATIONS: IntegrationDef[] = [
     category: 'storage',
     priority: 2,
     requires:
-      'A Bunny.net account with a stream library, its library ID and API key, and a pull zone for delivery.',
-    purpose: 'Video encoding and delivery, with a player that behaves on a weak connection.',
-    status: 'planned',
-    landsIn: 'Phase 8',
-    fields: [TEXT('libraryId', 'Library ID'), KEY('apiKey', 'API key'), TEXT('cdnHostname', 'CDN hostname')],
+      'A Bunny.net account with a Stream library. From the library: its ID, the API key, the CDN hostname (vz-xxxx.b-cdn.net), and, under Security, token authentication switched on and its key. Without token authentication every link is a public link.',
+    purpose:
+      'Video encoding and delivery at the lowest price per gigabyte of the three, which matters at 281 GB. Each upload is encoded to adaptive HLS and played through links that expire; the original stays in the bucket. Captions can be generated from the audio.',
+    status: 'wired',
+    fallback: 'Videos play straight from the bucket, one size, no adaptive streaming.',
+    docsUrl: 'https://docs.bunny.net/docs/stream',
+    fields: [
+      TEXT('libraryId', 'Library ID'),
+      KEY('apiKey', 'API key', undefined, 'The library API key, not the account one.'),
+      TEXT('cdnHostname', 'CDN hostname', undefined, 'vz-xxxxxxxx.b-cdn.net'),
+      KEY('tokenKey', 'Token authentication key', undefined, 'Library, Security, Token authentication.'),
+    ],
   },
   {
     id: 'cloudflare_stream',
@@ -497,11 +504,38 @@ export const INTEGRATIONS: IntegrationDef[] = [
     category: 'storage',
     priority: 2,
     requires:
-      'A Cloudflare account with Stream enabled, which is billed per minute stored and delivered. An API token scoped to Stream only.',
-    purpose: 'Video with signed playback and the encrypted delivery the DRM setting is waiting for.',
-    status: 'planned',
-    landsIn: 'Phase 8',
-    fields: [TEXT('accountId', 'Account ID'), KEY('apiToken', 'API token')],
+      'A Cloudflare account with Stream enabled (billed per minute stored and delivered), an API token scoped to Stream, the customer subdomain from the Stream dashboard, and a signing key: one call to POST /accounts/<id>/stream/keys returns an id and a pem; paste both.',
+    purpose:
+      'Video encoded to adaptive HLS and served from Cloudflare’s edge, with every playback link signed and expiring, which is what the DRM setting was waiting for. Captions can be generated from the audio.',
+    status: 'wired',
+    fallback: 'Videos play straight from the bucket, one size, no adaptive streaming.',
+    docsUrl: 'https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream/',
+    fields: [
+      TEXT('accountId', 'Account ID'),
+      KEY('apiToken', 'API token'),
+      TEXT('customerCode', 'Customer subdomain', undefined, 'customer-xxxxxxxx, from the Stream dashboard.'),
+      TEXT('signingKeyId', 'Signing key ID'),
+      KEY('signingKeyPem', 'Signing key (pem)', undefined, 'The pem value the keys endpoint returned, base64 as given.'),
+    ],
+  },
+  {
+    id: 'mux',
+    name: 'Mux',
+    category: 'storage',
+    priority: 3,
+    requires:
+      'A Mux account, an access token (ID and secret) with Mux Video permission, and a signing key from Settings, Signing keys (its ID and the private key).',
+    purpose:
+      'Video encoded to adaptive HLS with signed playback, and English captions generated at upload. The dearest of the three per minute; the best player analytics if that ever matters.',
+    status: 'wired',
+    fallback: 'Videos play straight from the bucket, one size, no adaptive streaming.',
+    docsUrl: 'https://docs.mux.com/guides/secure-video-playback',
+    fields: [
+      TEXT('tokenId', 'Access token ID'),
+      KEY('tokenSecret', 'Access token secret'),
+      TEXT('signingKeyId', 'Signing key ID'),
+      KEY('signingKeyPem', 'Signing key private key', undefined, 'Base64 as downloaded, or the pem itself.'),
+    ],
   },
 
   /* Signing in ------------------------------------------------------------- */

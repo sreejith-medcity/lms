@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { deleteAsset, renameAsset } from '@/server/assets';
+import { checkEncoding, deleteAsset, renameAsset, sendForEncoding } from '@/server/assets';
 import { Uploader } from '@/components/uploader';
 import { Badge, Button, Card, Input, Select } from '@/components/ui';
 
@@ -16,6 +16,9 @@ export interface AssetRow {
   createdAt: string;
   pending: boolean;
   usedBy: number;
+  /** Where the encoded copy is: QUEUED, PROCESSING, READY, FAILED, or null when never sent. */
+  streamStatus: string | null;
+  streamError: string | null;
 }
 
 function formatBytes(n: number): string {
@@ -42,7 +45,7 @@ export function LibraryUploader() {
 
 const TYPE_FILTERS = ['ALL', 'VIDEO', 'AUDIO', 'PDF', 'IMAGE', 'DOC', 'SHEET', 'SLIDE', 'ZIP'];
 
-export function AssetGrid({ assets }: { assets: AssetRow[] }) {
+export function AssetGrid({ assets, streamingOn = false }: { assets: AssetRow[]; streamingOn?: boolean }) {
   const [query, setQuery] = useState('');
   const [type, setType] = useState('ALL');
 
@@ -80,14 +83,14 @@ export function AssetGrid({ assets }: { assets: AssetRow[] }) {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((a) => (
-          <AssetCard key={a.id} asset={a} />
+          <AssetCard key={a.id} asset={a} streamingOn={streamingOn} />
         ))}
       </div>
     </div>
   );
 }
 
-function AssetCard({ asset }: { asset: AssetRow }) {
+function AssetCard({ asset, streamingOn }: { asset: AssetRow; streamingOn: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string>();
@@ -150,7 +153,13 @@ function AssetCard({ asset }: { asset: AssetRow }) {
             ) : (
               <Badge tone="neutral">unused</Badge>
             ))}
+          {asset.type === 'VIDEO' && asset.streamStatus && (
+            <Badge tone={asset.streamStatus === 'READY' ? 'ok' : asset.streamStatus === 'FAILED' ? 'bad' : 'warn'}>
+              {asset.streamStatus === 'READY' ? 'streaming' : asset.streamStatus === 'FAILED' ? 'encode failed' : asset.streamStatus === 'PROCESSING' ? 'encoding' : 'queued'}
+            </Badge>
+          )}
         </div>
+        {asset.streamError && <p className="t-small" style={{ color: 'var(--bad)' }}>{asset.streamError}</p>}
 
         {error && <p className="t-small text-[var(--bad)]">{error}</p>}
 
@@ -163,6 +172,38 @@ function AssetCard({ asset }: { asset: AssetRow }) {
           >
             Open
           </a>
+          {asset.type === 'VIDEO' && !asset.pending && streamingOn && (!asset.streamStatus || asset.streamStatus === 'FAILED') && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  const res = await sendForEncoding(asset.id, asset.streamStatus === 'FAILED');
+                  setError(res.error);
+                  if (!res.error) router.refresh();
+                })
+              }
+            >
+              {asset.streamStatus === 'FAILED' ? 'Send again' : 'Send for encoding'}
+            </Button>
+          )}
+          {asset.type === 'VIDEO' && (asset.streamStatus === 'QUEUED' || asset.streamStatus === 'PROCESSING') && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={pending}
+              onClick={() =>
+                start(async () => {
+                  const res = await checkEncoding(asset.id);
+                  setError(res.error);
+                  if (!res.error) router.refresh();
+                })
+              }
+            >
+              Check
+            </Button>
+          )}
           <Button
             variant="danger"
             size="sm"
