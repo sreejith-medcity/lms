@@ -8,6 +8,7 @@ import { requireTenant } from '@/lib/tenant';
 import { priceOrder } from '@/lib/order-lines';
 import { resolveSelectedAddons } from '@/lib/addons';
 import { paymentsAvailable, prepareOrder } from '@/lib/payments';
+import { attachAffiliateSale } from '@/lib/affiliates-data';
 import { claimPromo, PromoRefused } from '@/lib/promo-claim';
 import { rememberIntent, readBasket, CART_COOKIE } from '@/lib/cart';
 import { promoTarget } from '@/lib/cart-rules';
@@ -271,7 +272,7 @@ export async function startCheckout(
             })),
           },
         },
-        select: { id: true, orderNo: true, currency: true, totalPaise: true },
+        select: { id: true, orderNo: true, currency: true, totalPaise: true, userId: true, subtotalPaise: true, discountPaise: true },
       });
 
       if (claim) {
@@ -306,6 +307,7 @@ export async function startCheckout(
     await rememberIntent(product.id, plan.id);
     for (const a of addons) await rememberIntent(a.productId, a.pricingPlanId);
 
+    await attachAffiliateSale(tenant.organizationId, order);
     await prepareOrder(tenant.organizationId, order);
 
     return { ok: true, orderId: order.id };
@@ -559,7 +561,7 @@ export async function startCartCheckout(input: {
             })),
           },
         },
-        select: { id: true, orderNo: true, currency: true, totalPaise: true },
+        select: { id: true, orderNo: true, currency: true, totalPaise: true, userId: true, subtotalPaise: true, discountPaise: true },
       });
 
       if (claim) {
@@ -587,6 +589,7 @@ export async function startCartCheckout(input: {
       return created;
     });
 
+    await attachAffiliateSale(tenant.organizationId, order);
     await prepareOrder(tenant.organizationId, order);
 
     return { ok: true, orderId: order.id };

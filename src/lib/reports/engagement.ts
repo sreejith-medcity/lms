@@ -152,6 +152,54 @@ export const feedbackReports: ReportDef[] = [
 
 export const marketingReports: ReportDef[] = [
   {
+    id: 'affiliate-commission',
+    title: 'Affiliate commission',
+    category: 'marketing',
+    question: 'What did each partner send in this window, and what do we owe them?',
+    definitions: [
+      ['Sales', 'Orders through the partner’s link that were paid, in the window. Unpaid and voided orders are not counted.'],
+      ['Base', 'The order after discount, before tax: what the commission is a share of.'],
+      ['Commission', 'The partner’s share of the base, at the rate on their record when the order was placed.'],
+      ['Owed', 'Commission on paid orders not yet marked as paid to the partner, all time, not only this window.'],
+    ],
+    async run(ctx) {
+      const affiliates = await db.affiliate.findMany({
+        where: { organizationId: ctx.organizationId },
+        orderBy: { name: 'asc' },
+        select: {
+          name: true,
+          code: true,
+          commissionPercent: true,
+          sales: { select: { status: true, basePaise: true, commissionPaise: true, createdAt: true } },
+        },
+      });
+      const rows = affiliates
+        .map((a) => {
+          const inWindow = a.sales.filter((s) => (s.status === 'APPROVED' || s.status === 'PAID') && s.createdAt >= ctx.since);
+          const base = inWindow.reduce((n, s) => n + s.basePaise, 0);
+          const commission = inWindow.reduce((n, s) => n + s.commissionPaise, 0);
+          const owed = a.sales.filter((s) => s.status === 'APPROVED').reduce((n, s) => n + s.commissionPaise, 0);
+          return { commission, row: [a.name, a.code, `${a.commissionPercent}%`, inWindow.length, formatMoney(base, ctx.currency), formatMoney(commission, ctx.currency), formatMoney(owed, ctx.currency)] };
+        })
+        .sort((x, y) => y.commission - x.commission);
+      const totalCommission = rows.reduce((n, r) => n + r.commission, 0);
+      return {
+        columns: [
+          { key: 'partner', label: 'Partner' },
+          { key: 'code', label: 'Code' },
+          { key: 'rate', label: 'Rate' },
+          { key: 'sales', label: 'Sales', numeric: true },
+          { key: 'base', label: 'Base', numeric: true },
+          { key: 'commission', label: 'Commission', numeric: true },
+          { key: 'owed', label: 'Owed now', numeric: true },
+        ],
+        rows: rows.map((r) => r.row),
+        stats: [{ label: 'Commission in this window', value: formatMoney(totalCommission, ctx.currency), sub: `${rows.length} partners` }],
+        note: 'Paying a partner is recorded on their page under Marketing, Affiliates; that is what moves a sale from owed to paid.',
+      };
+    },
+  },
+  {
     id: 'promo-performance',
     title: 'Promo codes',
     category: 'marketing',

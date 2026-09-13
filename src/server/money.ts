@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { voidAffiliateSale } from '@/lib/affiliates-data';
 import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
@@ -179,6 +180,7 @@ export async function recordOfflineRefund(
       });
 
       await db.order.update({ where: { id: payment.orderId }, data: { status: 'REFUNDED' } });
+      await voidAffiliateSale(tenant.organizationId, payment.orderId);
 
       // Access ends; progress and attendance stay exactly where they are.
       // tenant-safe: the items belong to the order this refund is against,

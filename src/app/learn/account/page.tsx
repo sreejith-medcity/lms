@@ -63,6 +63,7 @@ export default async function AccountPage() {
   if (!account) return null;
 
   const completion = account.learnerProfile?.profileCompletion ?? 0;
+  const isPartner = (await db.affiliate.count({ where: { organizationId: tenant.organizationId, userId: user.id } })) > 0;
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-7">
@@ -81,6 +82,11 @@ export default async function AccountPage() {
           <Link href="/learn/account/privacy" className="t-small font-medium underline">
             Your data
           </Link>
+          {isPartner && (
+            <Link href="/learn/affiliate" className="t-small font-medium underline">
+              Your referral link
+            </Link>
+          )}
         </span>
       </div>
 

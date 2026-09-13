@@ -68,6 +68,7 @@ export const ADMIN_NAV: NavGroup[] = [
     children: [
       { label: 'Enquiries', href: '/admin/leads' },
       { label: 'Promo codes', href: '/admin/promo-codes' },
+      { label: 'Affiliates', href: '/admin/affiliates' },
       { label: 'Banners', href: '/admin/banners' },
       { label: 'Testimonials', href: '/admin/testimonials' },
       { label: 'Campaigns', href: '/admin/campaigns' },

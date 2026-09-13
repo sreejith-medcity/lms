@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { approveAffiliateSale } from '@/lib/affiliates-data';
 import { recordAudit } from '@/lib/audit';
 import type { Prisma } from '@prisma/client';
 import { markCartConverted } from '@/lib/cart';
@@ -594,6 +595,8 @@ export async function fulfilPaidOrder(input: {
     userId: order.userId,
     orderId: order.id,
   });
+  // A partner's sale is owed from the moment the money is in.
+  await approveAffiliateSale(input.organizationId, order.id);
 
   await recordAudit({
     organizationId: input.organizationId,

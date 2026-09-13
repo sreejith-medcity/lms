@@ -357,6 +357,18 @@ export const SETTINGS: SettingDef[] = [
 
   /* Selling ----------------------------------------------------------------- */
   {
+    key: 'affiliates.cookieDays',
+    group: 'commerce',
+    label: 'A partner’s referral is remembered for',
+    help: 'Somebody who arrives through a partner’s link and buys within this many days counts as the partner’s sale.',
+    kind: 'number',
+    default: 30,
+    min: 1,
+    max: 365,
+    unit: 'days',
+    live: true,
+  },
+  {
     key: 'payments.gateway',
     group: 'commerce',
     label: 'Payment gateway',
