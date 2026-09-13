@@ -235,6 +235,7 @@ model User {
   lessonQuestions      LessonQuestion[]
   dataRequests         DataRequest[]
   flashcardReviews     FlashcardReview[]
+  wishlist             Wishlist[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -539,6 +540,7 @@ model Product {
   offeredWith  ProductAddon[]     @relation("addonChild")
   bundle       Bundle?
   inBundles    BundleItem[]
+  wishedBy     Wishlist[]
 
   @@unique([organizationId, slug])
   @@index([organizationId, type, status])
@@ -1211,6 +1213,23 @@ model FlashcardReview {
   @@unique([cardId, userId])
   @@index([userId, due])
   @@map("flashcard_reviews")
+}
+
+/// A course saved for later by a signed-in learner. Guests keep theirs in a
+/// cookie until they sign in, when it is merged here.
+model Wishlist {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  productId      String
+  createdAt      DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([organizationId, productId])
+  @@map("wishlists")
 }
 
 /// A partner who sends buyers: a consultant, an agent, a former learner
