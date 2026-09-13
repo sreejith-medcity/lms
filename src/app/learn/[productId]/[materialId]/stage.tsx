@@ -7,6 +7,7 @@ import { MediaPlayer } from '@/components/media-player';
 import { Card } from '@/components/ui';
 import { CompleteButton } from './complete-button';
 import { BookmarkButton, Notes, type NoteRow } from './notes';
+import { Questions, type QuestionRow } from './questions';
 
 interface Material {
   id: string;
@@ -63,6 +64,9 @@ export function Stage({
   announcements = [],
   resources = [],
   discussionHref,
+  initialTab,
+  me,
+  questions = [],
 }: {
   productId: string;
   material: Material;
@@ -85,8 +89,13 @@ export function Stage({
   resources?: StageResource[];
   /** The course's discussion room. */
   discussionHref: string;
+  /** Opened from a link that names a tab, such as the answer notification. */
+  initialTab?: Tab;
+  /** The learner watching, for "You" and "me too". */
+  me: string;
+  questions?: QuestionRow[];
 }) {
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
   const [currentTime, setCurrentTime] = useState<number | null>(null);
   const mediaRef = useRef<HTMLMediaElement | null>(null);
 
@@ -97,7 +106,7 @@ export function Stage({
     { key: 'overview', label: 'Overview' },
     { key: 'notes', label: 'Notes', count: notes.length || undefined },
     { key: 'announcements', label: 'Announcements', count: announcements.length || undefined },
-    { key: 'qa', label: 'Q&A' },
+    { key: 'qa', label: 'Q&A', count: questions.length || undefined },
     { key: 'resources', label: 'Resources', count: resources.length || undefined },
   ];
 
@@ -240,19 +249,24 @@ export function Stage({
             )}
 
             {tab === 'qa' && (
-              <div>
-                <p className="t-small muted max-w-prose">
-                  Ask the trainer and the rest of your batch in the course discussion. Questions are
-                  answered there so everyone benefits from the answer.
-                </p>
-                <Link
-                  href={discussionHref}
-                  className="mt-3 inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold text-[var(--brand-ink)]"
-                  style={{ background: 'var(--brand)' }}
-                >
-                  Open the discussion
-                </Link>
-              </div>
+              <Questions
+                materialId={material.id}
+                me={me}
+                questions={questions}
+                discussionHref={discussionHref}
+                currentTime={isMedia && src ? (currentTime ?? 0) : null}
+                onSeek={
+                  isMedia && src
+                    ? (seconds) => {
+                        const el = mediaRef.current;
+                        if (el) {
+                          el.currentTime = seconds;
+                          void el.play?.();
+                        }
+                      }
+                    : undefined
+                }
+              />
             )}
 
             {tab === 'resources' && (

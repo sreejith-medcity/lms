@@ -9,16 +9,21 @@ import { settingBool, settingText } from '@/lib/settings/store';
 import { Card } from '@/components/ui';
 import { Rail, type RailModule } from './rail';
 import { Stage } from './stage';
+import type { QuestionRow } from './questions';
+import { learnerOrder, visibleBatches } from '@/lib/lesson-qa';
 import { PlayerShell } from './shell';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MaterialPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ productId: string; materialId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { productId, materialId } = await params;
+  const { tab } = await searchParams;
   const tenant = await requireTenant();
   const user = await getSessionUser();
   if (!user) return null;
@@ -122,7 +127,7 @@ export default async function MaterialPage({
   const prev = ordered.slice(0, index).reverse().find((m) => !gate.lockOf(m.id, m.sectionId)) ?? null;
   const next = ordered.slice(index + 1).find((m) => !gate.lockOf(m.id, m.sectionId)) ?? null;
 
-  const [progressRows, notes, announcements] = await Promise.all([
+  const [progressRows, notes, announcements, questionRows] = await Promise.all([
     db.materialProgress.findMany({
       where: { userId: user.id, materialId: { in: ordered.map((m) => m.id) } },
       select: {
@@ -155,7 +160,52 @@ export default async function MaterialPage({
       take: 10,
       select: { id: true, title: true, bodyHtml: true, urgency: true, publishAt: true },
     }),
+    // Questions on this lesson from this batch, and the course-wide ones.
+    db.lessonQuestion.findMany({
+      where: {
+        organizationId: tenant.organizationId,
+        materialId,
+        isHidden: false,
+        OR: visibleBatches(enrollment.batchId).map((batchId) => ({ batchId })),
+      },
+      take: 200,
+      select: {
+        id: true,
+        userId: true,
+        batchId: true,
+        body: true,
+        atSeconds: true,
+        answer: true,
+        answeredById: true,
+        answeredAt: true,
+        alsoAsking: true,
+        isPinned: true,
+        isHidden: true,
+        createdAt: true,
+        user: { select: { name: true } },
+      },
+    }),
   ]);
+
+  const answererIds = Array.from(new Set(questionRows.map((q) => q.answeredById).filter((id): id is string => Boolean(id))));
+  const answerers = answererIds.length
+    ? await db.user.findMany({ where: { id: { in: answererIds }, organizationId: tenant.organizationId }, select: { id: true, name: true } })
+    : [];
+  const answererName = new Map(answerers.map((a) => [a.id, a.name]));
+  const shortDate = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const questions: QuestionRow[] = learnerOrder(questionRows).map((q) => ({
+    id: q.id,
+    userId: q.userId,
+    askedBy: q.user.name,
+    body: q.body,
+    atSeconds: q.atSeconds,
+    askedAt: shortDate(q.createdAt),
+    answer: q.answer,
+    answeredBy: q.answeredById ? (answererName.get(q.answeredById) ?? null) : null,
+    answeredAt: q.answeredAt ? shortDate(q.answeredAt) : null,
+    alsoAsking: q.alsoAsking,
+    isPinned: q.isPinned,
+  }));
 
   const byMaterial = new Map(progressRows.map((p) => [p.materialId, p]));
   const here = byMaterial.get(materialId);
@@ -228,6 +278,9 @@ export default async function MaterialPage({
         courseDescription={enrollment.product.course.description}
         sectionTitle={section?.title ?? null}
         discussionHref={`/learn/${productId}/discussion`}
+        initialTab={tab === 'qa' || tab === 'notes' || tab === 'announcements' || tab === 'resources' ? tab : undefined}
+        me={user.id}
+        questions={questions}
         announcements={announcements.map((a) => ({
           id: a.id,
           title: a.title,

@@ -44,6 +44,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Assessments', href: '/admin/assessments' },
       { label: 'Assignments', href: '/admin/assignments' },
       { label: 'Marking', href: '/admin/submissions' },
+      { label: 'Questions', href: '/admin/questions' },
       { label: 'Certificates', href: '/admin/certificates' },
     ],
   },

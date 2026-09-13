@@ -41,6 +41,8 @@ export const DOMAIN_EVENTS: DomainEventDef[] = [
   { key: 'assignment.handed_in', label: 'Homework was handed in', group: 'Learning', filters: ['products', 'batches'], subject: 'the hand-in' },
   { key: 'assignment.graded', label: 'Homework was marked', group: 'Learning', filters: ['products', 'outcome'], notification: 'assignment.graded', subject: 'the hand-in' },
   { key: 'report_card.issued', label: 'A report card was sent', group: 'Learning', filters: ['products'], notification: 'report_card.issued', subject: 'the report card' },
+  { key: 'lesson_question.asked', label: 'A question was asked on a lesson', group: 'Learning', filters: ['products', 'batches'], subject: 'the question' },
+  { key: 'lesson_question.answered', label: 'A question on a lesson was answered', group: 'Learning', filters: ['products'], notification: 'lesson_question.answered', subject: 'the question' },
   { key: 'session.absent', label: 'Somebody missed a class', group: 'Classes', filters: ['batches'], subject: 'the class' },
   { key: 'learner.inactive', label: 'A learner has gone quiet', group: 'Learning', filters: ['days', 'products'], scheduled: true, subject: 'the quiet spell' },
   { key: 'payment.captured', label: 'A payment succeeded', group: 'Money', filters: [], subject: 'the order' },
