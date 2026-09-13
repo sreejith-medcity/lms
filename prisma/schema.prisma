@@ -238,6 +238,8 @@ model User {
   miscFees             MiscFee[]
   payouts              InstructorPayout[]
   helpTickets          HelpTicket[]
+  badges               BadgeAward[]
+  streaks              LearnerStreak[]
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
   @@unique([organizationId, email])
@@ -365,6 +367,47 @@ enum HelpStatus {
 enum HelpPriority {
   NORMAL
   HIGH
+}
+
+/// A badge a learner earned. The catalogue of badges and their tiers lives
+/// in code (src/lib/badges.ts); this is only the record of who got which,
+/// when, so it can be shown and never awarded twice.
+model BadgeAward {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  badgeKey       String
+  tier           Int       @default(1)
+  /// What earned it, for the toast: a course title, a streak length.
+  context        String?
+  awardedAt      DateTime  @default(now())
+  seenAt         DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, badgeKey, tier])
+  @@index([organizationId, userId, awardedAt])
+  @@map("badge_awards")
+}
+
+/// Days in a row with some learning in them, on the academy's clock. A
+/// lesson watched, a class attended or a paper handed in counts; opening
+/// the portal does not.
+model LearnerStreak {
+  organizationId String
+  userId         String
+  current        Int      @default(0)
+  longest        Int      @default(0)
+  /// YYYY-MM-DD of the last day that counted.
+  lastActiveDay  String?
+  /// The last 60 active days, YYYY-MM-DD, newest last, for the calendar.
+  recentDays     String[] @default([])
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, userId])
+  @@map("learner_streaks")
 }
 
 model OtpToken {
