@@ -83,6 +83,22 @@ export async function senderFor(
       if (resolved.fromEnv.length || Object.keys(resolved.values).length) partial.push(def.name);
       continue;
     }
+    // A verified sending domain of the academy's own replaces the provider's
+    // From, and signs SMTP mail with the academy's DKIM key. API providers
+    // check the domain on their own side; the From still changes here.
+    if (category === 'email') {
+      const { sendingIdentity } = await import('@/lib/email-domain');
+      const own = await sendingIdentity(organizationId).catch(() => null);
+      if (own) {
+        const values: Record<string, string> = { ...resolved.values, fromEmail: own.fromEmail, fromName: own.fromName ?? resolved.values.fromName ?? '' };
+        if (own.dkim) {
+          values.dkimDomain = own.dkim.domainName;
+          values.dkimSelector = own.dkim.keySelector;
+          values.dkimPrivateKey = own.dkim.privateKey;
+        }
+        return { sender: BUILDERS[def.id](values) };
+      }
+    }
     return { sender: BUILDERS[def.id](resolved.values) };
   }
 

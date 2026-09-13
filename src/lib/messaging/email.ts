@@ -43,6 +43,9 @@ export function smtpSender(values: Credentials): Sender {
         text: message.body,
         html: message.html ?? asHtml(message.body),
         attachments: message.attachments?.map((a) => ({ filename: a.fileName, content: Buffer.from(a.base64, 'base64'), contentType: a.mimeType })),
+        // The academy's own DKIM key, once their domain has verified; the
+        // relay still delivers, the signature says whose mail it is.
+        ...(values.dkimPrivateKey ? { dkim: { domainName: values.dkimDomain, keySelector: values.dkimSelector, privateKey: values.dkimPrivateKey } } : {}),
       });
 
       return sent(info.messageId, 0);
