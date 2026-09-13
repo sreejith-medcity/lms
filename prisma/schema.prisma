@@ -233,6 +233,7 @@ model User {
   reportCards          ReportCard[]
   pushSubscriptions    PushSubscription[]
   lessonQuestions      LessonQuestion[]
+  dataRequests         DataRequest[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -1147,6 +1148,43 @@ model SessionInstructor {
 /// A question pinned to a lesson, answered by the trainer where the whole
 /// batch can read it. Distinct from the community room: this is "I did not
 /// follow minute twelve", and it stays with minute twelve.
+/// A learner asking for their data, or to be forgotten. An export is done
+/// on the spot and recorded; a deletion waits for the office, which either
+/// anonymises the account (financial records stay, the person does not) or
+/// refuses with a reason the learner is told.
+model DataRequest {
+  id             String            @id @default(cuid())
+  organizationId String
+  userId         String
+  kind           DataRequestKind
+  status         DataRequestStatus @default(OPEN)
+  /// Why they asked, in their words.
+  reason         String?
+  /// What the office said when closing it; the learner is told.
+  note           String?
+  handledById    String?
+  handledAt      DateTime?
+  createdAt      DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([userId, kind])
+  @@map("data_requests")
+}
+
+enum DataRequestKind {
+  EXPORT
+  DELETION
+}
+
+enum DataRequestStatus {
+  OPEN
+  DONE
+  REFUSED
+  CANCELLED
+}
+
 model LessonQuestion {
   id             String    @id @default(cuid())
   organizationId String
