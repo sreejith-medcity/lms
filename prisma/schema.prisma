@@ -234,6 +234,7 @@ model User {
   pushSubscriptions    PushSubscription[]
   lessonQuestions      LessonQuestion[]
   dataRequests         DataRequest[]
+  miscFees             MiscFee[]
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
   @@unique([organizationId, email])
@@ -1561,6 +1562,7 @@ model Enrollment {
   attempts     Attempt[]
   certificates IssuedCertificate[]
   instalments  Instalment[]
+  miscFees     MiscFee[]
 
   assignmentSubmissions AssignmentSubmission[]
   reportCards           ReportCard[]
@@ -2196,14 +2198,44 @@ model PricingPlan {
   invoiceAnchor   String   @default("CLASS_COMMENCEMENT") // or ENROLLMENT
   isActive        Boolean  @default(true)
   sortOrder       Int      @default(0)
+  /// The template this plan was made from, if any; the values are copied,
+  /// so editing the template later does not move a price under anybody.
+  templateId      String?
 
-  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
-  branch      Branch?      @relation(fields: [branchId], references: [id])
+  product     Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branch      Branch?          @relation(fields: [branchId], references: [id])
+  template    PricingTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   enrollments Enrollment[]
   orderItems  OrderItem[]
 
   @@index([productId])
   @@map("pricing_plans")
+}
+
+/// A reusable shape for a price: how it is paid, in how many parts, how far
+/// apart, what share each part takes, and how long access lasts. The office
+/// picks one when adding a plan and the fields fill themselves.
+model PricingTemplate {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String
+  planType        PlanType @default(INSTALMENT)
+  instalmentCount Int      @default(3)
+  gapDays         Int      @default(30)
+  /// Percent of the price for each part, adding up to 100. Empty means
+  /// equal parts.
+  shares          Int[]    @default([])
+  validityDays    Int?
+  invoiceAnchor   String   @default("CLASS_COMMENCEMENT")
+  notes           String?
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  plans PricingPlan[]
+
+  @@index([organizationId, isActive, sortOrder])
+  @@map("pricing_templates")
 }
 
 enum PlanType {
@@ -2311,6 +2343,9 @@ model OrderItem {
   /// purchase: fulfilment then settles that instalment instead of enrolling
   /// the learner a second time.
   instalmentId  String?
+  /// Set when the line is a miscellaneous fee (an exam fee, study material)
+  /// being paid online: fulfilment marks that fee paid, nothing is enrolled.
+  miscFeeId     String?
   titleSnapshot String
   pricePaise    Int
   discountPaise Int     @default(0)
@@ -2321,8 +2356,10 @@ model OrderItem {
   product     Product      @relation(fields: [productId], references: [id])
   pricingPlan PricingPlan? @relation(fields: [pricingPlanId], references: [id])
   instalment  Instalment?  @relation(fields: [instalmentId], references: [id])
+  miscFee     MiscFee?     @relation(fields: [miscFeeId], references: [id])
 
   @@index([instalmentId])
+  @@index([miscFeeId])
   @@map("order_items")
 }
 
@@ -2346,6 +2383,65 @@ model Instalment {
   @@unique([enrollmentId, sequence])
   @@index([dueDate, paidAt])
   @@map("instalments")
+}
+
+/// The charges an academy raises besides the course fee: an exam fee, study
+/// material, a certificate reissue, a late fee. A catalogue with a usual
+/// amount, so the office picks one rather than typing it each time.
+model FeeType {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  amountPaise    Int      @default(0)
+  taxable        Boolean  @default(true)
+  description    String?
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  fees MiscFee[]
+
+  @@index([organizationId, isActive, sortOrder])
+  @@map("fee_types")
+}
+
+/// One such charge raised against one learner on one enrolment. Paid at
+/// the counter (a receipt) or online (an order line), or waived with a
+/// reason; never deleted once paid.
+model MiscFee {
+  id             String        @id @default(cuid())
+  organizationId String
+  userId         String
+  enrollmentId   String
+  feeTypeId      String?
+  label          String
+  amountPaise    Int
+  taxable        Boolean       @default(true)
+  dueDate        DateTime?
+  status         MiscFeeStatus @default(PENDING)
+  note           String?
+  paymentId      String?
+  paidAt         DateTime?
+  waivedReason   String?
+  reminderSentAt DateTime?
+  createdById    String?
+  createdAt      DateTime      @default(now())
+
+  feeType    FeeType?    @relation(fields: [feeTypeId], references: [id], onDelete: SetNull)
+  enrollment Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([organizationId, status, dueDate])
+  @@index([enrollmentId])
+  @@map("misc_fees")
+}
+
+enum MiscFeeStatus {
+  PENDING
+  PAID
+  WAIVED
+  CANCELLED
 }
 
 model Payment {
