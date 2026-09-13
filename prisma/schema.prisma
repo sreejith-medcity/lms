@@ -1215,6 +1215,55 @@ model FlashcardReview {
   @@map("flashcard_reviews")
 }
 
+/// A report sent by email on a schedule: the same rows the screen shows, as
+/// a CSV, to whoever the office names, without anyone remembering to run it.
+model ReportSchedule {
+  id             String    @id @default(cuid())
+  organizationId String
+  reportId       String
+  name           String
+  /// DAILY, WEEKLY or MONTHLY.
+  cadence        String    @default("WEEKLY")
+  /// 1 (Monday) to 7 (Sunday), for WEEKLY.
+  dayOfWeek      Int       @default(1)
+  /// 1 to 28, for MONTHLY.
+  dayOfMonth     Int       @default(1)
+  /// The hour, on the academy's clock.
+  hourLocal      Int       @default(8)
+  /// How far back the report looks: 7, 30, 90 days.
+  rangeDays      Int       @default(30)
+  recipients     String[]  @default([])
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime
+  createdById    String?
+  createdAt      DateTime  @default(now())
+
+  runs ReportRun[]
+
+  @@index([organizationId, isActive, nextRunAt])
+  @@map("report_schedules")
+}
+
+/// One sending of a scheduled report: the file as it went, kept so the
+/// email can carry it and the office can see what was sent.
+model ReportRun {
+  id             String   @id @default(cuid())
+  organizationId String
+  scheduleId     String
+  reportId       String
+  fileName       String
+  csv            String
+  rows           Int      @default(0)
+  sentTo         String[] @default([])
+  createdAt      DateTime @default(now())
+
+  schedule ReportSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, createdAt])
+  @@map("report_runs")
+}
+
 /// A course saved for later by a signed-in learner. Guests keep theirs in a
 /// cookie until they sign in, when it is merged here.
 model Wishlist {
