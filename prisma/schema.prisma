@@ -1213,6 +1213,71 @@ model FlashcardReview {
   @@map("flashcard_reviews")
 }
 
+/// A partner who sends buyers: a consultant, an agent, a former learner
+/// with a following. They get a link; a sale through it earns them a share.
+model Affiliate {
+  id                String   @id @default(cuid())
+  organizationId    String
+  name              String
+  email             String?
+  phone             String?
+  /// What goes in the link: short, memorable, unique per academy.
+  code              String
+  commissionPercent Float    @default(10)
+  status            String   @default("ACTIVE") // ACTIVE | PAUSED
+  /// The learner account this partner signs in with, when they have one, so they can see their own numbers.
+  userId            String?
+  /// How they are paid: a UPI id, a bank line, whatever the office writes.
+  payoutDetails     String?
+  notes             String?
+  createdById       String?
+  createdAt         DateTime @default(now())
+
+  clicks AffiliateClick[]
+  sales  AffiliateSale[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@map("affiliates")
+}
+
+model AffiliateClick {
+  id          String   @id @default(cuid())
+  affiliateId String
+  path        String?
+  /// A hash of the address, enough to count distinct visitors, not enough to name one.
+  visitorHash String?
+  landedAt    DateTime @default(now())
+
+  affiliate Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId, landedAt])
+  @@map("affiliate_clicks")
+}
+
+/// One order that came through a partner's link, and what it earns them.
+model AffiliateSale {
+  id              String    @id @default(cuid())
+  organizationId  String
+  affiliateId     String
+  orderId         String    @unique
+  /// The base the commission was computed on: the order after discount, before tax.
+  basePaise       Int
+  commissionPaise Int
+  /// PENDING until the order is paid, APPROVED once it is, PAID when the partner has been paid, VOID on refund.
+  status          String    @default("PENDING")
+  paidAt          DateTime?
+  payoutRef       String?
+  createdAt       DateTime  @default(now())
+
+  affiliate Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([affiliateId, status])
+  @@map("affiliate_sales")
+}
+
 /// A learner asking for their data, or to be forgotten. An export is done
 /// on the spot and recorded; a deletion waits for the office, which either
 /// anonymises the account (financial records stay, the person does not) or
@@ -2151,6 +2216,7 @@ model Order {
   items    OrderItem[]
   payments Payment[]
   invoice  Invoice?
+  affiliateSale AffiliateSale?
   promo    PromoCode?  @relation(fields: [promoCodeId], references: [id])
 
   @@unique([organizationId, orderNo])
