@@ -2434,21 +2434,28 @@ model FeedbackResponse {
 }
 
 model Testimonial {
-  id             String   @id @default(cuid())
-  organizationId String
-  userId         String?
-  productId      String?
-  authorName     String
-  authorEmail    String?
-  rating         Float
-  comment        String?
-  isPublished    Boolean  @default(false)
-  createdAt      DateTime @default(now())
+  id               String   @id @default(cuid())
+  organizationId   String
+  userId           String?
+  productId        String?
+  authorName       String
+  authorEmail      String?
+  rating           Float
+  comment          String?
+  isPublished      Boolean  @default(false)
+  /// How far through the course the learner was when they wrote it; null for one the team typed in.
+  progressAtReview Int?
+  /// The academy's public reply, shown under the review.
+  reply            String?
+  repliedAt        DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
 
   user    User?    @relation(fields: [userId], references: [id])
   product Product? @relation(fields: [productId], references: [id])
 
   @@index([organizationId, isPublished])
+  @@index([productId, isPublished, createdAt])
   @@map("testimonials")
 }
 
