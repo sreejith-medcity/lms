@@ -239,6 +239,7 @@ model User {
   payouts              InstructorPayout[]
   helpTickets          HelpTicket[]
   badges               BadgeAward[]
+  scormAttempts        ScormAttempt[]
   streaks              LearnerStreak[]
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
@@ -408,6 +409,75 @@ model LearnerStreak {
 
   @@id([organizationId, userId])
   @@map("learner_streaks")
+}
+
+/// A SCORM (1.2 or 2004) or xAPI package, unpacked from its zip into the
+/// bucket and launched in a frame; the API the package expects is answered
+/// by the player and saved here per learner.
+model ScormPackage {
+  id             String   @id @default(cuid())
+  organizationId String
+  materialId     String   @unique
+  assetId        String
+  title          String
+  /// SCORM_1_2, SCORM_2004 or XAPI.
+  standard       String
+  identifier     String?
+  launchPath     String
+  storagePrefix  String
+  masteryScore   Float?
+  fileCount      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  material Material       @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  attempts ScormAttempt[]
+
+  @@index([organizationId])
+  @@map("scorm_packages")
+}
+
+model ScormAttempt {
+  id           String   @id @default(cuid())
+  packageId    String
+  userId       String
+  /// not attempted, incomplete, completed, passed, failed, browsed.
+  lessonStatus String   @default("not attempted")
+  scoreRaw     Float?
+  scoreMax     Float?
+  scoreMin     Float?
+  suspendData  String?
+  location     String?
+  totalSeconds Int      @default(0)
+  /// The whole data model as the package last left it.
+  cmi          Json?
+  /// xAPI State API documents, keyed by stateId.
+  xapiState    Json?
+  startedAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  package ScormPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, userId])
+  @@map("scorm_attempts")
+}
+
+/// An xAPI statement a package sent to this LRS. Kept whole; the verb and
+/// object are lifted out so completion and reports can read them.
+model XapiStatement {
+  id             String   @id @default(cuid())
+  organizationId String
+  packageId      String?
+  userId         String?
+  statementId    String   @unique
+  verb           String
+  objectId       String
+  statement      Json
+  storedAt       DateTime @default(now())
+
+  @@index([organizationId, userId, storedAt])
+  @@index([packageId, userId])
+  @@map("xapi_statements")
 }
 
 model OtpToken {
@@ -1071,6 +1141,7 @@ model Material {
   embeddings ContentEmbedding[]
 
   questions  LessonQuestion[]
+  scorm      ScormPackage?
   @@index([sectionId])
   @@map("materials")
 }
