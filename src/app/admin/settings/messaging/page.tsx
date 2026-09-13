@@ -100,11 +100,11 @@ export default async function MessagingPage() {
           {Object.entries(readiness).map(([channel, row]) => (
             <Card key={channel}>
               <p className="flex items-center gap-2 font-medium">
-                {channel === 'EMAIL' ? 'Email' : channel === 'SMS' ? 'SMS' : 'WhatsApp'}
-                {row.ready ? <Badge tone="ok">ready</Badge> : <Badge tone="neutral">no provider</Badge>}
+                {channel === 'EMAIL' ? 'Email' : channel === 'SMS' ? 'SMS' : channel === 'WHATSAPP' ? 'WhatsApp' : channel === 'PUSH' ? 'Push' : 'In-app bell'}
+                {row.ready ? <Badge tone="ok">ready</Badge> : <Badge tone="neutral">{channel === 'PUSH' ? 'keys missing' : 'no provider'}</Badge>}
               </p>
               <p className="t-small muted mt-1">
-                {row.ready ? `Sending through ${row.provider}.` : row.reason}
+                {row.ready ? (channel === 'IN_APP' ? 'Every learner message also lands in their bell; nothing to connect.' : channel === 'PUSH' ? 'Browsers and phones that switched push on are told.' : `Sending through ${row.provider}.`) : row.reason}
               </p>
               {channel === 'WHATSAPP' && row.ready && (
                 <p className="t-small faint mt-1">

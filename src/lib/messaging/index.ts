@@ -108,6 +108,13 @@ export async function channelReadiness(
       reason: resolution.reason ?? null,
     };
   }
+  const { pushConfigured } = await import('./push');
+  out.PUSH = {
+    ready: pushConfigured(),
+    provider: pushConfigured() ? 'web-push' : null,
+    reason: pushConfigured() ? null : 'Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT in the environment (npx web-push generate-vapid-keys makes a pair).',
+  };
+  out.IN_APP = { ready: true, provider: 'in-app', reason: null };
   return out;
 }
 

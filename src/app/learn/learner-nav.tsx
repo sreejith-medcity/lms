@@ -19,7 +19,7 @@ export function LearnerNav({
       {all.map((item) => {
         const active =
           item.href === '/learn'
-            ? pathname === '/learn' || /^\/learn\/(?!community|wallet|book|purchases|fees|practice|account|assignments|calendar)/.test(pathname)
+            ? pathname === '/learn' || /^\/learn\/(?!community|wallet|book|purchases|fees|practice|account|assignments|calendar|notifications)/.test(pathname)
             : item.href === '/'
               ? false
               : pathname.startsWith(item.href);

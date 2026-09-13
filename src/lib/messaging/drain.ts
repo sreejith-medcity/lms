@@ -89,6 +89,22 @@ export async function drain(organizationId: string, limit = 100): Promise<DrainR
   const senders = new Map<string, Awaited<ReturnType<typeof senderFor>>>();
 
   for (const row of due) {
+    // The two channels delivered inside the product: the bell, and the
+    // browser's own push service. Neither has a provider to resolve.
+    if (row.channel === 'IN_APP' || row.channel === 'PUSH') {
+      const claim = await db.notificationLog.updateMany({ where: { id: row.id, status: 'QUEUED' }, data: { status: 'SENDING', attempts: { increment: 1 } } });
+      if (claim.count === 0) continue;
+      result.claimed += 1;
+      const outcome = await deliverInside(organizationId, row);
+      if (outcome === 'sent') result.sent += 1;
+      else if (outcome === 'deferred') {
+        result.deferred += 1;
+        const note = 'Web push keys are not set, so push notifications wait.';
+        if (!result.blocked.includes(note)) result.blocked.push(note);
+      } else result.failed += 1;
+      continue;
+    }
+
     let resolution = senders.get(row.channel);
     if (!resolution) {
       resolution = await senderFor(organizationId, row.channel);
@@ -350,4 +366,58 @@ async function attachmentsFor(organizationId: string, context: Record<string, st
     console.error('[drain] attachment', err instanceof Error ? err.message : err);
   }
   return out.length ? out : undefined;
+}
+
+
+/**
+ * IN_APP: the row itself is the message, so it is rendered now and marked
+ * sent; the bell reads it back. PUSH: rendered the same way and handed to
+ * every subscription the person holds; a learner with no subscription
+ * simply has nothing to receive, which is not a failure.
+ */
+async function deliverInside(
+  organizationId: string,
+  row: { id: string; channel: $Enums.Channel; eventKey: string; userId: string | null; context: unknown; templateKey: string | null },
+): Promise<'sent' | 'failed' | 'deferred'> {
+  const context = (row.context ?? {}) as Record<string, string>;
+  const template = (await templateForRow(organizationId, { ...row, channel: row.channel })) ?? (await templateForRow(organizationId, { ...row, channel: 'EMAIL' }));
+  if (!template) {
+    await db.notificationLog.update({ where: { id: row.id }, data: { status: 'FAILED', error: `No template for ${row.eventKey}.` } });
+    return 'failed';
+  }
+  const rendered = render(template, context);
+  if (rendered.missing.length) {
+    await db.notificationLog.update({ where: { id: row.id }, data: { status: 'FAILED', error: `Nothing to fill ${rendered.missing.join(', ')}.` } });
+    return 'failed';
+  }
+  const kept = { ...context, _renderedSubject: rendered.subject, _renderedBody: rendered.body };
+
+  if (row.channel === 'IN_APP') {
+    await db.notificationLog.update({ where: { id: row.id }, data: { status: 'SENT', sentAt: new Date(), provider: 'in-app', context: kept as Prisma.InputJsonValue } });
+    return 'sent';
+  }
+
+  const { pushConfigured, pushToUser } = await import('./push');
+  if (!pushConfigured()) {
+    await db.notificationLog.update({ where: { id: row.id }, data: { status: 'QUEUED', nextAttemptAt: new Date(Date.now() + 6 * 60 * 60_000), error: 'Web push keys are not set.' } });
+    return 'deferred';
+  }
+  if (!row.userId) {
+    await db.notificationLog.update({ where: { id: row.id }, data: { status: 'FAILED', error: 'Push needs an account to send to.' } });
+    return 'failed';
+  }
+  const url = context.url && context.url.startsWith('/') ? context.url : '/learn/notifications';
+  const out = await pushToUser(organizationId, row.userId, { title: rendered.subject || 'Medcity', body: rendered.body.slice(0, 240), url, tag: row.eventKey });
+  await db.notificationLog.update({
+    where: { id: row.id },
+    data: {
+      status: out.sent > 0 || out.failed.length === 0 ? 'SENT' : 'FAILED',
+      sentAt: new Date(),
+      provider: 'web-push',
+      providerRef: out.sent ? `${out.sent} device${out.sent === 1 ? '' : 's'}` : null,
+      error: out.failed[0] ?? null,
+      context: kept as Prisma.InputJsonValue,
+    },
+  });
+  return out.sent > 0 || out.failed.length === 0 ? 'sent' : 'failed';
 }

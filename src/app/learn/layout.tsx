@@ -7,6 +7,7 @@ import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { learnerNav } from '@/lib/learner-nav';
 import { BrandLockup } from '@/components/brand-lockup';
 import { LearnerNav } from './learner-nav';
+import { Bell } from './bell';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
   const nav = await learnerNav(tenant.organizationId);
   const initial = user.name.trim().slice(0, 1).toUpperCase() || '?';
   const avatar = (await db.user.findUnique({ where: { id: user.id }, select: { avatarUrl: true } }))?.avatarUrl ?? null;
+  const unread = await db.notificationLog.count({ where: { organizationId: tenant.organizationId, userId: user.id, channel: 'IN_APP', status: 'SENT' } });
 
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
@@ -34,6 +36,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
           <LearnerNav items={nav} isStaff={user.kind === 'STAFF'} />
 
           <div className="ml-auto flex items-center gap-3">
+            <Bell unread={unread} />
             <Link href="/learn/account" className="flex items-center gap-2" title="Account">
               <span className="t-small faint hidden sm:inline">{user.name}</span>
               {avatar ? (

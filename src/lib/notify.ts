@@ -82,6 +82,17 @@ async function channelsFor(organizationId: string, eventKey: string): Promise<$E
   return channels.length ? channels : DEFAULT_CHANNELS;
 }
 
+/**
+ * Sign-in codes and the like are not news; everything else the academy
+ * sends a learner also lands in their bell, whatever the outside channels
+ * say, because an inbox nobody has to configure is the one that works.
+ */
+const NOT_IN_APP = new Set(['account.otp', 'account.two_factor', 'account.password_reset']);
+export function inAppToo(eventKey: string, channels: $Enums.Channel[]): $Enums.Channel[] {
+  if (NOT_IN_APP.has(eventKey) || channels.includes('IN_APP')) return channels;
+  return [...channels, 'IN_APP'];
+}
+
 function targetFor(channel: $Enums.Channel, person: Recipient): string | null {
   if (channel === 'EMAIL') return person.email;
   if (channel === 'SMS' || channel === 'WHATSAPP') return person.phone;
@@ -99,7 +110,7 @@ export interface QueueResult {
 export async function queueNotifications(request: QueueRequest): Promise<QueueResult> {
   const channels = request.channels?.length
     ? request.channels
-    : await channelsFor(request.organizationId, request.eventKey);
+    : inAppToo(request.eventKey, await channelsFor(request.organizationId, request.eventKey));
   const dedupe = request.dedupeKey ?? null;
 
   // One query, not one per person: a batch of forty absentees should not be
