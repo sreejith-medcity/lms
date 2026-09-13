@@ -234,6 +234,7 @@ model User {
   pushSubscriptions    PushSubscription[]
   lessonQuestions      LessonQuestion[]
   dataRequests         DataRequest[]
+  flashcardReviews     FlashcardReview[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -661,6 +662,7 @@ model Course {
   assignments   Assignment[]
   prerequisites CoursePrerequisite[] @relation("prerequisiteOf")
   unlocks       CoursePrerequisite[] @relation("unlocks")
+  flashcards    Flashcard[]
 
   @@index([organizationId])
   @@map("courses")
@@ -1163,6 +1165,54 @@ model SessionInstructor {
 /// A question pinned to a lesson, answered by the trainer where the whole
 /// batch can read it. Distinct from the community room: this is "I did not
 /// follow minute twelve", and it stays with minute twelve.
+/// A card to revise: a prompt on the front, the answer on the back. Set by
+/// a trainer for the course (or drafted from a transcript and kept), or
+/// written by a learner for themselves.
+model Flashcard {
+  id             String   @id @default(cuid())
+  organizationId String
+  courseId       String
+  /// The lesson it came from, when it came from one.
+  materialId     String?
+  front          String
+  back           String
+  hint           String?
+  /// TRAINER, AI or LEARNER.
+  source         String   @default("TRAINER")
+  /// Set for a learner's own card; null means the whole course sees it.
+  ownerUserId    String?
+  sortOrder      Int      @default(0)
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  course  Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  reviews FlashcardReview[]
+
+  @@index([organizationId, courseId, ownerUserId])
+  @@map("flashcards")
+}
+
+/// Where one learner is with one card: the spaced repetition state.
+model FlashcardReview {
+  id             String    @id @default(cuid())
+  cardId         String
+  userId         String
+  due            DateTime
+  intervalDays   Float     @default(0)
+  ease           Float     @default(2.5)
+  reps           Int       @default(0)
+  lapses         Int       @default(0)
+  lastGrade      Int?
+  lastReviewedAt DateTime?
+
+  card Flashcard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, userId])
+  @@index([userId, due])
+  @@map("flashcard_reviews")
+}
+
 /// A learner asking for their data, or to be forgotten. An export is done
 /// on the spot and recorded; a deletion waits for the office, which either
 /// anonymises the account (financial records stay, the person does not) or
