@@ -6,6 +6,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
 import { razorpayConfig } from '@/lib/razorpay';
+import { GATEWAY_LABEL, gatewayChoice, prepareOrder } from '@/lib/payments';
 import { settingBool, settingNumber } from '@/lib/settings/store';
 import { estimatedGatewayFeePaise } from '@/lib/payment-amount';
 import { CART_COOKIE } from '@/lib/cart-cookie';
@@ -17,12 +18,20 @@ import { TrackEvent } from '@/components/track-event';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Checkout', robots: { index: false, follow: false } };
 
-export default async function CheckoutPage({ params }: { params: Promise<{ orderId: string }> }) {
+export default async function CheckoutPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ orderId: string }>;
+  searchParams: Promise<{ failed?: string; pending?: string }>;
+}) {
   const { orderId } = await params;
+  const { failed, pending } = await searchParams;
   const tenant = await requireTenant();
   const user = await getSessionUser();
 
   const config = razorpayConfig();
+  const choice = await gatewayChoice(tenant.organizationId);
 
   const order = await db.order.findFirst({
     where: { id: orderId, organizationId: tenant.organizationId },
@@ -112,7 +121,22 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
     );
   }
 
-  if (!config || !order.gatewayOrderId) {
+  // Which button to show: the gateway the order was prepared for, or the
+  // academy's choice now. Razorpay needs its order id to open the window.
+  const primary = choice.primary ?? (choice.international ? 'stripe' : null);
+  // A Razorpay order is minted when the order is written; after a detour to
+  // another gateway (a Stripe attempt that was cancelled) it is minted again,
+  // so the window never opens on another gateway's id.
+  let razorpayOrderId = order.gateway === 'razorpay' ? order.gatewayOrderId : null;
+  if (primary === 'razorpay' && config && !razorpayOrderId) {
+    await prepareOrder(tenant.organizationId, order).catch(() => null);
+    razorpayOrderId = (await db.order.findUnique({ where: { id: order.id }, select: { gatewayOrderId: true } }))?.gatewayOrderId ?? null;
+  }
+  const razorpayReady = primary === 'razorpay' && Boolean(config) && Boolean(razorpayOrderId);
+  const redirectReady = primary !== null && primary !== 'razorpay';
+  const offerStripe = choice.international === 'stripe' && primary !== 'stripe';
+
+  if (!razorpayReady && !redirectReady) {
     return (
       <Shell title="Payment is not available">
         <p className="muted">
@@ -128,10 +152,22 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
   // Where the academy's gateway account charges its fee to the buyer, the
   // card is charged more than the order. It is said here, before the payment
   // window opens, rather than discovered on a statement afterwards.
-  const [customerBearsFee, feePercent] = await Promise.all([
+  const [customerBearsFee, feePercent, emiNote] = await Promise.all([
     settingBool(tenant.organizationId, 'commerce.customerBearsGatewayFee'),
     settingNumber(tenant.organizationId, 'commerce.gatewayFeePercent'),
+    settingBool(tenant.organizationId, 'payments.emiNote'),
   ]);
+  const failedNote =
+    failed === 'cancelled'
+      ? 'The payment was cancelled. Nothing was charged; you can try again.'
+      : failed === 'payment'
+        ? 'The payment did not go through. Nothing was charged; you can try again or pay another way.'
+        : failed === 'start'
+          ? 'The payment page could not be opened just now. Please try again in a moment.'
+          : failed
+            ? 'We could not confirm the payment yet. If money left your account, it will be matched to this order shortly; do not pay twice.'
+            : null;
+  const pendingNote = pending ? 'The gateway is still confirming your payment. This page updates once it does; do not pay again.' : null;
   const gatewayFeePaise = customerBearsFee
     ? estimatedGatewayFeePaise(order.totalPaise, feePercent)
     : 0;
@@ -210,27 +246,65 @@ export default async function CheckoutPage({ params }: { params: Promise<{ order
           }}
         />
 
+        {failedNote && (
+          <p className="mt-4 rounded-[var(--radius-sm)] border px-3 py-2 text-sm" style={{ background: 'var(--warn-soft)', borderColor: 'var(--warn)' }}>
+            {failedNote}
+          </p>
+        )}
+        {pendingNote && (
+          <p className="mt-4 rounded-[var(--radius-sm)] border px-3 py-2 text-sm" style={{ background: 'var(--surface-2)' }}>
+            {pendingNote}
+          </p>
+        )}
+        {emiNote && <p className="t-small muted mt-4">Paying by card? EMI options appear in the payment window for cards that support it.</p>}
+
         <div className="mt-6">
-          <PayNow
-            orderId={order.id}
-            orderNo={order.orderNo}
-            taxPaise={order.taxPaise}
-            items={trackItems}
-            gatewayOrderId={order.gatewayOrderId}
-            keyId={config.keyId}
-            testMode={config.isTestMode}
-            amountPaise={order.totalPaise}
-            currency={order.currency}
-            organizationName={org?.name ?? 'Academy'}
-            brandColor={org?.brandColor ?? '#322046'}
-            learnerName={buyer.name}
-            learnerEmail={buyer.email}
-            productId={order.items[0]?.productId ?? null}
-          />
+          {razorpayReady && config && razorpayOrderId ? (
+            <PayNow
+              orderId={order.id}
+              orderNo={order.orderNo}
+              taxPaise={order.taxPaise}
+              items={trackItems}
+              gatewayOrderId={razorpayOrderId}
+              keyId={config.keyId}
+              testMode={config.isTestMode}
+              amountPaise={order.totalPaise}
+              currency={order.currency}
+              organizationName={org?.name ?? 'Academy'}
+              brandColor={org?.brandColor ?? '#322046'}
+              learnerName={buyer.name}
+              learnerEmail={buyer.email}
+              productId={order.items[0]?.productId ?? null}
+            />
+          ) : (
+            primary && (
+              <form method="post" action={`/api/payments/${primary}/start`}>
+                <input type="hidden" name="orderId" value={order.id} />
+                <button
+                  type="submit"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-[var(--radius-sm)] text-base font-semibold text-[var(--brand-ink)]"
+                  style={{ background: 'var(--brand)' }}
+                >
+                  Pay {formatMoney(order.totalPaise, order.currency)} with {GATEWAY_LABEL[primary]}
+                </button>
+              </form>
+            )
+          )}
+          {offerStripe && (
+            <form method="post" action="/api/payments/stripe/start" className="mt-3">
+              <input type="hidden" name="orderId" value={order.id} />
+              <button
+                type="submit"
+                className="inline-flex h-11 w-full items-center justify-center rounded-[var(--radius-sm)] border bg-[var(--surface)] text-sm font-medium"
+              >
+                Paying from outside India? Pay by card through Stripe
+              </button>
+            </form>
+          )}
         </div>
 
         <p className="t-small faint mt-4">
-          Your card details are entered on Razorpay and never reach this site. Access is granted
+          Your card details are entered on {primary ? GATEWAY_LABEL[primary] : 'the gateway'}{offerStripe ? ' or Stripe' : ''} and never reach this site. Access is granted
           only after the payment is confirmed with the gateway, not when this page says so.
         </p>
       </div>

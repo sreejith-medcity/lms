@@ -53,13 +53,14 @@ async function recordRefusal(input: {
   gatewayPaymentId: string;
   reason: string;
   detail: Record<string, unknown>;
+  gateway?: string;
 }) {
   console.error('[fulfilment] refused', input.reason, input.detail);
   try {
     await db.gatewayEvent.create({
       data: {
         organizationId: input.organizationId,
-        gateway: 'RAZORPAY',
+        gateway: input.gateway ?? 'RAZORPAY',
         eventId: `refusal:${input.gatewayPaymentId}:${Date.now()}`,
         event: 'fulfilment.refused',
         payload: { orderId: input.orderId, ...input.detail } as Prisma.InputJsonValue,
@@ -96,7 +97,10 @@ export async function fulfilPaidOrder(input: {
   feePaise?: number | null;
   method?: string | null;
   raw?: unknown;
+  /** Which gateway paid: RAZORPAY unless told otherwise. */
+  gateway?: string;
 }): Promise<FulfilResult> {
+  const gateway = input.gateway ?? 'RAZORPAY';
   const order = await db.order.findFirst({
     where: { id: input.orderId, organizationId: input.organizationId },
     include: {
@@ -109,6 +113,7 @@ export async function fulfilPaidOrder(input: {
 
   if (!order) {
     await recordRefusal({
+      gateway,
       organizationId: input.organizationId,
       orderId: input.orderId,
       gatewayPaymentId: input.gatewayPaymentId,
@@ -151,6 +156,7 @@ export async function fulfilPaidOrder(input: {
 
   if (!amount.ok) {
     await recordRefusal({
+      gateway,
       organizationId: input.organizationId,
       orderId: order.id,
       gatewayPaymentId: input.gatewayPaymentId,
@@ -190,7 +196,7 @@ export async function fulfilPaidOrder(input: {
   const existingPayment = await db.payment.findFirst({
     where: {
       organizationId: input.organizationId,
-      gateway: 'RAZORPAY',
+      gateway,
       gatewayRef: input.gatewayPaymentId,
     },
     select: { id: true, status: true },
@@ -332,7 +338,7 @@ export async function fulfilPaidOrder(input: {
       where: {
         organizationId_gateway_gatewayRef: {
           organizationId: input.organizationId,
-          gateway: 'RAZORPAY',
+          gateway,
           gatewayRef: input.gatewayPaymentId,
         },
       },
@@ -340,7 +346,7 @@ export async function fulfilPaidOrder(input: {
         organizationId: input.organizationId,
         orderId: order.id,
         userId: order.userId,
-        gateway: 'RAZORPAY',
+        gateway,
         gatewayRef: input.gatewayPaymentId,
         method: input.method ?? null,
         amountPaise: input.amountPaise,
@@ -562,6 +568,7 @@ export async function fulfilPaidOrder(input: {
         ? String((err as { code: unknown }).code)
         : undefined;
     await recordRefusal({
+      gateway,
       organizationId: input.organizationId,
       orderId: order.id,
       gatewayPaymentId: input.gatewayPaymentId,
@@ -639,12 +646,14 @@ export async function recordFailedPayment(input: {
   amountPaise: number;
   reason?: string | null;
   raw?: unknown;
+  gateway?: string;
 }) {
+  const gateway = input.gateway ?? 'RAZORPAY';
   await db.payment.upsert({
     where: {
       organizationId_gateway_gatewayRef: {
         organizationId: input.organizationId,
-        gateway: 'RAZORPAY',
+        gateway,
         gatewayRef: input.gatewayPaymentId,
       },
     },
@@ -652,7 +661,7 @@ export async function recordFailedPayment(input: {
       organizationId: input.organizationId,
       orderId: input.orderId ?? null,
       userId: input.userId ?? null,
-      gateway: 'RAZORPAY',
+      gateway,
       gatewayRef: input.gatewayPaymentId,
       amountPaise: input.amountPaise,
       status: 'FAILED',

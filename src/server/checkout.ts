@@ -7,7 +7,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { priceOrder } from '@/lib/order-lines';
 import { resolveSelectedAddons } from '@/lib/addons';
-import { createRazorpayOrder, paymentsConfigured } from '@/lib/razorpay';
+import { paymentsAvailable, prepareOrder } from '@/lib/payments';
 import { claimPromo, PromoRefused } from '@/lib/promo-claim';
 import { rememberIntent, readBasket, CART_COOKIE } from '@/lib/cart';
 import { promoTarget } from '@/lib/cart-rules';
@@ -49,7 +49,7 @@ export async function startCheckout(
     const user = await getSessionUser();
     if (!user) return { ok: false, error: 'Please sign in to continue.', signIn: true };
 
-    if (!paymentsConfigured()) {
+    if (!(await paymentsAvailable(tenant.organizationId))) {
       return { ok: false, error: 'Online payment is not switched on yet. Please contact the academy.' };
     }
 
@@ -306,17 +306,7 @@ export async function startCheckout(
     await rememberIntent(product.id, plan.id);
     for (const a of addons) await rememberIntent(a.productId, a.pricingPlanId);
 
-    const gatewayOrder = await createRazorpayOrder({
-      amountPaise: order.totalPaise,
-      currency: order.currency,
-      receipt: order.orderNo,
-      notes: { orderId: order.id, organizationId: tenant.organizationId },
-    });
-
-    await db.order.update({
-      where: { id: order.id },
-      data: { gatewayOrderId: gatewayOrder.id },
-    });
+    await prepareOrder(tenant.organizationId, order);
 
     return { ok: true, orderId: order.id };
   } catch (err) {
@@ -361,7 +351,7 @@ export async function startCartCheckout(input: {
   try {
     const tenant = await requireTenant();
 
-    if (!paymentsConfigured()) {
+    if (!(await paymentsAvailable(tenant.organizationId))) {
       return { ok: false, error: 'Online payment is not switched on yet. Please contact the academy.' };
     }
 
@@ -597,17 +587,7 @@ export async function startCartCheckout(input: {
       return created;
     });
 
-    const gatewayOrder = await createRazorpayOrder({
-      amountPaise: order.totalPaise,
-      currency: order.currency,
-      receipt: order.orderNo,
-      notes: { orderId: order.id, organizationId: tenant.organizationId },
-    });
-
-    await db.order.update({
-      where: { id: order.id },
-      data: { gatewayOrderId: gatewayOrder.id },
-    });
+    await prepareOrder(tenant.organizationId, order);
 
     return { ok: true, orderId: order.id };
   } catch (err) {

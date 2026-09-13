@@ -10,7 +10,7 @@ import { recordAudit } from '@/lib/audit';
 import { queueNotifications } from '@/lib/notify';
 import { formatMoney } from '@/lib/money';
 import { priceOrder } from '@/lib/order-lines';
-import { createRazorpayOrder, paymentsConfigured } from '@/lib/razorpay';
+import { paymentsAvailable, prepareOrder } from '@/lib/payments';
 import { allocatePayment, balanceOf, daysOverdue, nextReceiptNumber, receiptPrefix } from '@/lib/dues';
 import type { ActionState } from '@/server/courses';
 import { attributionJson, requestAttribution } from '@/lib/attribution-server';
@@ -297,7 +297,7 @@ export async function startInstalmentCheckout(instalmentId: string): Promise<Ins
     const tenant = await requireTenant();
     const user = await getSessionUser();
     if (!user) return { ok: false, error: 'Please sign in to continue.' };
-    if (!paymentsConfigured()) {
+    if (!(await paymentsAvailable(tenant.organizationId))) {
       return { ok: false, error: 'Online payment is not switched on yet. Please pay at the academy.' };
     }
 
@@ -411,14 +411,7 @@ export async function startInstalmentCheckout(instalmentId: string): Promise<Ins
       select: { id: true, orderNo: true, currency: true, totalPaise: true },
     });
 
-    const gatewayOrder = await createRazorpayOrder({
-      amountPaise: order.totalPaise,
-      currency: order.currency,
-      receipt: order.orderNo,
-      notes: { orderId: order.id, organizationId: tenant.organizationId, instalmentId: instalment.id },
-    });
-
-    await db.order.update({ where: { id: order.id }, data: { gatewayOrderId: gatewayOrder.id } });
+    await prepareOrder(tenant.organizationId, order, { instalmentId: instalment.id });
 
     return { ok: true, orderId: order.id };
   } catch (err) {

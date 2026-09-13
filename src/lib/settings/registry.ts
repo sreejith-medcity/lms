@@ -357,6 +357,42 @@ export const SETTINGS: SettingDef[] = [
 
   /* Selling ----------------------------------------------------------------- */
   {
+    key: 'payments.gateway',
+    group: 'commerce',
+    label: 'Payment gateway',
+    help: 'Where Indian buyers pay. Razorpay opens in a window on the checkout page; PhonePe and PayU send the buyer to their page and back. The chosen one needs its keys (Razorpay from the environment, the others on their Integrations card); without them, Razorpay is used.',
+    kind: 'select',
+    default: 'razorpay',
+    options: [
+      { value: 'razorpay', label: 'Razorpay' },
+      { value: 'phonepe', label: 'PhonePe' },
+      { value: 'payu', label: 'PayU' },
+    ],
+    live: true,
+  },
+  {
+    key: 'payments.international',
+    group: 'commerce',
+    label: 'Cards from abroad',
+    help: 'Offer Stripe beside the Indian gateway for learners paying from outside India. Needs the Stripe card under Integrations.',
+    kind: 'select',
+    default: 'none',
+    options: [
+      { value: 'none', label: 'Not offered' },
+      { value: 'stripe', label: 'Stripe' },
+    ],
+    live: true,
+  },
+  {
+    key: 'payments.emiNote',
+    group: 'commerce',
+    label: 'Say that EMI is available',
+    help: 'A line on the checkout page that card EMI options appear in the payment window. Only switch it on once your gateway account has EMI enabled, or it is a promise the window will not keep.',
+    kind: 'boolean',
+    default: false,
+    live: true,
+  },
+  {
     key: 'commerce.customerBearsGatewayFee',
     group: 'commerce',
     label: 'The learner pays the payment gateway fee',
