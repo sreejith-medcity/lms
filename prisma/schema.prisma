@@ -2136,6 +2136,8 @@ model Order {
   billingAddress   Json?
   gstin            String?
   gatewayOrderId   String? // the provider's order id, so a webhook can find us
+  /// Which gateway the order was started on: razorpay, phonepe, payu or stripe.
+  gateway          String?
   /// Where the buyer came from: click ids, UTM, landing page, first and last
   /// touch. Captured when the order is created and sent on with the
   /// conversion, which is what lets an ad platform tie a sale back to a click.
