@@ -51,6 +51,7 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
     group: 'Account',
     events: [
       { key: 'account.otp', label: 'A one-time code was asked for', who: 'Whoever asked for it', live: true },
+      { key: 'data_request.closed', label: 'Their request to be forgotten was decided', who: 'The learner who asked', live: true },
       { key: 'account.two_factor', label: 'A sign-in code was asked for', who: 'The account holder', live: true },
       { key: 'account.welcome', label: 'They created an account', who: 'The new account', live: true },
       { key: 'account.password_reset', label: 'A password was reset', who: 'The account holder', live: false, waitingOn: 'the reset flow to emit it' },

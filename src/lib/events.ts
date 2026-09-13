@@ -41,6 +41,8 @@ export const DOMAIN_EVENTS: DomainEventDef[] = [
   { key: 'assignment.handed_in', label: 'Homework was handed in', group: 'Learning', filters: ['products', 'batches'], subject: 'the hand-in' },
   { key: 'assignment.graded', label: 'Homework was marked', group: 'Learning', filters: ['products', 'outcome'], notification: 'assignment.graded', subject: 'the hand-in' },
   { key: 'report_card.issued', label: 'A report card was sent', group: 'Learning', filters: ['products'], notification: 'report_card.issued', subject: 'the report card' },
+  { key: 'data_request.opened', label: 'A learner asked to be forgotten', group: 'Account', filters: [], subject: 'the request' },
+  { key: 'data_request.closed', label: 'A data request was closed', group: 'Account', filters: [], notification: 'data_request.closed', subject: 'the request' },
   { key: 'lesson_question.asked', label: 'A question was asked on a lesson', group: 'Learning', filters: ['products', 'batches'], subject: 'the question' },
   { key: 'review.submitted', label: 'A learner reviewed a course', group: 'Learning', filters: ['products', 'outcome'], subject: 'the review' },
   { key: 'lesson_question.answered', label: 'A question on a lesson was answered', group: 'Learning', filters: ['products'], notification: 'lesson_question.answered', subject: 'the question' },

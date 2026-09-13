@@ -110,6 +110,10 @@ const DEFAULTS: Record<string, Default> = {
     subject: '{{item}} for {{course}}',
     body: 'Hello {{name}}, the {{item}} for {{course}} is attached. You can also open it at {{url}}.',
   },
+  'data_request.closed': {
+    subject: 'About your request to close your account',
+    body: 'Hello {{name}}, your request to close your account and remove your details has been {{outcome}}. {{note}} You can see the details at {{url}}.',
+  },
   'lesson_question.answered': {
     subject: 'Your question on {{item}} has an answer',
     body: 'Hello {{name}}, {{trainer}} has answered the question on {{item}} ({{course}}). Read it at {{url}}.',

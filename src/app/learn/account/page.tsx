@@ -74,9 +74,14 @@ export default async function AccountPage() {
             with {tenant.name} since {account.createdAt.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <Link href="/learn/account/security" className="t-small font-medium underline">
-          Sign-in and security
-        </Link>
+        <span className="flex flex-wrap gap-4">
+          <Link href="/learn/account/security" className="t-small font-medium underline">
+            Sign-in and security
+          </Link>
+          <Link href="/learn/account/privacy" className="t-small font-medium underline">
+            Your data
+          </Link>
+        </span>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
