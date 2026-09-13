@@ -289,6 +289,23 @@ model AuthSession {
   @@map("auth_sessions")
 }
 
+/// A parent signed in with the phone or email on their child's record. There
+/// is no account: a code to that contact is the whole proof, and the session
+/// reads whichever learners name that contact as a parent. Read-only.
+model ParentSession {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// The contact as signed in with: ten digits, or a lowercased email.
+  contact        String
+  token          String   @unique
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+
+  @@index([organizationId, contact])
+  @@map("parent_sessions")
+}
+
 model OtpToken {
   id        String    @id @default(cuid())
   userId    String?
