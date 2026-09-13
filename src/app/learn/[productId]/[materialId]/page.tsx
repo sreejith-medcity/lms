@@ -18,6 +18,7 @@ import { tutorAllowance, tutorHistory } from '@/lib/tutor-data';
 import { anthropicReady } from '@/lib/anthropic';
 import { paragraphs } from '@/lib/captions';
 import { PlayerShell } from './shell';
+import { scormLaunchFor } from '@/lib/scorm/launch';
 
 export const dynamic = 'force-dynamic';
 
@@ -167,6 +168,9 @@ export default async function MaterialPage({
         tutorAllowance(tenant.organizationId, user.id).then((a) => Math.max(0, a.limit - a.used)),
       ])
     : [[], null];
+
+  // An interactive package: what the frame needs to launch it, and where the learner left it.
+  const scorm = material.type === 'SCORM' ? await scormLaunchFor(tenant.organizationId, material.id, user.id, user.name) : null;
 
   // Skip past locked lessons rather than offering a next that refuses to open.
   const prev = ordered.slice(0, index).reverse().find((m) => !gate.lockOf(m.id, m.sectionId)) ?? null;
@@ -350,6 +354,7 @@ export default async function MaterialPage({
           durationSeconds: material.durationSeconds,
           streamReady: streamStatus === 'READY',
         }}
+        scorm={scorm}
         position={index + 1}
         total={ordered.length}
         startAt={jumpTo ?? here?.positionSeconds ?? 0}

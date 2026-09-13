@@ -10,6 +10,7 @@ import { BookmarkButton, Notes, type NoteRow } from './notes';
 import { Questions, type QuestionRow } from './questions';
 import { TranscriptTab, type TranscriptParagraph } from './transcript';
 import { TutorTab, type TutorMessage } from './tutor';
+import { ScormPlayer, type ScormLaunch } from '@/components/scorm-player';
 
 interface Material {
   id: string;
@@ -72,6 +73,7 @@ export function Stage({
   me,
   questions = [],
   transcript = null,
+  scorm = null,
   searchHref,
   tutor = null,
 }: {
@@ -103,6 +105,7 @@ export function Stage({
   questions?: QuestionRow[];
   /** The lesson as text, when it has one. */
   transcript?: { paragraphs: TranscriptParagraph[]; summary: string | null; chapters: { title: string; start: number }[] } | null;
+  scorm?: ScormLaunch | null;
   /** Search across the course's transcripts. */
   searchHref?: string;
   /** The course tutor, when the academy has it on. */
@@ -151,6 +154,8 @@ export function Stage({
                 onTimeUpdate={setCurrentTime}
               />
             </div>
+          ) : scorm ? (
+            <ScormPlayer launch={scorm} title={material.title} />
           ) : (
             <StaticViewer material={material} src={src} />
           )}

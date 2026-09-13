@@ -229,6 +229,13 @@ export async function setMaterialComplete(
  * the denominator is the visible curriculum for this enrolment, not the course
  * in the abstract.
  */
+/** Recompute from the enrolment alone, for callers outside this file (a SCORM package saying it is done). */
+export async function recomputeEnrollmentProgress(enrollmentId: string): Promise<void> {
+  const row = await db.enrollment.findUnique({ where: { id: enrollmentId }, select: { userId: true, product: { select: { course: { select: { id: true } } } } } });
+  if (!row?.product.course) return;
+  await recomputeProgress(enrollmentId, row.product.course.id, row.userId);
+}
+
 async function recomputeProgress(enrollmentId: string, courseId: string, userId: string) {
   const batchModules = await db.batchModule.findMany({
     where: { batch: { enrollments: { some: { id: enrollmentId } } } },

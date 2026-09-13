@@ -17,8 +17,9 @@ import {
   unlinkModule,
 } from '@/server/curriculum';
 import type { ActionState } from '@/server/courses';
-import { Badge, Button, Field, FormError, Input, Select, brandStyle } from '@/components/ui';
+import { Badge, Button, Field, FormError, FormSuccess, Input, Select, brandStyle } from '@/components/ui';
 import { Uploader, type UploadedAsset } from '@/components/uploader';
+import { unpackMaterial } from '@/server/scorm';
 
 const initial: ActionState = {};
 
@@ -160,6 +161,7 @@ export function AddMaterial({
       <input type="hidden" name="assetId" value={source === 'file' ? (asset?.id ?? '') : ''} />
       <input type="hidden" name="type" value={source === 'file' ? 'VIDEO' : linkType} />
       <FormError message={state.error} />
+      <FormSuccess message={state.ok ? state.message : undefined} />
 
       <div className="flex gap-4 text-sm">
         <label className="flex items-center gap-2">
@@ -299,6 +301,16 @@ export function MaterialRow({
         >
           ↓
         </button>
+        {(material.type === 'ZIP' || material.type === 'SCORM') && (
+          <button
+            className="rounded border px-2 py-1 text-xs muted disabled:opacity-50"
+            disabled={pending}
+            title={material.type === 'SCORM' ? 'Unpack the zip again' : 'Unpack a SCORM or xAPI zip into an interactive lesson'}
+            onClick={() => start(async () => { const r = await unpackMaterial(material.id, productId); setError(r.error ?? r.message); })}
+          >
+            {material.type === 'SCORM' ? 'Re-unpack' : 'Unpack as lesson'}
+          </button>
+        )}
         <button
           className="rounded border border-[var(--bad)]/30 px-2 py-1 text-xs text-[var(--bad)] disabled:opacity-50"
           disabled={pending}

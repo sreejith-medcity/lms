@@ -197,7 +197,7 @@ export async function addMaterial(_prev: ActionState, formData: FormData): Promi
 
     const count = await db.material.count({ where: { sectionId: d.sectionId } });
 
-    await db.material.create({
+    const created = await db.material.create({
       data: {
         sectionId: d.sectionId,
         title: d.title,
@@ -209,10 +209,27 @@ export async function addMaterial(_prev: ActionState, formData: FormData): Promi
         isDownloadable: d.isDownloadable,
         sortOrder: count,
       },
+      select: { id: true },
     });
 
+    // A zip that carries a SCORM or xAPI manifest is an interactive lesson,
+    // not a download: unpacked now so it plays in the frame from the start.
+    let note: string | undefined;
+    if (assetId && type === 'ZIP') {
+      const { sniffPackage, unpackPackage } = await import('@/lib/scorm/unpack');
+      if (await sniffPackage(assetId, tenant.organizationId)) {
+        try {
+          const r = await unpackPackage({ organizationId: tenant.organizationId, materialId: created.id, assetId });
+          note = `Unpacked as a ${r.info.standard.replace('_', ' ')} package (${r.fileCount} files).`;
+        } catch (err) {
+          console.error('[curriculum] unpack', err instanceof Error ? err.message : err);
+          note = 'The zip looks like a package but could not be unpacked; try "Unpack" on the row.';
+        }
+      }
+    }
+
     revalidatePath(`/admin/courses/${d.productId}/curriculum`);
-    return { ok: true };
+    return { ok: true, message: note };
   } catch (err) {
     return fail(err);
   }
