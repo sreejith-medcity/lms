@@ -42,6 +42,7 @@ const profileShape = z.object({
   bio: z.string().trim().max(600).optional(),
   expertise: z.string().trim().max(300).optional(),
   hourlyRateRupees: z.coerce.number().min(0).optional(),
+  perSessionRupees: z.coerce.number().min(0).optional(),
 });
 
 export async function saveInstructorProfile(
@@ -57,6 +58,7 @@ export async function saveInstructorProfile(
       bio: formData.get('bio') || undefined,
       expertise: formData.get('expertise') || undefined,
       hourlyRateRupees: formData.get('hourlyRateRupees') || undefined,
+      perSessionRupees: formData.get('perSessionRupees') || undefined,
     });
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -84,6 +86,7 @@ export async function saveInstructorProfile(
       bio: d.bio || null,
       expertise,
       hourlyRatePaise: d.hourlyRateRupees ? toPaise(d.hourlyRateRupees) : null,
+      perSessionPaise: d.perSessionRupees ? toPaise(d.perSessionRupees) : null,
       isMentor: formData.get('isMentor') === 'on',
       hideNameOnCards: formData.get('hideNameOnCards') === 'on',
     };

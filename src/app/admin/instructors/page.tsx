@@ -49,6 +49,7 @@ export default async function InstructorsPage() {
           bio: true,
           expertise: true,
           hourlyRatePaise: true,
+          perSessionPaise: true,
           isMentor: true,
           hideNameOnCards: true,
         },
@@ -85,6 +86,9 @@ export default async function InstructorsPage() {
                 expertise: (t.instructorProfile?.expertise ?? []).join(', '),
                 hourlyRateRupees: t.instructorProfile?.hourlyRatePaise
                   ? t.instructorProfile.hourlyRatePaise / 100
+                  : 0,
+                perSessionRupees: t.instructorProfile?.perSessionPaise
+                  ? t.instructorProfile.perSessionPaise / 100
                   : 0,
                 isMentor: t.instructorProfile?.isMentor ?? false,
                 hideNameOnCards: t.instructorProfile?.hideNameOnCards ?? false,

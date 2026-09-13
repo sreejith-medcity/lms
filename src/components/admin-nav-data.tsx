@@ -19,6 +19,7 @@ export interface NavGroup {
 
 export const ADMIN_NAV: NavGroup[] = [
   { label: 'Home', href: '/admin', icon: 'home' },
+  { label: 'My teaching', href: '/admin/desk', icon: 'book' },
   {
     label: 'Products',
     icon: 'box',
@@ -58,6 +59,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Data requests', href: '/admin/data-requests' },
       { label: 'Team', href: '/admin/team' },
       { label: 'Instructors', href: '/admin/instructors' },
+      { label: 'Trainer payouts', href: '/admin/payouts' },
       { label: 'Enrol a learner', href: '/admin/enrol' },
       { label: 'Attendance', href: '/admin/attendance' },
       { label: 'Feedback', href: '/admin/feedback' },

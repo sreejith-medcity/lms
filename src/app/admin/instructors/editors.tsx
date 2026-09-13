@@ -30,6 +30,7 @@ export function InstructorCard({
     bio: string;
     expertise: string;
     hourlyRateRupees: number;
+    perSessionRupees: number;
     isMentor: boolean;
     hideNameOnCards: boolean;
     batches: string[];
@@ -98,15 +99,26 @@ export function InstructorCard({
             />
           </Field>
 
-          <Field label={`Hourly rate (${currency})`} hint="Internal only. Zero to leave it unset.">
-            <Input
-              name="hourlyRateRupees"
-              type="number"
-              min={0}
-              step="0.01"
-              defaultValue={instructor.hourlyRateRupees}
-            />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={`Hourly rate (${currency})`} hint="For payouts. Zero to leave it unset.">
+              <Input
+                name="hourlyRateRupees"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue={instructor.hourlyRateRupees}
+              />
+            </Field>
+            <Field label={`Per class (${currency})`} hint="Paid per class taken rather than per hour. Wins over the hourly rate when set.">
+              <Input
+                name="perSessionRupees"
+                type="number"
+                min={0}
+                step="0.01"
+                defaultValue={instructor.perSessionRupees}
+              />
+            </Field>
+          </div>
 
           <Checkbox name="isMentor" label="Available as a mentor" defaultChecked={instructor.isMentor} />
           <Checkbox
