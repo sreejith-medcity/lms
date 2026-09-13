@@ -967,24 +967,37 @@ enum DripAnchor {
 }
 
 model Asset {
-  id              String       @id @default(cuid())
-  organizationId  String
-  name            String
-  fileName        String
-  type            MaterialType
-  storageKey      String // S3/R2 object key
-  cdnUrl          String?
-  mimeType        String?
-  sizeBytes       BigInt
-  durationSeconds Int?
-  checksum        String?
-  uploadedById    String?
-  transcodeStatus String?      @default("READY")
-  drmProtected    Boolean      @default(false)
-  usageCount      Int          @default(0)
-  downloadCount   Int          @default(0)
-  createdAt       DateTime     @default(now())
-  deletedAt       DateTime?
+  id               String       @id @default(cuid())
+  organizationId   String
+  name             String
+  fileName         String
+  type             MaterialType
+  storageKey       String // S3/R2 object key
+  cdnUrl           String?
+  mimeType         String?
+  sizeBytes        BigInt
+  durationSeconds  Int?
+  checksum         String?
+  uploadedById     String?
+  transcodeStatus  String?      @default("READY")
+  drmProtected     Boolean      @default(false)
+  usageCount       Int          @default(0)
+  downloadCount    Int          @default(0)
+  /// The video platform this was sent to for adaptive streaming, if any:
+  /// cloudflare_stream, mux or bunny. The original stays in the bucket.
+  streamProvider   String?
+  /// The provider's own id for it (Stream uid, Mux asset id, Bunny guid).
+  streamId         String?
+  /// Mux plays by a playback id rather than the asset id; the others do not need it.
+  streamPlaybackId String?
+  /// QUEUED, PROCESSING, READY or FAILED. Null when never sent.
+  streamStatus     String?
+  streamError      String?
+  streamReadyAt    DateTime?
+  /// When the provider was last asked, so a page load does not ask twice a second.
+  streamCheckedAt  DateTime?
+  createdAt        DateTime     @default(now())
+  deletedAt        DateTime?
 
   materials  Material[]
   recordings Recording[]
