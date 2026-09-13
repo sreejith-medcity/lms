@@ -123,6 +123,10 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
     }),
   ]);
   const hasTranscripts = transcriptCount > 0;
+  const hasCards =
+    (await db.flashcard.count({
+      where: { organizationId: tenant.organizationId, courseId: enrollment.product.course.id, OR: [{ ownerUserId: null }, { ownerUserId: user.id }] },
+    })) > 0;
   const finished = canReview(enrollment.progressPercent, reviewAfter);
   const myTestimonial = finished
     ? await db.testimonial.findFirst({
@@ -162,6 +166,14 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
         </div>
 
         <div className="flex items-center gap-3">
+        {hasCards && (
+          <Link
+            href={`/learn/${productId}/revise`}
+            className="rounded-[var(--radius-sm)] border px-4 py-2 text-sm hover:bg-[var(--surface-2)]"
+          >
+            Revise
+          </Link>
+        )}
         {hasTranscripts && (
           <Link
             href={`/learn/${productId}/search`}

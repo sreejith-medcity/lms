@@ -13,6 +13,7 @@ const TABS = [
   { href: '/curriculum', label: 'Curriculum' },
   { href: '/drip', label: 'Drip' },
   { href: '/learners', label: 'Learners' },
+  { href: '/flashcards', label: 'Flashcards' },
   { href: '/pricing', label: 'Pricing and publishing' },
 ];
 
