@@ -6,6 +6,8 @@ import { requireTenant } from '@/lib/tenant';
 import { MATERIAL_LABELS, formatDuration, percent } from '@/lib/progress';
 import { curriculumGate } from '@/lib/curriculum-access';
 import { TestimonialForm } from './testimonial-form';
+import { canReview } from '@/lib/reviews';
+import { settingNumber } from '@/lib/settings/store';
 import { Card, EmptyState } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -99,12 +101,14 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
   });
   const doneSet = new Set(done.map((d) => d.materialId));
 
-  // Asked once they are done, and only then.
-  const finished = enrollment.progressPercent >= 100;
+  // Asked once they are far enough in to have an opinion worth reading; the
+  // academy sets how far. Anyone who already wrote one keeps seeing it.
+  const reviewAfter = await settingNumber(tenant.organizationId, 'learning.reviewAfterPercent');
+  const finished = canReview(enrollment.progressPercent, reviewAfter);
   const myTestimonial = finished
     ? await db.testimonial.findFirst({
         where: { organizationId: tenant.organizationId, userId: user.id, productId },
-        select: { rating: true, comment: true, isPublished: true },
+        select: { rating: true, comment: true, isPublished: true, reply: true },
       })
     : null;
 
@@ -165,12 +169,14 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
         <TestimonialForm
           productId={productId}
           courseTitle={enrollment.product.title}
+          progressPercent={enrollment.progressPercent}
           existing={
             myTestimonial
               ? {
                   rating: myTestimonial.rating,
                   comment: myTestimonial.comment ?? '',
                   isPublished: myTestimonial.isPublished,
+                  reply: myTestimonial.reply,
                 }
               : null
           }

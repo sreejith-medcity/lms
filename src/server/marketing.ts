@@ -6,6 +6,9 @@ import { db } from '@/lib/db';
 import { requireStaff, getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
+import { happened } from '@/lib/events';
+import { settingNumber, settingText } from '@/lib/settings/store';
+import { REPLY_MAX_CHARS, canReview, publishOnArrival, replyProblem, reviewProblem } from '@/lib/reviews';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -31,6 +34,14 @@ function fail(err: unknown): ActionState {
 }
 
 /* Testimonials -------------------------------------------------------------- */
+
+/** Every page a review can appear on: home, catalogue, and each course page. */
+function refreshReviewPages() {
+  revalidatePath('/');
+  revalidatePath('/courses');
+  revalidatePath('/course/[slug]', 'page');
+  revalidatePath('/admin/testimonials');
+}
 
 const testimonialShape = z.object({
   authorName: z.string().trim().min(2, 'Whose words are these?').max(120),
@@ -98,8 +109,7 @@ export async function saveTestimonial(_prev: ActionState, formData: FormData): P
       after: { authorName: d.authorName, rating: d.rating },
     });
 
-    revalidatePath('/admin/testimonials');
-    revalidatePath('/');
+    refreshReviewPages();
     return { ok: true, message: 'Saved.' };
   } catch (err) {
     return fail(err);
@@ -127,8 +137,7 @@ export async function setTestimonialPublished(id: string, isPublished: boolean):
       after: { authorName: testimonial.authorName },
     });
 
-    revalidatePath('/admin/testimonials');
-    revalidatePath('/');
+    refreshReviewPages();
     return { ok: true };
   } catch (err) {
     return fail(err);
@@ -147,8 +156,7 @@ export async function deleteTestimonial(id: string): Promise<ActionState> {
 
     await db.testimonial.delete({ where: { id } });
 
-    revalidatePath('/admin/testimonials');
-    revalidatePath('/');
+    refreshReviewPages();
     return { ok: true };
   } catch (err) {
     return fail(err);
@@ -168,11 +176,11 @@ export async function leaveTestimonial(_prev: ActionState, formData: FormData): 
     if (!user) return { error: 'Please sign in again.' };
 
     const productId = String(formData.get('productId') ?? '');
-    const rating = Math.max(1, Math.min(5, Number(formData.get('rating') ?? 0)));
+    const rating = Number(formData.get('rating') ?? 0);
     const comment = String(formData.get('comment') ?? '').trim();
 
-    if (!rating) return { error: 'Pick a rating first.' };
-    if (comment.length < 10) return { error: 'Tell us a little more than that.' };
+    const problem = reviewProblem(rating, comment);
+    if (problem) return { error: problem };
 
     const enrollment = await db.enrollment.findFirst({
       where: {
@@ -181,22 +189,36 @@ export async function leaveTestimonial(_prev: ActionState, formData: FormData): 
         organizationId: tenant.organizationId,
         status: { notIn: ['CANCELLED', 'ARCHIVED'] },
       },
-      select: { id: true, progressPercent: true },
+      select: { id: true, progressPercent: true, product: { select: { title: true } } },
     });
     if (!enrollment) return { error: 'You are not enrolled in that course.' };
+
+    const [threshold, mode] = await Promise.all([
+      settingNumber(tenant.organizationId, 'learning.reviewAfterPercent'),
+      settingText(tenant.organizationId, 'learning.reviewsPublish'),
+    ]);
+    if (!canReview(enrollment.progressPercent, threshold)) {
+      return { error: `Reviews open once you are ${threshold}% of the way through.` };
+    }
+
+    const isPublished = publishOnArrival(mode, rating);
+    const progressAtReview = Math.round(enrollment.progressPercent);
 
     const existing = await db.testimonial.findFirst({
       where: { organizationId: tenant.organizationId, userId: user.id, productId },
       select: { id: true },
     });
 
+    let id: string;
     if (existing) {
+      // An edited review goes back through the same door as a new one.
       await db.testimonial.update({
         where: { id: existing.id },
-        data: { rating, comment, isPublished: false },
+        data: { rating, comment, isPublished, progressAtReview, authorName: user.name },
       });
+      id = existing.id;
     } else {
-      await db.testimonial.create({
+      const created = await db.testimonial.create({
         data: {
           organizationId: tenant.organizationId,
           userId: user.id,
@@ -205,14 +227,69 @@ export async function leaveTestimonial(_prev: ActionState, formData: FormData): 
           authorEmail: user.email,
           rating,
           comment,
-          isPublished: false,
+          isPublished,
+          progressAtReview,
         },
+        select: { id: true },
       });
+      id = created.id;
     }
 
+    await happened({
+      organizationId: tenant.organizationId,
+      key: 'review.submitted',
+      userId: user.id,
+      subjectId: id,
+      productId,
+      // Four stars and up counts as "passed" for the outcome filter, so a rule
+      // can follow up on the unhappy ones and thank the happy ones.
+      data: { reviewId: id, rating, comment, item: enrollment.product.title, published: isPublished, edited: Boolean(existing), passed: rating >= 4 },
+    });
+
     revalidatePath('/learn');
-    revalidatePath('/admin/testimonials');
-    return { ok: true, message: 'Thank you. The academy will take a look before it goes up.' };
+    revalidatePath(`/learn/${productId}`);
+    refreshReviewPages();
+    return {
+      ok: true,
+      message: isPublished
+        ? 'Thank you. Your review is on the course page.'
+        : 'Thank you. The academy will take a look before it goes up.',
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** The academy answers a review in public, or takes its answer back. */
+export async function replyToTestimonial(id: string, reply: string): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('testimonials.manage_testimonials');
+    const problem = replyProblem(reply);
+    if (problem) return { error: problem };
+
+    const testimonial = await db.testimonial.findFirst({
+      where: { id, organizationId: tenant.organizationId },
+      select: { id: true, authorName: true, productId: true },
+    });
+    if (!testimonial) return { error: 'Testimonial not found.' };
+
+    const clean = reply.trim().slice(0, REPLY_MAX_CHARS);
+    await db.testimonial.update({
+      where: { id },
+      data: { reply: clean || null, repliedAt: clean ? new Date() : null },
+    });
+
+    await recordAudit({
+      organizationId: tenant.organizationId,
+      actorId: user.id,
+      action: clean ? 'testimonial.replied' : 'testimonial.reply_removed',
+      entity: 'Testimonial',
+      entityId: id,
+      after: { authorName: testimonial.authorName },
+    });
+
+    refreshReviewPages();
+    return { ok: true, message: clean ? 'Reply is up.' : 'Reply removed.' };
   } catch (err) {
     return fail(err);
   }

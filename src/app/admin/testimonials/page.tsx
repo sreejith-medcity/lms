@@ -36,6 +36,8 @@ export default async function TestimonialsPage() {
         isPublished: true,
         createdAt: true,
         userId: true,
+        progressAtReview: true,
+        reply: true,
         product: { select: { id: true, title: true } },
       },
     }),
@@ -98,6 +100,8 @@ export default async function TestimonialsPage() {
                   comment: t.comment ?? '',
                   isPublished: t.isPublished,
                   fromLearner: Boolean(t.userId),
+                  progressAtReview: t.progressAtReview,
+                  reply: t.reply,
                   courseTitle: t.product?.title ?? null,
                   when: formatDayLabel(dayKey(t.createdAt, tz), tz),
                 }}

@@ -119,6 +119,33 @@ export const SETTINGS: SettingDef[] = [
     default: false,
     live: true,
   },
+  {
+    key: 'learning.reviewAfterPercent',
+    group: 'learning',
+    label: 'Ask for a review once a learner is this far through',
+    help: 'A review from somebody two lessons in tells the next person nothing. 100 asks only those who finished; lower it for long courses where few finish but many learn.',
+    kind: 'number',
+    default: 100,
+    min: 10,
+    max: 100,
+    unit: '%',
+    live: true,
+    effect: (v) => (Number(v) >= 100 ? 'Only learners who finished are asked.' : `Asked once ${v}% of the course is done.`),
+  },
+  {
+    key: 'learning.reviewsPublish',
+    group: 'learning',
+    label: 'When a review goes on the course page',
+    help: 'Reviews that wait sit under Marketing, Testimonials, until somebody publishes them. Whatever you choose, you can take any review down, and answer it in public.',
+    kind: 'select',
+    default: 'REVIEW',
+    options: [
+      { value: 'REVIEW', label: 'Every review waits for the team to read it' },
+      { value: 'FOUR_UP', label: 'Four and five stars go live at once; the rest wait' },
+      { value: 'ALL', label: 'Every review goes live at once' },
+    ],
+    live: true,
+  },
 
   /* The player -------------------------------------------------------------- */
   {

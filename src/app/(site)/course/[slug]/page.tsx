@@ -9,6 +9,8 @@ import { MATERIAL_LABELS, formatDuration } from '@/lib/progress';
 import { Badge } from '@/components/ui';
 import { CourseMedia } from '@/components/course-media';
 import { Rating } from '@/components/rating';
+import { Reviews, type ReviewCardData } from '@/components/reviews';
+import { reviewSummary, reviewerBadge } from '@/lib/reviews';
 import { NoTenantNotice } from '@/components/tenant-notices';
 import { addonsFor } from '@/lib/addons';
 import { settingText } from '@/lib/settings/store';
@@ -129,8 +131,8 @@ async function load(slug: string) {
       testimonials: {
         where: { isPublished: true },
         orderBy: { createdAt: 'desc' },
-        take: 6,
-        select: { id: true, authorName: true, rating: true, comment: true, createdAt: true },
+        take: 24,
+        select: { id: true, authorName: true, rating: true, comment: true, createdAt: true, userId: true, progressAtReview: true, reply: true, repliedAt: true },
       },
     },
   });
@@ -195,7 +197,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
     settingText(site.organizationId, 'website.reviewWidgetHtml'),
   ]);
 
-  const [instructors, related, addons] = await Promise.all([
+  const [instructors, related, addons, ratingRows] = await Promise.all([
     // Named only where a trainer is actually assigned to a running batch.
     db.user.findMany({
       where: { id: { in: course.batches.flatMap((b) => b.staff.map((s) => s.userId)) } },
@@ -235,6 +237,12 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
         })
       : Promise.resolve([]),
     addonsFor(site.organizationId, product.id),
+    // Every published review counts towards the average, not only the ones shown.
+    db.testimonial.groupBy({
+      by: ['rating'],
+      where: { organizationId: site.organizationId, productId: product.id, isPublished: true },
+      _count: { _all: true },
+    }),
   ]);
 
   const [googleRating, googleCount, reviewWidgetHtml] = await siteBits;
@@ -268,11 +276,22 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
       ? Math.round(((plan.mrpPaise - plan.pricePaise) / plan.mrpPaise) * 100)
       : null;
 
-  const reviews = product.testimonials.filter((t) => t.comment);
-  const ratingCount = product.testimonials.length;
-  const ratingAverage = ratingCount
-    ? Math.round((product.testimonials.reduce((n, t) => n + t.rating, 0) / ratingCount) * 10) / 10
-    : null;
+  const summary = reviewSummary(ratingRows.map((r) => ({ rating: r.rating, count: r._count._all })));
+  const monthYear = (d: Date) => d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  const reviews: ReviewCardData[] = product.testimonials
+    .filter((t) => t.comment)
+    .map((t) => ({
+      id: t.id,
+      authorName: t.authorName,
+      rating: t.rating,
+      comment: t.comment ?? '',
+      badge: reviewerBadge(t),
+      when: monthYear(t.createdAt),
+      reply: t.reply,
+      repliedWhen: t.repliedAt ? monthYear(t.repliedAt) : null,
+    }));
+  const ratingCount = summary.count;
+  const ratingAverage = ratingCount ? summary.average : null;
 
   // The four facts that decide whether somebody keeps reading, each one read
   // from the course rather than written by hand.
@@ -745,18 +764,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
           {(reviews.length > 0 || hasReviewWidget) && (
             <Section id="reviews" eyebrow="Learner reviews" title="What learners say">
               {hasReviewWidget && <ReviewWidget html={reviewWidgetHtml} className="mb-5" />}
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {reviews.map((r) => (
-                  <li key={r.id} className="rounded-[var(--radius)] border bg-[var(--surface)] p-4">
-                    <Rating average={r.rating} count={1} showCount={false} />
-                    <p className="t-small mt-2.5 leading-relaxed">{r.comment}</p>
-                    <p className="t-small faint mt-2.5">
-                      {r.authorName} ·{' '}
-                      {r.createdAt.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <Reviews summary={summary} reviews={reviews} academyName={site.organization.name} />
             </Section>
           )}
 

@@ -150,6 +150,7 @@ export const WEBHOOK_EVENTS = [
   { key: 'assignment.handed_in', label: 'Homework was handed in' },
   { key: 'assignment.graded', label: 'Homework was marked' },
   { key: 'report_card.issued', label: 'A report card was sent' },
+  { key: 'review.submitted', label: 'A learner reviewed a course' },
   { key: 'lesson_question.asked', label: 'A question was asked on a lesson' },
   { key: 'lesson_question.answered', label: 'A question on a lesson was answered' },
   { key: 'session.cancelled', label: 'A class was called off' },
