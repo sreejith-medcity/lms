@@ -5,7 +5,8 @@ import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
-import { clearFieldFile, saveFieldValues, storeFieldFile } from '@/lib/custom-fields';
+import { saveFieldValues } from '@/lib/custom-fields';
+import { clearFieldFile, storeFieldFile } from '@/lib/custom-field-files';
 import type { ActionState } from '@/server/courses';
 
 /**
