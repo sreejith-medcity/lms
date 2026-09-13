@@ -267,6 +267,8 @@ export async function joinSession(sessionId: string): Promise<ActionState & { ur
         },
         update: { joinedAt: now },
       });
+      const { afterLearning } = await import('@/lib/badges-data');
+      await afterLearning(tenant.organizationId, user.id);
     }
 
     revalidatePath('/learn');

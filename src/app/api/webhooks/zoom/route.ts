@@ -213,6 +213,8 @@ async function handle(
         // arrival, or a bad line turns a punctual learner into a late one.
         update: {},
       });
+      const { afterLearning } = await import('@/lib/badges-data');
+      await afterLearning(organizationId, user.id);
       return;
     }
 

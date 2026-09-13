@@ -208,6 +208,11 @@ export async function setMaterialComplete(
 
     await recomputeProgress(enrollment.id, enrollment.product.course.id, user.id);
 
+    if (complete) {
+      const { afterLearning } = await import('@/lib/badges-data');
+      await afterLearning(tenant.organizationId, user.id);
+    }
+
     revalidatePath(`/learn/${productId}`);
     return { ok: true };
   } catch (err) {

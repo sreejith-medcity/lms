@@ -96,7 +96,20 @@ export async function happened(event: DomainEvent): Promise<void> {
   } catch (err) {
     console.error(`[events] workflows for ${event.key}`, err instanceof Error ? err.message : err);
   }
+
+  // The moments that can earn a badge. Best effort, after everything else.
+  if (event.userId && BADGE_EVENTS.has(event.key)) {
+    try {
+      const { afterLearning, awardDueBadges } = await import('@/lib/badges-data');
+      if (event.key === 'assignment.handed_in') await afterLearning(event.organizationId, event.userId);
+      else await awardDueBadges(event.organizationId, event.userId);
+    } catch (err) {
+      console.error(`[events] badges for ${event.key}`, err instanceof Error ? err.message : err);
+    }
+  }
 }
+
+const BADGE_EVENTS = new Set(['course.completed', 'assessment.marked', 'assignment.handed_in', 'lesson_question.asked', 'review.submitted']);
 
 /**
  * The learner's own message for an event, through the academy's channel

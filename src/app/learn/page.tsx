@@ -15,6 +15,9 @@ import { assessmentsForLearner } from '@/lib/assessment-access';
 import { feeNoticeFor } from '@/lib/dues';
 import { TrackEvent } from '@/components/track-event';
 import { getTranslator } from '@/lib/i18n/server';
+import { settingBool } from '@/lib/settings/store';
+import { atRisk, currentStreak } from '@/lib/badges';
+import { streakFor } from '@/lib/badges-data';
 
 export const dynamic = 'force-dynamic';
 
@@ -143,6 +146,13 @@ export default async function MyLearning({
     },
   });
 
+  // The streak, one line, because it is the thing that changes today.
+  const badgesOn = await settingBool(tenant.organizationId, 'learning.badges');
+  const streak = badgesOn ? await streakFor(tenant.organizationId, user.id) : null;
+  const today = dayKey(new Date(), tenant.timezone);
+  const streakDays = streak ? currentStreak(streak, today) : 0;
+  const newBadges = badgesOn ? await db.badgeAward.count({ where: { organizationId: tenant.organizationId, userId: user.id, seenAt: null } }) : 0;
+
   const reportCards = await db.reportCard.findMany({
     where: { organizationId: tenant.organizationId, userId: user.id, sentAt: { not: null } },
     orderBy: { issuedAt: 'desc' },
@@ -161,6 +171,12 @@ export default async function MyLearning({
               ? t('Hello, {{name}}. {{count}} course on your shelf.', { name: user.name.split(' ')[0], count: 1 })
               : t('Hello, {{name}}. {{count}} courses on your shelf.', { name: user.name.split(' ')[0], count: enrollments.length })}
         </p>
+        {badgesOn && (streakDays > 0 || newBadges > 0) && (
+          <Link href="/learn/badges" className="t-small mt-2 inline-flex items-center gap-2 rounded-full border px-3 py-1 hover:bg-[var(--surface-2)]">
+            {streakDays > 0 && <span>🔥 {streakDays} {streakDays === 1 ? 'day' : 'days'}{streak && atRisk(streak, today) ? ' · keep it going today' : ''}</span>}
+            {newBadges > 0 && <span className="rounded-full px-2 text-xs font-semibold text-[var(--brand-ink)]" style={{ background: 'var(--brand)' }}>{newBadges} new badge{newBadges === 1 ? '' : 's'}</span>}
+          </Link>
+        )}
         {enrollments.length > 0 && (
           <nav aria-label="Sections" className="rail -mx-5 mt-4 flex gap-1 border-b px-5">
             {[

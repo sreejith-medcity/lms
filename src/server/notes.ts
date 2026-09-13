@@ -156,6 +156,12 @@ export async function savePosition(
       },
     });
 
+    // Watching a good part of a lesson is a day of learning; a tap to peek is not.
+    if (percent != null && percent >= 25) {
+      const { recordLearningDay } = await import('@/lib/badges-data');
+      await recordLearningDay(user.organizationId, user.id);
+    }
+
     await db.enrollment.update({
       where: { id: enrollment.id },
       data: { lastActivityAt: new Date() },
