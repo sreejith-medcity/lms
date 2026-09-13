@@ -43,6 +43,10 @@ export default async function LoginPage({
           <Link href="/signup" className="font-medium text-[var(--ink)] hover:underline">
             Create an account
           </Link>
+          <span className="mx-2 faint">·</span>
+          <Link href="/parent/login" className="hover:underline">
+            A parent?
+          </Link>
         </>
       }
     >

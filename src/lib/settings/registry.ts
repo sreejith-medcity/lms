@@ -315,6 +315,15 @@ export const SETTINGS: SettingDef[] = [
     live: true,
   },
   {
+    key: 'auth.parentPortal',
+    group: 'auth',
+    label: 'Parents may sign in to see their child',
+    help: 'A parent signs in at /parent with the phone or email on the learner\'s record, by a code sent there, and sees attendance, fees, marks and report cards. Read-only; nothing is changed from there.',
+    kind: 'boolean',
+    default: true,
+    live: true,
+  },
+  {
     key: 'auth.otpLogin',
     group: 'auth',
     label: 'Sign in with a one-time code',
