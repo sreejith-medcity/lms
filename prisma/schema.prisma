@@ -232,6 +232,7 @@ model User {
   assignmentSubmissions AssignmentSubmission[]
   reportCards          ReportCard[]
   pushSubscriptions    PushSubscription[]
+  lessonQuestions      LessonQuestion[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -843,6 +844,7 @@ model Material {
   dripRules  DripRule[]
   embeddings ContentEmbedding[]
 
+  questions  LessonQuestion[]
   @@index([sectionId])
   @@map("materials")
 }
@@ -1089,6 +1091,37 @@ model SessionInstructor {
 }
 
 /// A learner's own notes, optionally pinned to a moment in a recording.
+/// A question pinned to a lesson, answered by the trainer where the whole
+/// batch can read it. Distinct from the community room: this is "I did not
+/// follow minute twelve", and it stays with minute twelve.
+model LessonQuestion {
+  id             String    @id @default(cuid())
+  organizationId String
+  materialId     String
+  courseId       String
+  /// The batch that sees it; null for a self-paced learner, where the course sees it.
+  batchId        String?
+  userId         String
+  body           String
+  /// Where in a video it was asked, when it was.
+  atSeconds      Int?
+  answer         String?
+  answeredById   String?
+  answeredAt     DateTime?
+  /// Learners who pressed "I have this question too".
+  alsoAsking     String[]  @default([])
+  isPinned       Boolean   @default(false)
+  isHidden       Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, courseId, answeredAt])
+  @@index([materialId, createdAt])
+  @@map("lesson_questions")
+}
+
 model LearnerNote {
   id           String   @id @default(cuid())
   userId       String
