@@ -480,6 +480,32 @@ model XapiStatement {
   @@map("xapi_statements")
 }
 
+/// The academy's own sending domain. Mail goes out as name@their domain
+/// once the DNS records shown to them (DKIM, SPF, DMARC) resolve; the DKIM
+/// key is minted here and the private half sealed like every other secret.
+model EmailDomain {
+  id                String    @id @default(cuid())
+  organizationId    String    @unique
+  domain            String
+  fromLocal         String    @default("noreply")
+  fromName          String?
+  dkimSelector      String    @default("lms")
+  dkimPublicKey     String
+  dkimPrivateKey    String
+  status            String    @default("PENDING")
+  spfOk             Boolean   @default(false)
+  dkimOk            Boolean   @default(false)
+  dmarcOk           Boolean   @default(false)
+  lastCheckedAt     DateTime?
+  lastCheckNote     String?
+  verifiedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([domain])
+  @@map("email_domains")
+}
+
 model OtpToken {
   id        String    @id @default(cuid())
   userId    String?
