@@ -144,6 +144,12 @@ export async function GET(
     if (filed > 0) allowed = true;
   }
 
+  // A file the office attached to the learner's own help ticket.
+  if (!allowed && user && sameOrg) {
+    const onTicket = await db.helpMessage.count({ where: { attachmentIds: { has: asset.id }, ticket: { organizationId: tenant.organizationId, userId: user.id } } });
+    if (onTicket > 0) allowed = true;
+  }
+
   // The picture or clip on a question, to anyone sitting or reviewing a
   // paper it is on. Not to the public: a listening clip is exam material.
   if (!allowed && user && sameOrg) {

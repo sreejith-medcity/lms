@@ -143,7 +143,7 @@ export async function attentionItems(organizationId: string): Promise<AttentionI
   const items: AttentionItem[] = [];
   const now = new Date();
 
-  const [unpriced, stalledOrders, silentClasses, emptyBatches, brokenMaterials] = await Promise.all([
+  const [unpriced, stalledOrders, silentClasses, emptyBatches, brokenMaterials, helpWaiting] = await Promise.all([
     db.product.findMany({
       where: {
         organizationId,
@@ -200,7 +200,20 @@ export async function attentionItems(organizationId: string): Promise<AttentionI
         type: { notIn: ['LIVE_SESSION', 'ASSESSMENT'] },
       },
     }),
+
+    // A learner's question nobody has answered in two days is a phone call waiting to happen.
+    db.helpTicket.count({ where: { organizationId, status: 'OPEN', lastMessageAt: { lt: daysAgo(2) } } }),
   ]);
+
+  if (helpWaiting > 0) {
+    items.push({
+      id: 'help',
+      tone: 'warn',
+      title: `${helpWaiting} help ticket${helpWaiting === 1 ? '' : 's'} unanswered for two days or more`,
+      detail: 'Learners asked from the portal and nobody has written back.',
+      href: '/admin/help',
+    });
+  }
 
   if (unpriced.length) {
     items.push({

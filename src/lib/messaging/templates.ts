@@ -118,6 +118,10 @@ const DEFAULTS: Record<string, Default> = {
     subject: 'Your question on {{item}} has an answer',
     body: 'Hello {{name}}, {{trainer}} has answered the question on {{item}} ({{course}}). Read it at {{url}}.',
   },
+  'help.replied': {
+    subject: 'Re: {{subject}}',
+    body: 'Hello {{name}}, {{staff}} at {{organization}} has {{outcome}} on your question "{{subject}}". Read it and write back at {{url}}.',
+  },
   'misc_fee.raised': {
     subject: '{{item}}: {{amount}} due {{due}}',
     body: 'Hello {{name}}, {{organization}} has added a charge of {{amount}} for {{item}} ({{course}}), due {{due}}. You can pay it online at {{url}} or at the academy.',

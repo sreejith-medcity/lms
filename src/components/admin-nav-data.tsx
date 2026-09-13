@@ -56,6 +56,7 @@ export const ADMIN_NAV: NavGroup[] = [
     icon: 'users',
     children: [
       { label: 'Learners', href: '/admin/learners' },
+      { label: 'Help desk', href: '/admin/help' },
       { label: 'Data requests', href: '/admin/data-requests' },
       { label: 'Team', href: '/admin/team' },
       { label: 'Instructors', href: '/admin/instructors' },
