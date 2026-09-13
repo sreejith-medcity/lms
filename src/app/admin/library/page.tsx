@@ -32,6 +32,8 @@ export default async function LibraryPage() {
         streamProvider: true,
         streamStatus: true,
         streamError: true,
+        captionsRequestedAt: true,
+        transcript: { select: { wordCount: true, language: true, source: true } },
         _count: { select: { materials: true, recordings: true } },
       },
     }),
@@ -60,6 +62,13 @@ export default async function LibraryPage() {
     usedBy: a._count.materials + a._count.recordings,
     streamStatus: a.streamStatus,
     streamError: a.streamError,
+    captions: {
+      words: a.transcript?.wordCount ?? null,
+      language: a.transcript?.language ?? null,
+      source: a.transcript?.source ?? null,
+      requested: Boolean(a.captionsRequestedAt),
+      canGenerate: a.streamStatus === 'READY',
+    },
   }));
 
   const streaming = (await settingText(tenant.organizationId, 'video.provider')).trim();

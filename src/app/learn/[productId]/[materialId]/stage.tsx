@@ -8,6 +8,7 @@ import { Card } from '@/components/ui';
 import { CompleteButton } from './complete-button';
 import { BookmarkButton, Notes, type NoteRow } from './notes';
 import { Questions, type QuestionRow } from './questions';
+import { TranscriptTab, type TranscriptParagraph } from './transcript';
 
 interface Material {
   id: string;
@@ -23,7 +24,7 @@ interface Material {
   streamReady?: boolean;
 }
 
-type Tab = 'overview' | 'notes' | 'announcements' | 'qa' | 'resources';
+type Tab = 'overview' | 'transcript' | 'notes' | 'announcements' | 'qa' | 'resources';
 
 export interface StageAnnouncement {
   id: string;
@@ -69,6 +70,8 @@ export function Stage({
   initialTab,
   me,
   questions = [],
+  transcript = null,
+  searchHref,
 }: {
   productId: string;
   material: Material;
@@ -96,6 +99,10 @@ export function Stage({
   /** The learner watching, for "You" and "me too". */
   me: string;
   questions?: QuestionRow[];
+  /** The lesson as text, when it has one. */
+  transcript?: { paragraphs: TranscriptParagraph[]; summary: string | null; chapters: { title: string; start: number }[] } | null;
+  /** Search across the course's transcripts. */
+  searchHref?: string;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
   const [currentTime, setCurrentTime] = useState<number | null>(null);
@@ -106,6 +113,7 @@ export function Stage({
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'overview', label: 'Overview' },
+    ...(transcript ? [{ key: 'transcript' as Tab, label: 'Transcript' }] : []),
     { key: 'notes', label: 'Notes', count: notes.length || undefined },
     { key: 'announcements', label: 'Announcements', count: announcements.length || undefined },
     { key: 'qa', label: 'Q&A', count: questions.length || undefined },
@@ -129,6 +137,7 @@ export function Stage({
                 kind={material.type === 'VIDEO' ? 'video' : 'audio'}
                 src={src}
                 streamUrl={material.streamReady ? `${src}?stream=1` : null}
+                captions={transcript ? [{ src: `/api/captions/${material.id}`, label: 'Captions', language: 'en' }] : []}
                 watermark={watermark}
                 blockContextMenu={blockContextMenu}
                 materialId={material.id}
@@ -249,6 +258,27 @@ export function Stage({
                   ))}
                 </ul>
               )
+            )}
+
+            {tab === 'transcript' && transcript && (
+              <TranscriptTab
+                paragraphs={transcript.paragraphs}
+                summary={transcript.summary}
+                chapters={transcript.chapters}
+                searchHref={searchHref ?? `/learn/${productId}/search`}
+                currentTime={isMedia && src ? (currentTime ?? 0) : null}
+                onSeek={
+                  isMedia && src
+                    ? (seconds) => {
+                        const el = mediaRef.current;
+                        if (el) {
+                          el.currentTime = seconds;
+                          void el.play?.();
+                        }
+                      }
+                    : undefined
+                }
+              />
             )}
 
             {tab === 'qa' && (

@@ -13,6 +13,8 @@ import type { QuestionRow } from './questions';
 import { learnerOrder, visibleBatches } from '@/lib/lesson-qa';
 import { refreshStream } from '@/lib/video';
 import { dueForCheck } from '@/lib/video/tokens';
+import { captionsDue, pullCaptions, segmentsOf } from '@/lib/transcripts';
+import { paragraphs } from '@/lib/captions';
 import { PlayerShell } from './shell';
 
 export const dynamic = 'force-dynamic';
@@ -22,10 +24,10 @@ export default async function MaterialPage({
   searchParams,
 }: {
   params: Promise<{ productId: string; materialId: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; t?: string }>;
 }) {
   const { productId, materialId } = await params;
-  const { tab } = await searchParams;
+  const { tab, t } = await searchParams;
   const tenant = await requireTenant();
   const user = await getSessionUser();
   if (!user) return null;
@@ -104,7 +106,7 @@ export default async function MaterialPage({
                   bodyHtml: true,
                   isDownloadable: true,
                   durationSeconds: true,
-                  asset: { select: { streamStatus: true, streamCheckedAt: true } },
+                  asset: { select: { streamStatus: true, streamCheckedAt: true, captionsRequestedAt: true, transcript: { select: { segments: true, summary: true, chapters: true } } } },
                 },
               },
             },
@@ -132,6 +134,27 @@ export default async function MaterialPage({
   if (material.assetId && dueForCheck(streamStatus, material.asset?.streamCheckedAt ?? null)) {
     streamStatus = await refreshStream(tenant.organizationId, material.assetId);
   }
+  // Captions the platform was asked for: the same on-the-way-past pull.
+  let transcriptRow = material.asset?.transcript ?? null;
+  if (material.assetId && !transcriptRow && captionsDue(material.asset?.captionsRequestedAt ?? null)) {
+    if ((await pullCaptions(tenant.organizationId, material.assetId)) === 'SAVED') {
+      transcriptRow = await db.transcript.findUnique({ where: { assetId: material.assetId }, select: { segments: true, summary: true, chapters: true } });
+    }
+  }
+  const transcriptSegments = segmentsOf(transcriptRow?.segments);
+  const transcript = transcriptSegments.length
+    ? {
+        paragraphs: paragraphs(transcriptSegments),
+        summary: transcriptRow?.summary ?? null,
+        chapters: Array.isArray(transcriptRow?.chapters)
+          ? (transcriptRow.chapters as { title?: unknown; start?: unknown }[])
+              .filter((c) => typeof c?.title === 'string' && typeof c?.start === 'number')
+              .map((c) => ({ title: c.title as string, start: c.start as number }))
+          : [],
+      }
+    : null;
+  // Arrived from a search hit: start at that second rather than where they left off.
+  const jumpTo = t && Number.isFinite(Number(t)) ? Math.max(0, Math.floor(Number(t))) : null;
 
   // Skip past locked lessons rather than offering a next that refuses to open.
   const prev = ordered.slice(0, index).reverse().find((m) => !gate.lockOf(m.id, m.sectionId)) ?? null;
@@ -288,7 +311,9 @@ export default async function MaterialPage({
         courseDescription={enrollment.product.course.description}
         sectionTitle={section?.title ?? null}
         discussionHref={`/learn/${productId}/discussion`}
-        initialTab={tab === 'qa' || tab === 'notes' || tab === 'announcements' || tab === 'resources' ? tab : undefined}
+        initialTab={tab === 'qa' || tab === 'notes' || tab === 'announcements' || tab === 'resources' || tab === 'transcript' ? tab : undefined}
+        transcript={transcript}
+        searchHref={`/learn/${productId}/search`}
         me={user.id}
         questions={questions}
         announcements={announcements.map((a) => ({
@@ -314,7 +339,7 @@ export default async function MaterialPage({
         }}
         position={index + 1}
         total={ordered.length}
-        startAt={here?.positionSeconds ?? 0}
+        startAt={jumpTo ?? here?.positionSeconds ?? 0}
         done={Boolean(here?.completedAt)}
         bookmarked={Boolean(here?.isBookmarked)}
         prevId={prev?.id ?? null}

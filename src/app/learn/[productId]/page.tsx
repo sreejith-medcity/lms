@@ -103,7 +103,7 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
 
   // Asked once they are far enough in to have an opinion worth reading; the
   // academy sets how far. Anyone who already wrote one keeps seeing it.
-  const [reviewAfter, nextOnPath] = await Promise.all([
+  const [reviewAfter, nextOnPath, transcriptCount] = await Promise.all([
     settingNumber(tenant.organizationId, 'learning.reviewAfterPercent'),
     // Where the path goes from here: the courses that list this one as a
     // prerequisite, shown once this one is done.
@@ -117,7 +117,12 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
           select: { course: { select: { product: { select: { id: true, title: true, slug: true } } } } },
         })
       : Promise.resolve([]),
+    // Whether there is anything to search: a lesson with a transcript.
+    db.transcript.count({
+      where: { asset: { organizationId: tenant.organizationId, materials: { some: { section: { module: { courses: { some: { courseId: enrollment.product.course.id } } } } } } } },
+    }),
   ]);
+  const hasTranscripts = transcriptCount > 0;
   const finished = canReview(enrollment.progressPercent, reviewAfter);
   const myTestimonial = finished
     ? await db.testimonial.findFirst({
@@ -157,6 +162,14 @@ export default async function CourseOutline({ params }: { params: Promise<{ prod
         </div>
 
         <div className="flex items-center gap-3">
+        {hasTranscripts && (
+          <Link
+            href={`/learn/${productId}/search`}
+            className="rounded-[var(--radius-sm)] border px-4 py-2 text-sm hover:bg-[var(--surface-2)]"
+          >
+            Search
+          </Link>
+        )}
         <Link
           href={`/learn/${productId}/discussion`}
           className="rounded-[var(--radius-sm)] border px-4 py-2 text-sm hover:bg-[var(--surface-2)]"

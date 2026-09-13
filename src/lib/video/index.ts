@@ -118,6 +118,12 @@ export async function refreshStream(organizationId: string, assetId: string, opt
         ...(status.durationSeconds && !asset.durationSeconds ? { durationSeconds: status.durationSeconds } : {}),
       },
     });
+    // The first time it comes back ready, captions are asked for if the
+    // academy wants them written for everything.
+    if (status.state === 'READY' && asset.streamStatus !== 'READY') {
+      const { captionsAfterEncode } = await import('@/lib/transcripts');
+      await captionsAfterEncode(organizationId, asset.id).catch(() => {});
+    }
     return status.state;
   } catch (err) {
     await db.asset.update({ where: { id: asset.id }, data: { streamCheckedAt: new Date() } });

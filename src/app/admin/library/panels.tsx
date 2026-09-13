@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { checkEncoding, deleteAsset, renameAsset, sendForEncoding } from '@/server/assets';
 import { Uploader } from '@/components/uploader';
 import { Badge, Button, Card, Input, Select } from '@/components/ui';
+import { CaptionsPanel, type CaptionState } from './captions';
 
 export interface AssetRow {
   id: string;
@@ -19,6 +20,7 @@ export interface AssetRow {
   /** Where the encoded copy is: QUEUED, PROCESSING, READY, FAILED, or null when never sent. */
   streamStatus: string | null;
   streamError: string | null;
+  captions: CaptionState;
 }
 
 function formatBytes(n: number): string {
@@ -160,6 +162,7 @@ function AssetCard({ asset, streamingOn }: { asset: AssetRow; streamingOn: boole
           )}
         </div>
         {asset.streamError && <p className="t-small" style={{ color: 'var(--bad)' }}>{asset.streamError}</p>}
+        {(asset.type === 'VIDEO' || asset.type === 'AUDIO') && !asset.pending && <CaptionsPanel assetId={asset.id} state={asset.captions} />}
 
         {error && <p className="t-small text-[var(--bad)]">{error}</p>}
 
