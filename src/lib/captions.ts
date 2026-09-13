@@ -102,7 +102,7 @@ export interface Hit {
 
 /** The segments that contain the words, case-insensitively, every word present. */
 export function searchSegments(segments: Segment[], query: string, limit = 20): Hit[] {
-  const words = query.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  const words = query.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter((w) => w.length > 1);
   if (words.length === 0) return [];
   const hits: Hit[] = [];
   for (const s of segments) {

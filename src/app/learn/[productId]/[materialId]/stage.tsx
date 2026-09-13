@@ -9,6 +9,7 @@ import { CompleteButton } from './complete-button';
 import { BookmarkButton, Notes, type NoteRow } from './notes';
 import { Questions, type QuestionRow } from './questions';
 import { TranscriptTab, type TranscriptParagraph } from './transcript';
+import { TutorTab, type TutorMessage } from './tutor';
 
 interface Material {
   id: string;
@@ -24,7 +25,7 @@ interface Material {
   streamReady?: boolean;
 }
 
-type Tab = 'overview' | 'transcript' | 'notes' | 'announcements' | 'qa' | 'resources';
+type Tab = 'overview' | 'transcript' | 'tutor' | 'notes' | 'announcements' | 'qa' | 'resources';
 
 export interface StageAnnouncement {
   id: string;
@@ -72,6 +73,7 @@ export function Stage({
   questions = [],
   transcript = null,
   searchHref,
+  tutor = null,
 }: {
   productId: string;
   material: Material;
@@ -103,6 +105,8 @@ export function Stage({
   transcript?: { paragraphs: TranscriptParagraph[]; summary: string | null; chapters: { title: string; start: number }[] } | null;
   /** Search across the course's transcripts. */
   searchHref?: string;
+  /** The course tutor, when the academy has it on. */
+  tutor?: { ready: boolean; left: number | null; history: TutorMessage[] } | null;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'overview');
   const [currentTime, setCurrentTime] = useState<number | null>(null);
@@ -114,6 +118,7 @@ export function Stage({
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'overview', label: 'Overview' },
     ...(transcript ? [{ key: 'transcript' as Tab, label: 'Transcript' }] : []),
+    ...(tutor ? [{ key: 'tutor' as Tab, label: 'Tutor' }] : []),
     { key: 'notes', label: 'Notes', count: notes.length || undefined },
     { key: 'announcements', label: 'Announcements', count: announcements.length || undefined },
     { key: 'qa', label: 'Q&A', count: questions.length || undefined },
@@ -267,6 +272,28 @@ export function Stage({
                 chapters={transcript.chapters}
                 searchHref={searchHref ?? `/learn/${productId}/search`}
                 currentTime={isMedia && src ? (currentTime ?? 0) : null}
+                onSeek={
+                  isMedia && src
+                    ? (seconds) => {
+                        const el = mediaRef.current;
+                        if (el) {
+                          el.currentTime = seconds;
+                          void el.play?.();
+                        }
+                      }
+                    : undefined
+                }
+              />
+            )}
+
+            {tab === 'tutor' && tutor && (
+              <TutorTab
+                materialId={material.id}
+                lessonTitle={material.title}
+                history={tutor.history}
+                left={tutor.left}
+                ready={tutor.ready}
+                qaHref="?tab=qa"
                 onSeek={
                   isMedia && src
                     ? (seconds) => {

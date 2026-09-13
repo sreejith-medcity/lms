@@ -14,6 +14,8 @@ import { learnerOrder, visibleBatches } from '@/lib/lesson-qa';
 import { refreshStream } from '@/lib/video';
 import { dueForCheck } from '@/lib/video/tokens';
 import { captionsDue, pullCaptions, segmentsOf } from '@/lib/transcripts';
+import { tutorAllowance, tutorHistory } from '@/lib/tutor-data';
+import { anthropicReady } from '@/lib/anthropic';
 import { paragraphs } from '@/lib/captions';
 import { PlayerShell } from './shell';
 
@@ -155,6 +157,16 @@ export default async function MaterialPage({
     : null;
   // Arrived from a search hit: start at that second rather than where they left off.
   const jumpTo = t && Number.isFinite(Number(t)) ? Math.max(0, Math.floor(Number(t))) : null;
+
+  // The tutor: on when the academy says so and the model is connected.
+  const tutorOn = await settingBool(tenant.organizationId, 'ai.tutorEnabled');
+  const tutorReady = tutorOn && (await anthropicReady(tenant.organizationId));
+  const [tutorTurns, tutorLeft] = tutorReady
+    ? await Promise.all([
+        tutorHistory(tenant.organizationId, user.id, enrollment.product.course.id, 20),
+        tutorAllowance(tenant.organizationId, user.id).then((a) => Math.max(0, a.limit - a.used)),
+      ])
+    : [[], null];
 
   // Skip past locked lessons rather than offering a next that refuses to open.
   const prev = ordered.slice(0, index).reverse().find((m) => !gate.lockOf(m.id, m.sectionId)) ?? null;
@@ -311,7 +323,8 @@ export default async function MaterialPage({
         courseDescription={enrollment.product.course.description}
         sectionTitle={section?.title ?? null}
         discussionHref={`/learn/${productId}/discussion`}
-        initialTab={tab === 'qa' || tab === 'notes' || tab === 'announcements' || tab === 'resources' || tab === 'transcript' ? tab : undefined}
+        initialTab={tab === 'qa' || tab === 'notes' || tab === 'announcements' || tab === 'resources' || tab === 'transcript' || tab === 'tutor' ? tab : undefined}
+        tutor={tutorOn ? { ready: tutorReady, left: tutorLeft, history: tutorTurns.map((m) => ({ id: m.id, role: m.role, content: m.content, citations: m.citations })) } : null}
         transcript={transcript}
         searchHref={`/learn/${productId}/search`}
         me={user.id}

@@ -5,6 +5,7 @@ import { formatBytes, localRoot, storageDriver } from '@/lib/storage';
 import { Card, EmptyState, PageHeader } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { settingText } from '@/lib/settings/store';
+import { anthropicReady } from '@/lib/anthropic';
 import { AssetGrid, LibraryUploader, StorageStatus } from './panels';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ export default async function LibraryPage() {
         streamStatus: true,
         streamError: true,
         captionsRequestedAt: true,
-        transcript: { select: { wordCount: true, language: true, source: true } },
+        transcript: { select: { wordCount: true, language: true, source: true, summary: true } },
         _count: { select: { materials: true, recordings: true } },
       },
     }),
@@ -69,7 +70,14 @@ export default async function LibraryPage() {
       requested: Boolean(a.captionsRequestedAt),
       canGenerate: a.streamStatus === 'READY',
     },
+    hasTranscript: Boolean(a.transcript),
+    hasSummary: Boolean(a.transcript?.summary),
   }));
+
+  const [banks, aiReady] = await Promise.all([
+    db.questionBank.findMany({ where: { organizationId: tenant.organizationId }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    anthropicReady(tenant.organizationId),
+  ]);
 
   const streaming = (await settingText(tenant.organizationId, 'video.provider')).trim();
   const streamingOn = Boolean(streaming) && streaming !== 'none';
@@ -101,7 +109,7 @@ export default async function LibraryPage() {
             hint="Drop a class recording or a workbook above. Uploads run in the background, so the page stays responsive."
           />
         ) : (
-          <AssetGrid assets={rows} streamingOn={streamingOn} />
+          <AssetGrid assets={rows} streamingOn={streamingOn} banks={banks} aiReady={aiReady} />
         )}
       </div>
     </div>

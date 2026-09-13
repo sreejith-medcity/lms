@@ -26,6 +26,8 @@ export async function askClaude(input: {
   organizationId: string;
   system: string;
   user: string;
+  /** Earlier turns, oldest first, for a conversation; the user line above is the latest. */
+  history?: { role: 'user' | 'assistant'; content: string }[];
   maxTokens?: number;
   /** Named in the integration history: "Marked writing", "Wrote a task". */
   purpose: string;
@@ -49,7 +51,7 @@ export async function askClaude(input: {
         model,
         max_tokens: input.maxTokens ?? 1500,
         system: input.system,
-        messages: [{ role: 'user', content: input.user }],
+        messages: [...(input.history ?? []).filter((m) => m.content.trim()), { role: 'user', content: input.user }],
       }),
       signal: AbortSignal.timeout(60_000),
     });

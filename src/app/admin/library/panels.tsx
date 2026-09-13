@@ -6,6 +6,7 @@ import { checkEncoding, deleteAsset, renameAsset, sendForEncoding } from '@/serv
 import { Uploader } from '@/components/uploader';
 import { Badge, Button, Card, Input, Select } from '@/components/ui';
 import { CaptionsPanel, type CaptionState } from './captions';
+import { LessonTools } from './lesson-tools';
 
 export interface AssetRow {
   id: string;
@@ -21,6 +22,8 @@ export interface AssetRow {
   streamStatus: string | null;
   streamError: string | null;
   captions: CaptionState;
+  hasTranscript: boolean;
+  hasSummary: boolean;
 }
 
 function formatBytes(n: number): string {
@@ -47,7 +50,17 @@ export function LibraryUploader() {
 
 const TYPE_FILTERS = ['ALL', 'VIDEO', 'AUDIO', 'PDF', 'IMAGE', 'DOC', 'SHEET', 'SLIDE', 'ZIP'];
 
-export function AssetGrid({ assets, streamingOn = false }: { assets: AssetRow[]; streamingOn?: boolean }) {
+export function AssetGrid({
+  assets,
+  streamingOn = false,
+  banks = [],
+  aiReady = false,
+}: {
+  assets: AssetRow[];
+  streamingOn?: boolean;
+  banks?: { id: string; name: string }[];
+  aiReady?: boolean;
+}) {
   const [query, setQuery] = useState('');
   const [type, setType] = useState('ALL');
 
@@ -85,14 +98,14 @@ export function AssetGrid({ assets, streamingOn = false }: { assets: AssetRow[];
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {visible.map((a) => (
-          <AssetCard key={a.id} asset={a} streamingOn={streamingOn} />
+          <AssetCard key={a.id} asset={a} streamingOn={streamingOn} banks={banks} aiReady={aiReady} />
         ))}
       </div>
     </div>
   );
 }
 
-function AssetCard({ asset, streamingOn }: { asset: AssetRow; streamingOn: boolean }) {
+function AssetCard({ asset, streamingOn, banks, aiReady }: { asset: AssetRow; streamingOn: boolean; banks: { id: string; name: string }[]; aiReady: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string>();
@@ -163,6 +176,7 @@ function AssetCard({ asset, streamingOn }: { asset: AssetRow; streamingOn: boole
         </div>
         {asset.streamError && <p className="t-small" style={{ color: 'var(--bad)' }}>{asset.streamError}</p>}
         {(asset.type === 'VIDEO' || asset.type === 'AUDIO') && !asset.pending && <CaptionsPanel assetId={asset.id} state={asset.captions} />}
+        {asset.hasTranscript && aiReady && <LessonTools assetId={asset.id} hasSummary={asset.hasSummary} banks={banks} />}
 
         {error && <p className="t-small text-[var(--bad)]">{error}</p>}
 

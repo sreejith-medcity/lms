@@ -45,6 +45,12 @@ export async function saveTranscript(input: {
     },
   });
   await db.asset.update({ where: { id: asset.id }, data: { captionsRequestedAt: null } });
+
+  // Study notes, when the academy wants them written for every lesson.
+  if (await settingBool(input.organizationId, 'ai.autoSummaries')) {
+    const { summariseLesson } = await import('@/lib/tutor-data');
+    await summariseLesson(input.organizationId, asset.id).catch(() => null);
+  }
   return { words };
 }
 
