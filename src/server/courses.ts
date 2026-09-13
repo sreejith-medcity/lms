@@ -10,6 +10,7 @@ import { requireTenant } from '@/lib/tenant';
 import { slugify, uniqueSlug } from '@/lib/slug';
 import { toPaise } from '@/lib/money';
 import { recordAudit } from '@/lib/audit';
+import { scheduleFromTemplate } from '@/lib/pricing-templates';
 
 export interface ActionState {
   error?: string;
@@ -247,6 +248,7 @@ const pricingPlan = z.object({
   instalmentCount: z.coerce.number().int().min(1).max(24).optional(),
   instalmentGapDays: z.coerce.number().int().min(1).max(365).optional(),
   invoiceAnchor: z.enum(['CLASS_COMMENCEMENT', 'ENROLLMENT']).optional(),
+  templateId: z.string().trim().optional(),
 });
 
 /**
@@ -281,10 +283,22 @@ export async function addPricingPlan(_prev: ActionState, formData: FormData): Pr
       instalmentCount: formData.get('instalmentCount') || undefined,
       instalmentGapDays: formData.get('instalmentGapDays') || undefined,
       invoiceAnchor: formData.get('invoiceAnchor') || undefined,
+      templateId: formData.get('templateId') || undefined,
     });
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
     const d = parsed.data;
+
+    // A template supplies the shares (40/30/30 rather than thirds) and is
+    // remembered on the plan; the other values were already filled into the
+    // form from it, so they arrive like any hand-typed plan.
+    const template = d.templateId
+      ? await db.pricingTemplate.findFirst({
+          where: { id: d.templateId, organizationId: tenant.organizationId },
+          select: { id: true, instalmentCount: true, shares: true },
+        })
+      : null;
+    if (d.templateId && !template) return { error: 'That pricing template no longer exists.' };
 
     const product = await db.product.findFirst({
       where: { id: d.productId, organizationId: tenant.organizationId },
@@ -330,9 +344,12 @@ export async function addPricingPlan(_prev: ActionState, formData: FormData): Pr
         instalmentCount,
         instalmentPlan:
           planType === 'INSTALMENT'
-            ? instalmentSchedule(pricePaise, instalmentCount, d.instalmentGapDays ?? 30)
+            ? template && template.shares.length === instalmentCount
+              ? scheduleFromTemplate(pricePaise, { instalmentCount, gapDays: d.instalmentGapDays ?? 30, shares: template.shares }).map((p) => ({ ...p }))
+              : instalmentSchedule(pricePaise, instalmentCount, d.instalmentGapDays ?? 30)
             : undefined,
         invoiceAnchor: d.invoiceAnchor ?? 'CLASS_COMMENCEMENT',
+        templateId: template?.id ?? null,
       },
     });
 

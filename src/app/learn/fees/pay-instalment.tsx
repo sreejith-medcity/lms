@@ -3,9 +3,11 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { startInstalmentCheckout } from '@/server/fees';
+import { startMiscFeeCheckout } from '@/server/misc-fees';
 import { Button, FormError } from '@/components/ui';
 
-export function PayInstalment({ instalmentId, label }: { instalmentId: string; label: string }) {
+/** The same button pays an instalment or one of the other charges; the kind says which order is started. */
+export function PayInstalment({ instalmentId, label, kind = 'instalment' }: { instalmentId: string; label: string; kind?: 'instalment' | 'fee' }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string>();
   const router = useRouter();
@@ -17,7 +19,7 @@ export function PayInstalment({ instalmentId, label }: { instalmentId: string; l
         disabled={pending}
         onClick={() =>
           start(async () => {
-            const res = await startInstalmentCheckout(instalmentId);
+            const res = kind === 'fee' ? await startMiscFeeCheckout(instalmentId) : await startInstalmentCheckout(instalmentId);
             if (res.ok) router.push(`/checkout/${res.orderId}`);
             else setError(res.error);
           })

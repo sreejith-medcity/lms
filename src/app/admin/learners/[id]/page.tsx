@@ -231,6 +231,9 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
                     <span className="t-small faint shrink-0">
                       {e.createdAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                     </span>
+                    <Link href={`/admin/fees/${e.id}`} className="t-small shrink-0 underline">
+                      Fees
+                    </Link>
                   </li>
                 ))}
               </ul>

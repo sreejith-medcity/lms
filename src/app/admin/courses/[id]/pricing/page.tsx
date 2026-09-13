@@ -1,8 +1,10 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
+import { describeTemplate } from '@/lib/pricing-templates';
 import { Badge, Card, Cell, EmptyState, Row, Table } from '@/components/ui';
 import { AddPlanForm, DeletePlanButton, PublishingForm } from './editors';
 
@@ -26,7 +28,7 @@ export default async function PricingPage({ params }: { params: Promise<{ id: st
   const me = await requireStaff('courses.pricing_and_publish', 'view');
   const canEdit = me.permissions['courses.pricing_and_publish']?.edit ?? false;
 
-  const [product, branches] = await Promise.all([
+  const [product, branches, templates] = await Promise.all([
     db.product.findFirst({
       where: { id, organizationId: tenant.organizationId, type: 'COURSE' },
       select: {
@@ -56,6 +58,11 @@ export default async function PricingPage({ params }: { params: Promise<{ id: st
       where: { organizationId: tenant.organizationId, isActive: true },
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
+    }),
+    db.pricingTemplate.findMany({
+      where: { organizationId: tenant.organizationId, isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, name: true, planType: true, instalmentCount: true, gapDays: true, shares: true, validityDays: true, invoiceAnchor: true },
     }),
   ]);
   if (!product?.course) notFound();
@@ -131,7 +138,15 @@ export default async function PricingPage({ params }: { params: Promise<{ id: st
       {canEdit && (
         <Card>
           <h2 className="t-heading mb-4">Add a plan</h2>
-          <AddPlanForm productId={product.id} currency={tenant.currency} branches={branches} />
+          <AddPlanForm
+            productId={product.id}
+            currency={tenant.currency}
+            branches={branches}
+            templates={templates.map((t) => ({ ...t, description: describeTemplate(t) }))}
+          />
+          <p className="t-micro faint mt-3">
+            The shapes in the template list are kept under <Link href="/admin/pricing-templates" className="underline">Pricing templates</Link>.
+          </p>
         </Card>
       )}
 

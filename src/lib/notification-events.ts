@@ -31,6 +31,7 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
       { key: 'payment.received', label: 'A payment went through', who: 'The learner who paid', live: true },
       { key: 'payment.failed', label: 'A payment failed', who: 'The learner who tried', live: true },
       { key: 'instalment.due', label: 'An instalment is due', who: 'The learner who owes it', live: true },
+      { key: 'misc_fee.raised', label: 'A charge was added to their account', who: 'The learner', live: true },
       { key: 'cart.abandoned', label: 'They left a cart', who: 'The learner who left it', live: true },
     ],
   },

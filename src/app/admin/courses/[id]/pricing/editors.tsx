@@ -16,32 +16,76 @@ import {
   Input,
   Select,
 } from '@/components/ui';
+import { scheduleFromTemplate } from '@/lib/pricing-templates';
 
 const initial: ActionState = {};
+
+export interface PlanTemplate {
+  id: string;
+  name: string;
+  planType: string;
+  instalmentCount: number;
+  gapDays: number;
+  shares: number[];
+  validityDays: number | null;
+  invoiceAnchor: string;
+  description: string;
+}
 
 export function AddPlanForm({
   productId,
   currency,
   branches,
+  templates = [],
 }: {
   productId: string;
   currency: string;
   branches: { id: string; name: string }[];
+  templates?: PlanTemplate[];
 }) {
   const [state, action, pending] = useActionState(addPricingPlan, initial);
   const [planType, setPlanType] = useState('ONE_TIME');
   const [price, setPrice] = useState(0);
   const [count, setCount] = useState(3);
   const [gap, setGap] = useState(30);
+  const [templateId, setTemplateId] = useState('');
+  const [validity, setValidity] = useState('');
+  const [anchor, setAnchor] = useState('CLASS_COMMENCEMENT');
+  const template = templates.find((t) => t.id === templateId) ?? null;
 
   const free = price === 0;
   const instalment = planType === 'INSTALMENT' && !free;
 
+  // Picking a template fills the shape; the price is still typed, because
+  // the template is how it is paid, not what it costs.
+  const applyTemplate = (id: string) => {
+    setTemplateId(id);
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    setPlanType(t.planType);
+    setCount(Math.max(2, t.instalmentCount));
+    setGap(t.gapDays);
+    setValidity(t.validityDays ? String(t.validityDays) : '');
+    setAnchor(t.invoiceAnchor);
+  };
+
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="productId" value={productId} />
+      <input type="hidden" name="templateId" value={templateId} />
       <FormError message={state.error} />
       <FormSuccess message={state.ok ? 'Plan added.' : undefined} />
+
+      {templates.length > 0 && (
+        <Field label="Start from a template" hint={template ? template.description : 'Fills how it is paid; the price is yours to type.'}>
+          <Select value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+            <option value="">No template</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Plan name">
@@ -65,7 +109,7 @@ export function AddPlanForm({
         </Field>
 
         <Field label="Validity in days" hint="Blank means access never expires.">
-          <Input name="validityDays" type="number" min={0} step={1} />
+          <Input name="validityDays" type="number" min={0} step={1} value={validity} onChange={(e) => setValidity(e.target.value)} />
         </Field>
 
         <Field
@@ -121,13 +165,13 @@ export function AddPlanForm({
               />
             </Field>
             <Field label="Counted from">
-              <Select name="invoiceAnchor" defaultValue="CLASS_COMMENCEMENT">
+              <Select name="invoiceAnchor" value={anchor} onChange={(e) => setAnchor(e.target.value)}>
                 <option value="CLASS_COMMENCEMENT">The batch start date</option>
                 <option value="ENROLLMENT">The day they enrol</option>
               </Select>
             </Field>
           </div>
-          <p className="t-small faint mt-3">{describeSchedule(price, count, gap, currency)}</p>
+          <p className="t-small faint mt-3">{describeSchedule(price, count, gap, currency, template && template.shares.length === count ? template.shares : null)}</p>
         </div>
       )}
 
@@ -139,15 +183,19 @@ export function AddPlanForm({
 }
 
 /** Show the office the actual dues, so nobody has to trust the arithmetic. */
-function describeSchedule(price: number, count: number, gap: number, currency: string) {
+function describeSchedule(price: number, count: number, gap: number, currency: string, shares: number[] | null) {
   if (price <= 0 || count < 2) return 'Set a price to see the schedule.';
   const paise = Math.round(price * 100);
-  const each = Math.floor(paise / count);
-  const first = each + (paise - each * count);
   const fmt = (p: number) =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(
       p / 100,
     );
+  if (shares) {
+    const parts = scheduleFromTemplate(paise, { instalmentCount: count, gapDays: gap, shares });
+    return parts.map((p) => `${fmt(p.amountPaise)} on day ${p.dueOffsetDays}`).join(', ') + '.';
+  }
+  const each = Math.floor(paise / count);
+  const first = each + (paise - each * count);
   return `${fmt(first)} on day 0, then ${count - 1} × ${fmt(each)} every ${gap} days.`;
 }
 

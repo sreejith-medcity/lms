@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { formatMoney } from '@/lib/money';
 import { balanceOf, daysOverdue, summariseAccount } from '@/lib/dues';
+import { feeStatusLabel } from '@/lib/misc-fees';
 import { Badge, Card, EmptyState } from '@/components/ui';
 import { PayInstalment } from './pay-instalment';
 
@@ -36,6 +37,14 @@ export default async function FeesPage() {
     },
   });
 
+  // The charges beyond the course fee: open ones first, then what was settled.
+  const charges = await db.miscFee.findMany({
+    where: { organizationId: tenant.organizationId, userId: user.id, status: { in: ['PENDING', 'PAID', 'WAIVED'] } },
+    orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+    take: 40,
+    select: { id: true, label: true, amountPaise: true, dueDate: true, status: true, paidAt: true, enrollment: { select: { product: { select: { title: true } } } }, feeType: { select: { description: true } } },
+  });
+
   const receipts = await db.payment.findMany({
     where: { organizationId: tenant.organizationId, userId: user.id, receiptNo: { not: null }, status: 'CAPTURED' },
     orderBy: { capturedAt: 'desc' },
@@ -54,12 +63,12 @@ export default async function FeesPage() {
       </p>
 
       <div className="mt-6 space-y-4">
-        {plans.length === 0 ? (
+        {plans.length === 0 && charges.length === 0 ? (
           <EmptyState
             title="No instalment plans"
             hint="Everything you have bought was paid in full. Purchases and invoices are under Purchases."
           />
-        ) : (
+        ) : plans.length === 0 ? null : (
           plans.map((plan) => {
             const summary = summariseAccount(plan.instalments, now);
             const next = plan.instalments.find((i) => balanceOf(i) > 0);
@@ -119,6 +128,41 @@ export default async function FeesPage() {
               </Card>
             );
           })
+        )}
+
+        {charges.length > 0 && (
+          <Card>
+            <h2 className="t-heading">Other charges</h2>
+            <p className="t-small faint mt-1">Exam fees, materials and the like, added by the academy. Pay here or at the counter.</p>
+            <ul className="mt-3 divide-y rounded-[var(--radius-sm)] border">
+              {charges.map((c) => {
+                const s = feeStatusLabel(c, now);
+                return (
+                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+                    <div>
+                      <p className="text-sm font-medium">{c.label}</p>
+                      <p className="t-small faint">
+                        {c.enrollment.product.title}
+                        {c.feeType?.description ? ` · ${c.feeType.description}` : ''}
+                        {c.status === 'PAID' && c.paidAt ? ` · paid ${dateLabel(c.paidAt)}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="tabular-nums">{formatMoney(c.amountPaise, tenant.currency)}</span>
+                      {c.status === 'PENDING' ? (
+                        <>
+                          <Badge tone={s.tone}>{s.text}</Badge>
+                          <PayInstalment instalmentId={c.id} kind="fee" label="Pay now" />
+                        </>
+                      ) : (
+                        <Badge tone={s.tone}>{s.text}</Badge>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
         )}
 
         {receipts.length > 0 && (

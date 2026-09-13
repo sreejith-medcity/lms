@@ -8,6 +8,8 @@ import { balanceOf, daysOverdue, summariseAccount } from '@/lib/dues';
 import { Badge, Card, Cell, PageHeader, Row, Table } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { CounterPaymentForm, ReminderButton } from '../editors';
+import { FeeActions, RaiseFeeForm } from '../misc-fee-editors';
+import { feeStatusLabel, summariseFees } from '@/lib/misc-fees';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -56,6 +58,23 @@ export default async function FeeStatementPage({ params }: { params: Promise<{ i
   const now = new Date();
   const summary = summariseAccount(enrollment.instalments, now);
 
+  // The charges beyond the course fee, and the catalogue to raise one from.
+  const [charges, feeTypes] = await Promise.all([
+    db.miscFee.findMany({
+      where: { enrollmentId: enrollment.id, organizationId: tenant.organizationId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, label: true, amountPaise: true, dueDate: true, status: true, note: true, waivedReason: true, paidAt: true, createdAt: true, feeType: { select: { name: true } } },
+    }),
+    canEdit
+      ? db.feeType.findMany({
+          where: { organizationId: tenant.organizationId, isActive: true },
+          orderBy: { sortOrder: 'asc' },
+          select: { id: true, name: true, amountPaise: true, description: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const chargeSummary = summariseFees(charges, now);
+
   // Every payment that touched this plan: counter receipts carry the
   // enrolment on the row, online ones are found through the order line.
   const payments = await db.payment.findMany({
@@ -65,6 +84,7 @@ export default async function FeeStatementPage({ params }: { params: Promise<{ i
       OR: [
         { raw: { path: ['enrollmentId'], equals: enrollment.id } },
         { order: { items: { some: { instalmentId: { in: enrollment.instalments.map((i) => i.id) } } } } },
+        { order: { items: { some: { miscFee: { enrollmentId: enrollment.id } } } } },
         { id: { in: enrollment.instalments.flatMap((i) => (i.paymentId ? [i.paymentId] : [])) } },
       ],
     },
@@ -161,6 +181,57 @@ export default async function FeeStatementPage({ params }: { params: Promise<{ i
             </Card>
 
             <Card>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h2 className="t-heading">Other charges</h2>
+                  <p className="t-small muted mt-1">
+                    {charges.length === 0
+                      ? 'Nothing beyond the course fee.'
+                      : chargeSummary.openCount === 0
+                        ? 'Nothing open.'
+                        : `${formatMoney(chargeSummary.openPaise, tenant.currency)} open across ${chargeSummary.openCount}${chargeSummary.overduePaise > 0 ? `, ${formatMoney(chargeSummary.overduePaise, tenant.currency)} overdue` : ''}.`}
+                  </p>
+                </div>
+                <Link href="/admin/fees/types" className="t-small underline">Fee types</Link>
+              </div>
+              {charges.length > 0 && (
+                <div className="mt-3">
+                  <Table head={['Charge', 'Raised', 'Due', 'Amount', 'Status']}>
+                    {charges.map((c) => {
+                      const s = feeStatusLabel(c, now);
+                      return (
+                        <Row key={c.id}>
+                          <Cell>
+                            <span className="font-medium">{c.label}</span>
+                            {c.note && <span className="t-small faint block">{c.note}</span>}
+                            {c.waivedReason && <span className="t-small faint block">Waived: {c.waivedReason}</span>}
+                            {canEdit && c.status === 'PENDING' && (
+                              <div className="mt-2">
+                                <FeeActions feeId={c.id} label={c.label} canDelete={me.permissions['sales.fee_tracking']?.delete ?? false} />
+                              </div>
+                            )}
+                          </Cell>
+                          <Cell className="tabular-nums">{dateLabel(c.createdAt)}</Cell>
+                          <Cell className="tabular-nums">{c.dueDate ? dateLabel(c.dueDate) : <span className="faint">—</span>}</Cell>
+                          <Cell className="tabular-nums">{formatMoney(c.amountPaise, tenant.currency)}</Cell>
+                          <Cell><Badge tone={s.tone}>{s.text}{c.status === 'PAID' && c.paidAt ? ` ${dateLabel(c.paidAt)}` : ''}</Badge></Cell>
+                        </Row>
+                      );
+                    })}
+                  </Table>
+                </div>
+              )}
+              {canEdit && (
+                <details className="mt-4">
+                  <summary className="t-small cursor-pointer font-medium">Raise a charge</summary>
+                  <div className="mt-3">
+                    <RaiseFeeForm enrollmentId={enrollment.id} types={feeTypes} currency={tenant.currency} />
+                  </div>
+                </details>
+              )}
+            </Card>
+
+            <Card>
               <h2 className="t-heading">Receipts</h2>
               {payments.length === 0 ? (
                 <p className="t-small faint mt-2">Nothing collected yet.</p>
@@ -168,10 +239,12 @@ export default async function FeeStatementPage({ params }: { params: Promise<{ i
                 <div className="mt-3">
                   <Table head={['Receipt', 'When', 'How', 'Against', 'Amount']}>
                     {payments.map((p) => {
-                      const raw = (p.raw ?? {}) as { allocations?: { sequence: number; paise: number }[]; note?: string | null };
+                      const raw = (p.raw ?? {}) as { kind?: string; item?: string; allocations?: { sequence: number; paise: number }[]; note?: string | null };
                       const against = raw.allocations?.length
                         ? raw.allocations.map((a) => `#${a.sequence}`).join(', ')
-                        : p.order?.orderNo ?? '';
+                        : raw.kind === 'misc_fee' && raw.item
+                          ? raw.item
+                          : p.order?.orderNo ?? '';
                       const no = p.receiptNo ?? p.order?.invoice?.invoiceNo ?? null;
                       const href = p.receiptNo
                         ? `/learn/receipts/${p.receiptNo}`

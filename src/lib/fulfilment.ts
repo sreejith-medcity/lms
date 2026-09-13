@@ -106,7 +106,7 @@ export async function fulfilPaidOrder(input: {
     where: { id: input.orderId, organizationId: input.organizationId },
     include: {
       items: {
-        select: { id: true, productId: true, pricingPlanId: true, instalmentId: true, pricePaise: true },
+        select: { id: true, productId: true, pricingPlanId: true, instalmentId: true, miscFeeId: true, pricePaise: true },
       },
       invoice: { select: { invoiceNo: true } },
     },
@@ -403,6 +403,22 @@ export async function fulfilPaidOrder(input: {
        * this payment does is settle one part of their fee plan. Guarded on
        * paidAt so a replayed webhook cannot count the money twice.
        */
+      /*
+       * A miscellaneous fee paid online: an exam fee, study material. The
+       * learner is already enrolled; the fee is marked paid against this
+       * payment, and a replayed webhook finds it paid and moves on.
+       */
+      if (item.miscFeeId) {
+        const fee = await tx.miscFee.findFirst({
+          where: { id: item.miscFeeId, organizationId: input.organizationId },
+          select: { id: true, status: true },
+        });
+        if (fee && fee.status === 'PENDING') {
+          await tx.miscFee.update({ where: { id: fee.id }, data: { status: 'PAID', paidAt: new Date(), paymentId: payment.id } });
+        }
+        continue;
+      }
+
       if (item.instalmentId) {
         const part = await tx.instalment.findFirst({
           where: { id: item.instalmentId, enrollment: { organizationId: input.organizationId } },

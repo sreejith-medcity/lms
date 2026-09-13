@@ -25,6 +25,7 @@ export const ADMIN_NAV: NavGroup[] = [
     children: [
       { label: 'Courses', href: '/admin/courses' },
       { label: 'Bundles', href: '/admin/bundles' },
+      { label: 'Pricing templates', href: '/admin/pricing-templates' },
       { label: 'Events', href: '/admin/events', feature: 'events' },
       { label: 'Memberships', href: '/admin/memberships', feature: 'memberships' },
       { label: 'Categories', href: '/admin/categories' },

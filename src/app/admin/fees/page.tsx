@@ -110,6 +110,13 @@ export default async function FeesPage({
     plans.map((p) => ({ ...p, summary: summariseAccount(p.instalments, now) })),
   );
 
+  // The other charges still open, so the book here is the whole book.
+  const openCharges = await db.miscFee.aggregate({
+    where: { organizationId: tenant.organizationId, status: 'PENDING' },
+    _sum: { amountPaise: true },
+    _count: true,
+  });
+
   const open = accounts.filter((a) => !a.summary.settled);
   const settled = accounts.filter((a) => a.summary.settled);
 
@@ -140,6 +147,11 @@ export default async function FeesPage({
       <PageHeader
         title="Fees and dues"
         description="Who owes what, oldest first. Open a learner to take a payment, print a receipt or send a reminder."
+        action={
+          <Link href="/admin/fees/types" className="t-small underline">
+            Fee types
+          </Link>
+        }
       />
 
       <div className="space-y-6">
@@ -155,6 +167,11 @@ export default async function FeesPage({
             sub={`${overdueAccounts} learners past a due date`}
           />
           <Stat label="Due this week" value={String(dueSoon.length)} sub="worth a call before they lapse" />
+          <Stat
+            label="Other charges open"
+            value={formatMoney(openCharges._sum.amountPaise ?? 0, tenant.currency)}
+            sub={`${openCharges._count} exam fees, materials and the like`}
+          />
           <Stat
             label="Collected at the counter"
             value={formatMoney(collectedThisMonth._sum.amountPaise ?? 0, tenant.currency)}
