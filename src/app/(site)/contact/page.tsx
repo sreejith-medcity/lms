@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getSiteContext } from '@/lib/site';
 import { NoTenantNotice } from '@/components/tenant-notices';
 import { EnquiryForm } from './form';
+import { captchaSite } from '@/lib/captcha';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,7 +43,7 @@ export default async function ContactPage() {
       </p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <EnquiryForm courses={courses} />
+        <EnquiryForm courses={courses} captcha={await captchaSite(site.organizationId)} />
 
         <aside className="space-y-5">
           <div className="rounded-[var(--radius)] border bg-[var(--surface)] p-5">

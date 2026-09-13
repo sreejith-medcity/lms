@@ -393,6 +393,17 @@ export const SETTINGS: SettingDef[] = [
     live: true,
   },
   {
+    key: 'security.captchaMinScore',
+    group: 'auth',
+    label: 'reCAPTCHA score to accept',
+    help: 'reCAPTCHA v3 scores a visitor from 0 (a bot) to 1 (a person). Sign-ups and enquiries below this are refused. 0.5 is Google’s own suggestion; lower it if real people are being turned away.',
+    kind: 'number',
+    default: 0.5,
+    min: 0.1,
+    max: 0.9,
+    live: true,
+  },
+  {
     key: 'commerce.customerBearsGatewayFee',
     group: 'commerce',
     label: 'The learner pays the payment gateway fee',

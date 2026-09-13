@@ -4,10 +4,11 @@ import { useActionState } from 'react';
 import { submitEnquiry, type EnquiryState } from '@/server/enquiry';
 import { Button, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
 import { TrackEvent } from '@/components/track-event';
+import { CaptchaField } from '@/components/captcha-field';
 
 const initial: EnquiryState = {};
 
-export function EnquiryForm({ courses }: { courses: { id: string; title: string }[] }) {
+export function EnquiryForm({ courses, captcha = null }: { courses: { id: string; title: string }[]; captcha?: { provider: 'recaptcha' | 'turnstile'; siteKey: string } | null }) {
   const [state, action, pending] = useActionState(submitEnquiry, initial);
 
   if (state.ok) {
@@ -62,6 +63,7 @@ export function EnquiryForm({ courses }: { courses: { id: string; title: string 
         <input id="website" name="website" tabIndex={-1} autoComplete="off" />
       </div>
 
+      {captcha && <CaptchaField provider={captcha.provider} siteKey={captcha.siteKey} action="enquiry" />}
       <Button type="submit" disabled={pending}>
         {pending ? 'Sending...' : 'Send enquiry'}
       </Button>

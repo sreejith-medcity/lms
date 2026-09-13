@@ -1,7 +1,9 @@
 'use server';
 
 import { z } from 'zod';
+import { headers } from 'next/headers';
 import { db } from '@/lib/db';
+import { CAPTCHA_REFUSED, verifyCaptcha } from '@/lib/captcha';
 import { reportConversion } from '@/lib/analytics-server';
 import { attributionJson, conversionHints, requestAttribution } from '@/lib/attribution-server';
 import { getTenantContext } from '@/lib/tenant';
@@ -41,6 +43,10 @@ export async function submitEnquiry(_prev: EnquiryState, formData: FormData): Pr
 
     const d = parsed.data;
     if (d.website) return { ok: true }; // silently drop, so the bot learns nothing
+
+    const ip = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+    const verdict = await verifyCaptcha(tenant.organizationId, String(formData.get('captchaToken') ?? '') || null, 'enquiry', ip);
+    if (!verdict.ok) return { error: CAPTCHA_REFUSED };
     if (!d.email && !d.phone) {
       return { error: 'Leave an email address or a phone number so we can reply.' };
     }

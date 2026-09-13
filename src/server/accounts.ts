@@ -5,6 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { CAPTCHA_REFUSED, verifyCaptcha } from '@/lib/captcha';
 import { reportConversion } from '@/lib/analytics-server';
 import { conversionHints, requestAttribution } from '@/lib/attribution-server';
 import { SESSION_COOKIE } from '@/lib/auth';
@@ -78,6 +79,9 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
     const limit = checkAll(authAttemptKeys('signup', tenantId, email || phone || '', ip), 3, 60 * 60);
     if (!limit.ok) return { error: tooManyAttemptsMessage(limit.retryAfterSeconds) };
+
+    const verdict = await verifyCaptcha(org.id, String(formData.get('captchaToken') ?? '') || null, 'signup', ip);
+    if (!verdict.ok) return { error: CAPTCHA_REFUSED };
 
     // Whichever field the academy made primary is the one that has to be unique,
     // because that is the one people will sign in with.

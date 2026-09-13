@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/auth';
 import { getTenantContext } from '@/lib/tenant';
 import { AuthShell } from '@/components/auth-shell';
 import { SignupForm } from './form';
+import { captchaSite } from '@/lib/captcha';
 import { settingText } from '@/lib/settings/store';
 import { optionsOf, signupFields } from '@/lib/custom-fields';
 
@@ -49,6 +50,7 @@ export default async function SignupPage({
         referralCode={(ref ?? '').trim().toUpperCase().slice(0, 16)}
         primaryField={primaryField}
         extraFields={extraFields}
+        captcha={tenant ? await captchaSite(tenant.organizationId) : null}
       />
     </AuthShell>
   );

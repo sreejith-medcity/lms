@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { CaptchaField } from '@/components/captcha-field';
 import { register } from '@/server/accounts';
 import type { ActionState } from '@/server/courses';
 import { Button, Field, FormError, Input, Select } from '@/components/ui';
@@ -19,10 +20,12 @@ export function SignupForm({
   referralCode = '',
   primaryField = 'EMAIL',
   extraFields = [],
+  captcha = null,
 }: {
   referralCode?: string;
   primaryField?: string;
   extraFields?: ExtraField[];
+  captcha?: { provider: 'recaptcha' | 'turnstile'; siteKey: string } | null;
 }) {
   const [state, action, pending] = useActionState(register, initial);
   // Offered rather than asked: most people do not have one, and an empty box
@@ -116,6 +119,7 @@ export function SignupForm({
         </button>
       )}
 
+      {captcha && <CaptchaField provider={captcha.provider} siteKey={captcha.siteKey} action="signup" />}
       <Button type="submit" disabled={pending} size="lg" className="w-full">
         {pending ? 'Creating...' : 'Create account'}
       </Button>
