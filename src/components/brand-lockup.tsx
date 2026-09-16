@@ -37,7 +37,7 @@ export function BrandLockup({
     return (
       <span className={`flex items-center gap-2 ${className}`}>
         <span
-          className="grid h-7 w-7 place-items-center rounded-[var(--radius-sm)] text-xs font-bold"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-sm)] text-xs font-bold"
           style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
         >
           {name.slice(0, 1)}

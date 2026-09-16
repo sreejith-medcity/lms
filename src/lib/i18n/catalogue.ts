@@ -24,6 +24,11 @@ export const CATALOGUE: Record<'ml' | 'hi', Record<string, string>> = {
     Admin: 'അഡ്മിൻ',
     Notifications: 'അറിയിപ്പുകൾ',
     'Sign out': 'സൈൻ ഔട്ട്',
+    Menu: 'മെനു',
+    'Open menu': 'മെനു തുറക്കുക',
+    'Close menu': 'മെനു അടയ്ക്കുക',
+    'Collapse menu': 'മെനു ചുരുക്കുക',
+    'Expand menu': 'മെനു വികസിപ്പിക്കുക',
     'Sign in': 'സൈൻ ഇൻ',
     Language: 'ഭാഷ',
 
@@ -148,6 +153,11 @@ export const CATALOGUE: Record<'ml' | 'hi', Record<string, string>> = {
     Admin: 'एडमिन',
     Notifications: 'सूचनाएँ',
     'Sign out': 'साइन आउट',
+    Menu: 'मेन्यू',
+    'Open menu': 'मेन्यू खोलें',
+    'Close menu': 'मेन्यू बंद करें',
+    'Collapse menu': 'मेन्यू छोटा करें',
+    'Expand menu': 'मेन्यू बड़ा करें',
     'Sign in': 'साइन इन',
     Language: 'भाषा',
 

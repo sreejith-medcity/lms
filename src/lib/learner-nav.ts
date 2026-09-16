@@ -1,9 +1,9 @@
 import { db } from '@/lib/db';
 
 /**
- * What a learner sees across the top, and in what order.
+ * What a learner sees in the menu down the left, and in what order.
  *
- * An institute that sells one self-paced course does not want a community tab,
+ * An institute that sells one self-paced course does not want a community entry,
  * and one running eighteen branches of live classes wants it first. So the list
  * is a setting rather than a constant, stored as ordered keys and read back
  * against this catalogue: an unknown key is dropped rather than rendered, so a

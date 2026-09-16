@@ -24,9 +24,9 @@ export default async function LearnerPortalSettings() {
     <Card>
       <h2 className="t-heading">The learner portal menu</h2>
       <p className="t-small muted mt-1 max-w-prose">
-        What a learner sees across the top, and in what order. An academy selling one self-paced
-        course does not want a community tab; one running eighteen branches of live classes may want
-        it first.
+        What a learner sees in the menu down the left, and in what order. An academy selling one
+        self-paced course does not want a community entry; one running eighteen branches of live
+        classes may want it first.
       </p>
       <div className="mt-5">
         <LearnerNavForm
