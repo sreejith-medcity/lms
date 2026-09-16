@@ -946,6 +946,10 @@ model Course {
   onDemandOnly           Boolean @default(false) // admin-only enrolment
   appleIapProductId      String?
   overviewLinkOverride   String?
+  /// How many partner mock tests (telc today) this course includes. Summed
+  /// across a learner's live enrolments and sent to the partner at login;
+  /// null leaves the partner's own default in place.
+  mockTestAttempts       Int?
   milestoneCelebrations  Boolean @default(true)
   accessAfterCompletion  Boolean @default(true)
   learnerCanComplete     Boolean @default(true)
