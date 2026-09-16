@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
-import { telcConfig } from '@/lib/telc';
+import { mockTestAllowance, telcConfig } from '@/lib/telc';
+import { mockTestLine, mockTestsLeft } from '@/lib/mock-tests';
 import { anthropicReady } from '@/lib/anthropic';
 import { settingBool } from '@/lib/settings/store';
 import { Badge, Card, Section } from '@/components/ui';
@@ -8,8 +9,58 @@ import { Badge, Card, Section } from '@/components/ui';
 /**
  * Practice on the learner's home: the AI examiner for writing and
  * speaking, the partner mock exams with one button to get in, and the
- * results that came back, newest first.
+ * results that came back, newest first. The mock test card is its own
+ * piece so the practice room can show it too.
  */
+
+/** The partner mock test: one button in, and how much of the allowance is left. */
+export async function MockTestCard({
+  organizationId,
+  userId,
+  unavailable = false,
+}: {
+  organizationId: string;
+  userId: string;
+  unavailable?: boolean;
+}) {
+  const allowance = await mockTestAllowance(organizationId, userId);
+  const left = mockTestsLeft(allowance);
+  const line = mockTestLine(allowance);
+  const exhausted = left === 0;
+  return (
+    <Card className="flex flex-col">
+      <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
+        German
+      </p>
+      <p className="mt-1 text-base font-bold">TELC AI Mocktest</p>
+      <p className="t-small muted mt-1.5 leading-relaxed">
+        Full-length telc practice exams at A1 to B2, in the official format and timing, marked
+        automatically with feedback on every module. You are signed in there with this account;
+        no second password.
+      </p>
+      <div className="mt-auto pt-4">
+        {exhausted ? (
+          <span className="inline-flex h-10 cursor-not-allowed items-center rounded-[var(--radius-sm)] border px-4 text-sm font-semibold text-[var(--ink-2)]" aria-disabled>
+            No mock tests left
+          </span>
+        ) : (
+          <a
+            href="/api/sso/telc/start"
+            className="inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold text-[var(--brand-ink)]"
+            style={{ background: 'var(--brand)' }}
+          >
+            Open the mock test
+          </a>
+        )}
+        {line && <p className={`t-small mt-2 tabular-nums ${exhausted ? 'text-[var(--bad)]' : 'faint'}`}>{line}{exhausted ? '. Ask the office for more.' : ''}</p>}
+        {unavailable && (
+          <p className="t-small mt-2 text-[var(--bad)]">The mock test could not be opened just now. Try again in a minute.</p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export async function PartnerPractice({
   organizationId,
   userId,
@@ -58,31 +109,7 @@ export async function PartnerPractice({
             </div>
           </Card>
         )}
-        {telc && (
-          <Card className="flex flex-col">
-            <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
-              German
-            </p>
-            <p className="mt-1 text-base font-bold">TELC AI Mocktest</p>
-            <p className="t-small muted mt-1.5 leading-relaxed">
-              Full-length telc practice exams at A1 to B2, in the official format and timing, marked
-              automatically with feedback on every module. You are signed in there with this account;
-              no second password.
-            </p>
-            <div className="mt-auto pt-4">
-              <a
-                href="/api/sso/telc/start"
-                className="inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold text-[var(--brand-ink)]"
-                style={{ background: 'var(--brand)' }}
-              >
-                Open the mock test
-              </a>
-              {unavailable && (
-                <p className="t-small mt-2 text-[var(--bad)]">The mock test could not be opened just now. Try again in a minute.</p>
-              )}
-            </div>
-          </Card>
-        )}
+        {telc && <MockTestCard organizationId={organizationId} userId={userId} unavailable={unavailable} />}
 
         <Card padded={false}>
           <p className="border-b px-5 py-3 text-sm font-semibold">Your results</p>

@@ -7,6 +7,8 @@ import { practiceAllowance } from '@/lib/ai-practice';
 import { settingBool } from '@/lib/settings/store';
 import { EXAM_PRESETS, presetFor } from '@/lib/ai-evaluation';
 import { Badge, Card, EmptyState } from '@/components/ui';
+import { telcConfig } from '@/lib/telc';
+import { MockTestCard } from '@/components/partner-practice';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Practice' };
@@ -14,18 +16,21 @@ export const metadata = { title: 'Practice' };
 const when = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
 /**
- * The practice room: every exam the examiner marks, and what the learner
- * has done so far. When the key is not in place the page says so in
- * plain words instead of offering buttons that fail.
+ * The practice room: the partner mock test where the academy has one,
+ * every exam the examiner marks, and what the learner has done so far.
+ * When the key is not in place the examiner says so in plain words
+ * instead of offering buttons that fail, and the mock test stands on its
+ * own above it.
  */
 export default async function PracticePage() {
   const tenant = await requireTenant();
   const user = await getSessionUser();
   if (!user) return null;
 
-  const [enabled, ready] = await Promise.all([
+  const [enabled, ready, telc] = await Promise.all([
     settingBool(tenant.organizationId, 'ai.practiceEnabled'),
     anthropicReady(tenant.organizationId),
+    telcConfig(tenant.organizationId),
   ]);
 
   const [allowance, attempts] = await Promise.all([
@@ -48,7 +53,7 @@ export default async function PracticePage() {
         <div>
           <h1 className="text-xl font-semibold">Practice</h1>
           <p className="t-small faint mt-1 max-w-2xl">
-            Writing and speaking tasks in the style of your exam, marked to the official criteria within a
+            {telc ? 'Full-length mock exams, and writing' : 'Writing'} and speaking tasks in the style of your exam, marked to the official criteria within a
             minute, with corrections in your own words. It is practice, not a prediction: a real examiner on
             the day may see it differently.
           </p>
@@ -61,9 +66,18 @@ export default async function PracticePage() {
         )}
       </div>
 
+      {telc && (
+        <section className="mt-8">
+          <h2 className="text-base font-semibold">Mock exams</h2>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            <MockTestCard organizationId={tenant.organizationId} userId={user.id} />
+          </div>
+        </section>
+      )}
+
       {!enabled ? (
         <div className="mt-6">
-          <EmptyState title="Practice is switched off" hint="The academy has turned the AI examiner off for now." />
+          <EmptyState title="The AI examiner is switched off" hint="The academy has turned the writing and speaking examiner off for now." />
         </div>
       ) : !ready ? (
         <Card className="mt-6 border-dashed">

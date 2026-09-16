@@ -90,6 +90,7 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
           durationHours: product.course.durationMinutes
             ? Math.round((product.course.durationMinutes / 60) * 2) / 2
             : 0,
+          mockTestAttempts: product.course.mockTestAttempts,
           promoVideoUrl: product.course.promoVideoUrl ?? '',
           overviewLinkOverride: product.course.overviewLinkOverride ?? '',
           thumbnailAssetId: product.course.thumbnailAssetId,

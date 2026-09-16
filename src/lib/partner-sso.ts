@@ -26,6 +26,8 @@ export interface HandoffClaims {
   returnTo?: string;
   /** Anything the partner needs to decide what to show: levels, courses. */
   grants?: string[];
+  /** How many mock tests the learner's courses include; absent means the partner's own default. */
+  mockTestAttempts?: number;
   /** Issued and expiry, seconds since the epoch. */
   iat: number;
   exp: number;

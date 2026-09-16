@@ -37,6 +37,7 @@ export function DetailsForm({
     language: string;
     prettyName: string;
     durationHours: number;
+    mockTestAttempts: number | null;
     promoVideoUrl: string;
     overviewLinkOverride: string;
     thumbnailAssetId: string | null;
@@ -228,6 +229,13 @@ export function DetailsForm({
             hint="Off, and access stops when the batch completes."
             defaultChecked={course.accessAfterCompletion}
           />
+
+          <Field
+            label="Mock tests included"
+            hint="Full-length partner mock tests (the TELC AI Mocktest) a learner on this course may take. Added up across their courses and set on the partner at login. Blank leaves the partner's own default."
+          >
+            <Input name="mockTestAttempts" type="number" min={0} max={1000} step={1} defaultValue={course.mockTestAttempts ?? ''} placeholder="Partner default" className="max-w-[12rem]" />
+          </Field>
 
           <Field label="Promo video" hint="A YouTube link shown on the course page.">
             <Input name="promoVideoUrl" type="url" defaultValue={course.promoVideoUrl} placeholder="https://" />

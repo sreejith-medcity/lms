@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { db } from '@/lib/db';
 import { resolveIntegration } from '@/lib/integration-store';
 import { signHandoff } from '@/lib/partner-sso';
+import { sumMockTestAttempts, type MockTestAllowance } from '@/lib/mock-tests';
 
 /**
  * The telc mock test as a partner: where it is, and how a learner gets in.
@@ -36,11 +37,12 @@ export async function telcHandoffUrl(input: {
       phone: true,
       enrollments: {
         where: { status: { in: ['ENROLLED', 'REGISTERED', 'COMPLETED'] } },
-        select: { product: { select: { title: true } } },
+        select: { product: { select: { title: true, course: { select: { mockTestAttempts: true } } } } },
       },
     },
   });
   if (!user) return null;
+  const mockTestAttempts = sumMockTestAttempts(user.enrollments.map((e) => e.product.course ?? { mockTestAttempts: null }));
 
   const token = signHandoff(
     {
@@ -51,6 +53,7 @@ export async function telcHandoffUrl(input: {
       org: input.organizationId,
       returnTo: input.returnTo,
       grants: user.enrollments.map((e) => e.product.title).slice(0, 20),
+      ...(mockTestAttempts === null ? {} : { mockTestAttempts }),
       jti: randomBytes(12).toString('base64url'),
     },
     config.secret,
@@ -58,4 +61,16 @@ export async function telcHandoffUrl(input: {
   );
 
   return `${config.baseUrl}/api/lms/login?token=${encodeURIComponent(token)}`;
+}
+
+/** The learner's allowance and how much of it the partner has reported used. */
+export async function mockTestAllowance(organizationId: string, userId: string): Promise<MockTestAllowance> {
+  const [enrollments, used] = await Promise.all([
+    db.enrollment.findMany({
+      where: { organizationId, userId, status: { in: ['ENROLLED', 'REGISTERED', 'COMPLETED'] } },
+      select: { product: { select: { course: { select: { mockTestAttempts: true } } } } },
+    }),
+    db.partnerResult.count({ where: { organizationId, userId, provider: 'telc' } }),
+  ]);
+  return { limit: sumMockTestAttempts(enrollments.map((e) => e.product.course ?? { mockTestAttempts: null })), used };
 }

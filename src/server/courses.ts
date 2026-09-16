@@ -108,6 +108,7 @@ export async function createCourse(_prev: ActionState, formData: FormData): Prom
 const courseUpdate = z.object({
   prettyName: z.string().trim().max(120).optional().or(z.literal('')),
   durationMinutes: z.coerce.number().min(0).max(2000).optional(),
+  mockTestAttempts: z.coerce.number().int('Whole tests only').min(0).max(1000).optional(),
   thumbnailAssetId: z.string().optional().or(z.literal('')),
   overviewLinkOverride: z.string().trim().url('That is not a full URL').optional().or(z.literal('')),
   productId: z.string().min(1),
@@ -135,6 +136,7 @@ export async function updateCourse(_prev: ActionState, formData: FormData): Prom
       promoVideoUrl: formData.get('promoVideoUrl') || '',
       prettyName: formData.get('prettyName') || '',
       durationMinutes: formData.get('durationHours') || undefined,
+      mockTestAttempts: formData.get('mockTestAttempts') || undefined,
       thumbnailAssetId: formData.get('thumbnailAssetId') || '',
       overviewLinkOverride: formData.get('overviewLinkOverride') || '',
       modulesArePrerequisite: formData.get('modulesArePrerequisite') === 'on',
@@ -176,6 +178,7 @@ export async function updateCourse(_prev: ActionState, formData: FormData): Prom
             // Entered in hours because that is how a curriculum is discussed,
             // stored in minutes because that is how it is summed.
             durationMinutes: d.durationMinutes ? Math.round(d.durationMinutes * 60) : null,
+            mockTestAttempts: d.mockTestAttempts ?? null,
             thumbnailAssetId: d.thumbnailAssetId || null,
             overviewLinkOverride: d.overviewLinkOverride || null,
             overviewBlocks: overviewBlocks as Prisma.InputJsonValue,
