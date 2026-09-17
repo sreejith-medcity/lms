@@ -16,6 +16,8 @@ import { checkEdmingle, edmingleFor } from '@/lib/edmingle';
 import { attachVideos, importCatalogue, importFiles, type EdmingleReport } from '@/lib/migrate-edmingle';
 import { importBatches, importEnrollments, importLearners, importPrices } from '@/lib/migrate-edmingle-people';
 import { importQuestions } from '@/lib/migrate-edmingle-questions';
+import { setEdmingleAuto as writeEdmingleAuto } from '@/lib/migrate-edmingle-auto';
+import { migrateLocalAssetsToBucket, type MigrationReport as StorageReport } from '@/lib/storage-migrate';
 
 /**
  * Running the migration.
@@ -176,6 +178,46 @@ export async function runEdmingleStep(step: EdmingleStep, apply: boolean): Promi
       message: apply
         ? `${moved} ${moved === 1 ? 'item' : 'items'} brought across, ${report.alreadyDone} were already here.${more}`
         : `${moved} would come across, ${report.alreadyDone} are already here. Nothing has been written.${more}`,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** The background switch: the five-minute cron does a little of the import each run while it is on. */
+export async function setEdmingleAuto(on: boolean): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard('delete');
+    await writeEdmingleAuto(on);
+    await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: on ? 'migration.edmingle.auto_on' : 'migration.edmingle.auto_off', entity: 'MigrationRecord', entityId: 'edmingle' });
+    revalidatePath('/admin/settings/migration');
+    return { ok: true, message: on ? 'The import will carry on by itself, a little every five minutes.' : 'The background run is off.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export interface StorageMoveState extends ActionState {
+  report?: StorageReport;
+  dryRun?: boolean;
+}
+
+/** Copying the files uploaded before the bucket existed into the bucket. */
+export async function moveFilesToBucket(apply: boolean): Promise<StorageMoveState> {
+  try {
+    const { tenant, user } = await guard(apply ? 'delete' : 'view');
+    const report = await migrateLocalAssetsToBucket({ dryRun: !apply, budgetMs: 45_000 });
+    if (apply) {
+      await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: 'storage.migrated', entity: 'Asset', entityId: 'bucket', after: { copied: report.copied, skipped: report.skipped, failed: report.failed, remaining: report.remaining } });
+    }
+    const more = report.remaining > 0 ? ` ${report.remaining} not looked at yet: press again.` : '';
+    return {
+      ok: true,
+      dryRun: !apply,
+      report,
+      message: apply
+        ? `${report.copied} copied (${(report.bytes / 1048576).toFixed(1)} MB), ${report.skipped} already in the bucket, ${report.missing} missing on disk, ${report.failed} failed.${more}`
+        : `${report.copied} would be copied (${(report.bytes / 1048576).toFixed(1)} MB), ${report.skipped} already in the bucket, ${report.missing} missing on disk.${more}`,
     };
   } catch (err) {
     return fail(err);

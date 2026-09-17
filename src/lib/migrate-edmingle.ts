@@ -181,6 +181,8 @@ export async function importCatalogue(organizationId: string, options: { dryRun:
   let processed = 0;
   for (const m of pending) {
     if (outOfTime()) break;
+    // A rehearsal reads two curricula as a sample and leaves Edmingle's call allowance for the real run.
+    if (options.dryRun && processed >= 2) break;
     const moduleId = moduleTarget.get(m.course_id);
     if (!moduleId && !options.dryRun) continue;
     let sections;
@@ -260,7 +262,7 @@ export async function importCatalogue(organizationId: string, options: { dryRun:
     if (!options.dryRun && complete) await mark('curriculum', String(m.course_id), moduleId ?? null);
   }
   r.remaining = Math.max(0, pending.length - processed);
-  if (r.remaining > 0) sample(r, `${r.remaining} modules' curricula still to read: press again.`);
+  if (r.remaining > 0) sample(r, options.dryRun ? `${r.remaining} modules' curricula to read on the real run (a rehearsal samples two).` : `${r.remaining} modules' curricula still to read: press again, or switch on the background run.`);
   return r;
 }
 

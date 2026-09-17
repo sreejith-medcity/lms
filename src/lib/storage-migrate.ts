@@ -27,6 +27,8 @@ export interface MigrationReport {
   bytes: number;
   problems: string[];
   lines: string[];
+  /** Assets not looked at because the time ran out; another run picks them up. */
+  remaining: number;
 }
 
 /** Big files go up in one PUT, so this is the ceiling a single request can take. */
@@ -49,7 +51,10 @@ export async function migrateLocalAssetsToBucket(options: {
   dryRun: boolean;
   /** Stop after this many, for a first cautious pass. */
   limit?: number;
+  /** Stop looking once this much time has passed, so a run inside a request ends before the request does. */
+  budgetMs?: number;
 }): Promise<MigrationReport> {
+  const started = Date.now();
   const report: MigrationReport = {
     looked: 0,
     copied: 0,
@@ -59,6 +64,7 @@ export async function migrateLocalAssetsToBucket(options: {
     bytes: 0,
     problems: [],
     lines: [],
+    remaining: 0,
   };
 
   if (!s3Config()) {
@@ -73,7 +79,11 @@ export async function migrateLocalAssetsToBucket(options: {
     select: { id: true, storageKey: true, mimeType: true, name: true, sizeBytes: true },
   });
 
-  for (const asset of assets) {
+  for (const [i, asset] of assets.entries()) {
+    if (options.budgetMs && Date.now() - started > options.budgetMs) {
+      report.remaining = assets.length - i;
+      break;
+    }
     report.looked += 1;
     const key = asset.storageKey;
 

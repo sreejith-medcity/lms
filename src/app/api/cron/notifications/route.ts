@@ -7,6 +7,7 @@ import { queueUpcomingReminders } from '@/lib/messaging/reminders';
 import { queueFeeReminders } from '@/lib/messaging/fee-reminders';
 import { sendDueCampaigns } from '@/lib/messaging/campaigns';
 import { runDueWorkflows } from '@/lib/workflows';
+import { runEdmingleAuto } from '@/lib/migrate-edmingle-auto';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -52,7 +53,10 @@ export async function GET(request: Request) {
     const result = await drain(organization.id, 100);
     sent += result.sent;
     failed += result.failed;
-    results[organization.name] = { ...result, reminders, fees, workflows, campaigns };
+    // The Edmingle import, a little each run while its switch is on, with
+    // whatever is left of this run's time after the messages have gone.
+    const edmingle = await runEdmingleAuto(organization.id, Math.max(0, 48_000 - (Date.now() - started)));
+    results[organization.name] = { ...result, reminders, fees, workflows, campaigns, ...(edmingle ? { edmingle } : {}) };
   }
 
   const purged = await purgeExpiredOtps();

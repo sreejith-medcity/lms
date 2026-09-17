@@ -16,8 +16,8 @@ import type { EdmingleBatch, EdminglePackage, EdmingleQuestion, EdmingleStudent 
  */
 
 /** Gap between calls, so a step reads a library without tripping the limit. */
-const PACE_MS = 400;
-const RETRIES = 4;
+const PACE_MS = 1500;
+const RETRIES = 3;
 let lastCallAt = 0;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -57,7 +57,7 @@ export async function edmingleFor(organizationId: string): Promise<EdmingleClien
         });
         if (res.status === 429 && attempt < RETRIES) {
           const after = Number(res.headers.get('retry-after'));
-          await sleep(Number.isFinite(after) && after > 0 ? Math.min(after, 15) * 1000 : 1500 * 2 ** attempt);
+          await sleep(Number.isFinite(after) && after > 0 ? Math.min(after, 30) * 1000 : 5000 * 2 ** attempt);
           continue;
         }
         if (!res.ok) throw new Error(res.status === 429 ? `Edmingle is rate-limiting us on ${path}: wait a minute and press again` : `Edmingle answered ${res.status} for ${path}`);

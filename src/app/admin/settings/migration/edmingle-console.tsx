@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { runEdmingleStep, testEdmingle, type EdmingleStep, type EdmingleStepState } from '@/server/migration';
+import { moveFilesToBucket, runEdmingleStep, setEdmingleAuto, testEdmingle, type EdmingleStep, type EdmingleStepState, type StorageMoveState } from '@/server/migration';
 import type { ActionState } from '@/server/courses';
 import { Badge, Button, Card, FormError, FormSuccess } from '@/components/ui';
 
@@ -72,12 +72,15 @@ const STEPS: { key: EdmingleStep; title: string; blurb: string; caution?: string
   },
 ];
 
-export function EdmingleConsole({ connected, canApply, done }: { connected: boolean; canApply: boolean; done: { entity: string; migrated: number }[] }) {
+export function EdmingleConsole({ connected, canApply, done, auto, bucket }: { connected: boolean; canApply: boolean; done: { entity: string; migrated: number }[]; auto: boolean; bucket: boolean }) {
   const router = useRouter();
   const [busy, start] = useTransition();
   const [results, setResults] = useState<Record<string, EdmingleStepState>>({});
   const [connection, setConnection] = useState<ActionState>({});
   const [confirming, setConfirming] = useState<EdmingleStep | null>(null);
+  const [autoState, setAutoState] = useState<ActionState>({});
+  const [move, setMove] = useState<StorageMoveState | null>(null);
+  const [confirmMove, setConfirmMove] = useState(false);
   const count = new Map(done.map((row) => [row.entity, row.migrated]));
 
   function run(step: EdmingleStep, apply: boolean) {
@@ -106,6 +109,93 @@ export function EdmingleConsole({ connected, canApply, done }: { connected: bool
         </div>
         <FormError message={connection.error} />
         <FormSuccess message={connection.ok ? connection.message : undefined} />
+      </Card>
+
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 font-medium">
+              Carry on in the background
+              {auto ? <Badge tone="ok">on</Badge> : <Badge tone="warn">off</Badge>}
+            </p>
+            <p className="t-small muted">
+              Edmingle allows only a few calls a minute, so the whole library takes hours of presses. With this on, the five-minute job does a little of the next step
+              each run, in order, until every step below reports nothing left. What each run did shows on the Edmingle card&rsquo;s history under Integrations.
+            </p>
+            <p className="t-small faint mt-1">Same as pressing &ldquo;Do it for real&rdquo; on each step in turn: rehearse the steps you care about before switching it on.</p>
+          </div>
+          {canApply && (
+            <Button
+              variant={auto ? 'secondary' : 'primary'}
+              disabled={busy || !connected}
+              onClick={() =>
+                start(async () => {
+                  setAutoState(await setEdmingleAuto(!auto));
+                  router.refresh();
+                })
+              }
+            >
+              {busy ? 'Working...' : auto ? 'Switch off' : 'Switch on'}
+            </Button>
+          )}
+        </div>
+        <FormError message={autoState.error} />
+        <FormSuccess message={autoState.ok ? autoState.message : undefined} />
+      </Card>
+
+      <Card>
+        <p className="flex flex-wrap items-center gap-2 font-medium">
+          Move earlier uploads to the bucket
+          {bucket ? <Badge tone="ok">bucket connected</Badge> : <Badge tone="warn">no bucket yet</Badge>}
+        </p>
+        <p className="t-small muted mt-1">
+          Files uploaded before the bucket existed sit on this server&rsquo;s disk and vanish with the next deployment. This copies them into the bucket under the same
+          keys; nothing is deleted and nothing in the database changes, so it is safe to run while the site is up and safe to run twice. About a minute a press.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button variant="secondary" disabled={busy || !bucket} onClick={() => start(async () => setMove(await moveFilesToBucket(false)))}>
+            {busy ? 'Working...' : 'Rehearse'}
+          </Button>
+          {canApply && !confirmMove && (
+            <Button disabled={busy || !bucket || !move} onClick={() => setConfirmMove(true)}>
+              Copy them
+            </Button>
+          )}
+          {canApply && confirmMove && (
+            <>
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  start(async () => {
+                    setMove(await moveFilesToBucket(true));
+                    setConfirmMove(false);
+                  })
+                }
+              >
+                {busy ? 'Copying...' : 'Yes, copy'}
+              </Button>
+              <button type="button" className="t-small faint hover:underline" onClick={() => setConfirmMove(false)}>
+                Cancel
+              </button>
+            </>
+          )}
+        </div>
+        {move && (
+          <div className="mt-3 border-t pt-3">
+            <FormError message={move.error} />
+            <FormSuccess message={move.ok ? move.message : undefined} />
+            {move.report && move.report.problems.length > 0 && (
+              <div className="t-small muted mt-2 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-3">
+                <ul className="space-y-1">
+                  {move.report.problems.slice(0, 8).map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+                {move.report.problems.length > 8 && <p className="faint mt-1">and {move.report.problems.length - 8} more.</p>}
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {STEPS.map((step) => {

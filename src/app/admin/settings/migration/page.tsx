@@ -6,6 +6,8 @@ import { PageHeader, Card } from '@/components/ui';
 import { MigrationConsole } from './console';
 import { EdmingleConsole } from './edmingle-console';
 import { edmingleSummary } from '@/lib/migrate-edmingle';
+import { edmingleAutoOn } from '@/lib/migrate-edmingle-auto';
+import { s3Config } from '@/lib/storage';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -21,12 +23,14 @@ export default async function MigrationPage() {
   const me = await requireStaff('settings.integrations', 'view');
   const canApply = me.permissions['settings.integrations']?.delete ?? false;
 
-  const [woo, done, edmingle, edmingleDone] = await Promise.all([
+  const [woo, done, edmingle, edmingleDone, auto] = await Promise.all([
     resolveIntegration(tenant.organizationId, 'woocommerce'),
     migrationSummary(),
     resolveIntegration(tenant.organizationId, 'edmingle'),
     edmingleSummary(),
+    edmingleAutoOn(),
   ]);
+  const bucket = s3Config() !== null;
 
   return (
     <div className="space-y-6">
@@ -46,7 +50,7 @@ export default async function MigrationPage() {
             </p>
           </Card>
         )}
-        <EdmingleConsole connected={Boolean(edmingle?.complete)} canApply={canApply} done={edmingleDone} />
+        <EdmingleConsole connected={Boolean(edmingle?.complete)} canApply={canApply} done={edmingleDone} auto={auto} bucket={bucket} />
       </section>
 
       <h2 className="t-heading pt-4">WooCommerce: the store</h2>
