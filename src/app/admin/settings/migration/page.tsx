@@ -4,6 +4,8 @@ import { resolveIntegration } from '@/lib/integration-store';
 import { migrationSummary } from '@/lib/migrate-woo';
 import { PageHeader, Card } from '@/components/ui';
 import { MigrationConsole } from './console';
+import { EdmingleConsole } from './edmingle-console';
+import { edmingleSummary } from '@/lib/migrate-edmingle';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -19,17 +21,35 @@ export default async function MigrationPage() {
   const me = await requireStaff('settings.integrations', 'view');
   const canApply = me.permissions['settings.integrations']?.delete ?? false;
 
-  const [woo, done] = await Promise.all([
+  const [woo, done, edmingle, edmingleDone] = await Promise.all([
     resolveIntegration(tenant.organizationId, 'woocommerce'),
     migrationSummary(),
+    resolveIntegration(tenant.organizationId, 'edmingle'),
+    edmingleSummary(),
   ]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Migration"
-        description="Bringing the WooCommerce store across. Every step can be run as a rehearsal first, and every step is safe to run twice."
+        description="Bringing Edmingle and the WooCommerce store across. Every step can be run as a rehearsal first, and every step is safe to run twice."
       />
+
+      <section className="space-y-4">
+        <h2 className="t-heading">Edmingle: the courses</h2>
+        {!edmingle?.complete && (
+          <Card>
+            <p className="font-medium">Edmingle is not connected yet.</p>
+            <p className="t-small muted mt-1">
+              Signed in to the Edmingle admin panel, copy the &ldquo;apikey&rdquo; and &ldquo;curr_org_id&rdquo; values from the browser&rsquo;s local storage
+              onto the Edmingle card in Settings, Integrations. Nothing here ever writes to Edmingle.
+            </p>
+          </Card>
+        )}
+        <EdmingleConsole connected={Boolean(edmingle?.complete)} canApply={canApply} done={edmingleDone} />
+      </section>
+
+      <h2 className="t-heading pt-4">WooCommerce: the store</h2>
 
       {!woo?.complete && (
         <Card>

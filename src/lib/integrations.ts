@@ -1429,6 +1429,23 @@ export const INTEGRATIONS: IntegrationDef[] = [
     ],
   },
   {
+    id: 'edmingle',
+    name: 'Edmingle',
+    category: 'commerce',
+    priority: 1,
+    purpose:
+      'The LMS this replaces. Read only: its courses, modules, sections, lessons and documents come across through Settings, Migration, and its videos are matched to the lessons waiting for them once the export arrives.',
+    status: 'wired',
+    requires:
+      'Your own admin sign-in, nothing from Edmingle. Signed in to the admin panel, open the browser developer tools, Application, Local storage, and copy the value of "apikey"; the organisation id is beside it as "curr_org_id". The API address is the panel address with "-api" after the institute name, for example https://medcity-api.edmingle.com. The key changes when you sign out of Edmingle, so paste a fresh one if a step reports a refusal.',
+    fallback: 'Courses are authored here by hand and files uploaded through the library.',
+    fields: [
+      URLF('apiBase', 'API address', 'https://medcity-api.edmingle.com'),
+      TEXT('orgId', 'Organisation id', undefined, 'A number, "curr_org_id" in the browser storage.'),
+      KEY('apiKey', 'API key', undefined, 'The "apikey" value from the browser storage while signed in as an admin.'),
+    ],
+  },
+  {
     id: 'shopify',
     name: 'Shopify',
     category: 'commerce',

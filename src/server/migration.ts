@@ -12,6 +12,8 @@ import {
   type StepReport,
 } from '@/lib/migrate-woo';
 import type { ActionState } from '@/server/courses';
+import { checkEdmingle, edmingleFor } from '@/lib/edmingle';
+import { attachVideos, importCatalogue, importFiles, type EdmingleReport } from '@/lib/migrate-edmingle';
 
 /**
  * Running the migration.
@@ -103,6 +105,67 @@ export async function runStep(step: Step, apply: boolean): Promise<StepState> {
       message: apply
         ? `${moved} ${moved === 1 ? 'record' : 'records'} brought across, ${report.alreadyDone} were already here.`
         : `${moved} would move, ${report.alreadyDone} are already here. Nothing has been written.`,
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* Edmingle --------------------------------------------------------------------- */
+
+export type EdmingleStep = 'catalogue' | 'files' | 'videos';
+
+export interface EdmingleStepState extends ActionState {
+  report?: EdmingleReport;
+  dryRun?: boolean;
+}
+
+export async function testEdmingle(): Promise<ActionState> {
+  try {
+    const { tenant } = await guard('view');
+    const client = await edmingleFor(tenant.organizationId);
+    if (!client) return { error: 'Edmingle is not connected. Put the key on the Edmingle card in Settings, Integrations.' };
+    return { ok: true, message: await checkEdmingle(client) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: message };
+  }
+}
+
+export async function runEdmingleStep(step: EdmingleStep, apply: boolean): Promise<EdmingleStepState> {
+  try {
+    const { tenant, user } = await guard(apply ? 'delete' : 'view');
+    const options = { dryRun: !apply };
+    const report =
+      step === 'catalogue'
+        ? await importCatalogue(tenant.organizationId, options)
+        : step === 'files'
+          ? await importFiles(tenant.organizationId, options)
+          : await attachVideos(tenant.organizationId, options);
+
+    if (apply) {
+      await recordAudit({
+        organizationId: tenant.organizationId,
+        actorId: user.id,
+        action: 'migration.edmingle',
+        entity: 'MigrationRecord',
+        entityId: step,
+        after: { created: report.wouldCreate, updated: report.wouldUpdate, alreadyDone: report.alreadyDone, remaining: report.remaining, problems: report.problems.length },
+      });
+      revalidatePath('/admin/settings/migration');
+      revalidatePath('/admin/courses');
+      revalidatePath('/admin/library');
+    }
+
+    const moved = report.wouldCreate + report.wouldUpdate;
+    const more = report.remaining > 0 ? ` ${report.remaining} left for the next press.` : '';
+    return {
+      ok: true,
+      dryRun: !apply,
+      report,
+      message: apply
+        ? `${moved} ${moved === 1 ? 'item' : 'items'} brought across, ${report.alreadyDone} were already here.${more}`
+        : `${moved} would come across, ${report.alreadyDone} are already here. Nothing has been written.${more}`,
     };
   } catch (err) {
     return fail(err);
