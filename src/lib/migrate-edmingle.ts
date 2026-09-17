@@ -44,24 +44,24 @@ interface MaterialPayload {
   moduleId: number;
 }
 
-function report(entity: string): EdmingleReport {
+export function report(entity: string): EdmingleReport {
   return { entity, looked: 0, wouldCreate: 0, wouldUpdate: 0, alreadyDone: 0, problems: [], samples: [], remaining: 0 };
 }
 
-function sample(r: EdmingleReport, line: string) {
+export function sample(r: EdmingleReport, line: string) {
   if (r.samples.length < 8) r.samples.push(line);
 }
 
-function problem(r: EdmingleReport, line: string) {
+export function problem(r: EdmingleReport, line: string) {
   if (r.problems.length < 200) r.problems.push(line);
 }
 
-async function migrated(entity: string): Promise<Map<string, string | null>> {
+export async function migrated(entity: string): Promise<Map<string, string | null>> {
   const rows = await db.migrationRecord.findMany({ where: { sourceSystem: SOURCE, entity, status: 'MIGRATED' }, select: { sourceId: true, targetId: true } });
   return new Map(rows.map((r) => [r.sourceId, r.targetId]));
 }
 
-async function mark(entity: string, sourceId: string, targetId: string | null, payload?: Prisma.InputJsonValue) {
+export async function mark(entity: string, sourceId: string, targetId: string | null, payload?: Prisma.InputJsonValue) {
   await db.migrationRecord.upsert({
     where: { sourceSystem_entity_sourceId: { sourceSystem: SOURCE, entity, sourceId } },
     create: { sourceSystem: SOURCE, entity, sourceId, targetId, status: 'MIGRATED', migratedAt: new Date(), payload },

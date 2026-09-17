@@ -1,5 +1,6 @@
 import { resolveIntegration } from '@/lib/integration-store';
 import type { EdmingleAsset, EdmingleBundle, EdmingleModule, EdmingleSection } from '@/lib/edmingle-rules';
+import type { EdmingleBatch, EdminglePackage, EdmingleQuestion, EdmingleStudent } from '@/lib/edmingle-records';
 
 /**
  * Edmingle's own API, the one its admin panel talks to.
@@ -139,4 +140,74 @@ export async function assetDownloadUrl(client: EdmingleClient, assetId: number):
   const m = r.material ?? {};
   const candidate = [m.url, m.mat_file_path].find((u) => typeof u === 'string' && /^https?:\/\//.test(u)) ?? null;
   return { url: candidate, fileName: m.file_name ?? null, mimeType: m.mime_type ?? null, sizeBytes: typeof m.file_size === 'number' ? m.file_size : null };
+}
+
+/* People, batches, prices, questions --------------------------------------- */
+
+
+/** One page of learners, oldest first so a re-run walks the same order. */
+export async function studentsPage(client: EdmingleClient, page: number): Promise<{ students: EdmingleStudent[]; more: boolean; total: number }> {
+  const r = await client.get<{ students?: EdmingleStudent[]; page_context?: PageContext }>('organization/students', { organization_id: client.orgId, page, per_page: 100, sort_order: 'A' });
+  return { students: r.students ?? [], more: Boolean(r.page_context?.has_more_page), total: r.page_context?.total_rows ?? 0 };
+}
+
+/** Every batch, with the course it belongs to. */
+export async function batches(client: EdmingleClient): Promise<{ bundleId: number; bundleName: string; batch: EdmingleBatch }[]> {
+  const out: { bundleId: number; bundleName: string; batch: EdmingleBatch }[] = [];
+  for (let page = 1; page <= 50; page += 1) {
+    const r = await client.get<{ courses?: { bundle_id: number; bundle_name: string; batch?: EdmingleBatch[] }[]; page_context?: PageContext }>('short/masterbatch', { organization_id: client.orgId, page, per_page: 100 });
+    for (const c of r.courses ?? []) for (const b of c.batch ?? []) out.push({ bundleId: c.bundle_id, bundleName: c.bundle_name, batch: b });
+    if (!r.courses?.length || !r.page_context?.has_more_page) break;
+  }
+  return out;
+}
+
+export interface EdmingleBatchStudent {
+  user_id: number;
+  name?: string;
+  progress?: number;
+  classusers_start_date?: number | null;
+  attendance_percent?: number;
+}
+
+/** One page of a batch's learners. */
+export async function batchStudentsPage(client: EdmingleClient, classId: number, page: number): Promise<{ students: EdmingleBatchStudent[]; more: boolean }> {
+  const r = await client.get<{ students?: EdmingleBatchStudent[]; page_context?: PageContext }>(`masterbatch/${classId}/students`, { page, per_page: 100, sort_by: 'name', sort_order: 'A' });
+  return { students: r.students ?? [], more: Boolean(r.page_context?.has_more_page) };
+}
+
+/** The prices Edmingle sells the courses at. */
+export async function packages(client: EdmingleClient): Promise<EdminglePackage[]> {
+  const out: EdminglePackage[] = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const r = await client.get<{ packages?: EdminglePackage[]; page_context?: PageContext }>('institutions/packages', { institution_id: client.orgId, page, per_page: 100 });
+    for (const p of r.packages ?? []) out.push(p);
+    if (!r.packages?.length || !r.page_context?.has_more_page) break;
+  }
+  return out;
+}
+
+export interface EdmingleBank {
+  question_list_id: number;
+  question_list_name: string;
+  description?: string | null;
+  total_questions?: number;
+  question_type?: number;
+  difficulty?: number;
+  engage_topic_tag_name?: string | null;
+}
+
+export async function questionBanks(client: EdmingleClient): Promise<EdmingleBank[]> {
+  const out: EdmingleBank[] = [];
+  for (let page = 1; page <= 50; page += 1) {
+    const r = await client.get<{ q_banks?: EdmingleBank[]; page_context?: PageContext }>('user/qbanks', { page, per_page: 100 });
+    for (const b of r.q_banks ?? []) out.push(b);
+    if (!r.q_banks?.length || !r.page_context?.has_more_page) break;
+  }
+  return out;
+}
+
+export async function bankQuestionsPage(client: EdmingleClient, bankId: number, page: number): Promise<{ questions: EdmingleQuestion[]; more: boolean; bankType: number }> {
+  const r = await client.get<{ question_bank?: { details?: { question_type?: number }; questions?: EdmingleQuestion[] }; page_context?: PageContext }>('questionbank/questions', { question_list_id: bankId, page, per_page: 100 });
+  return { questions: r.question_bank?.questions ?? [], more: Boolean(r.page_context?.has_more_page), bankType: r.question_bank?.details?.question_type ?? 0 };
 }

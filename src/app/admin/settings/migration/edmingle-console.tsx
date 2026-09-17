@@ -30,6 +30,40 @@ const STEPS: { key: EdmingleStep; title: string; blurb: string; caution?: string
     counts: ['file'],
   },
   {
+    key: 'prices',
+    title: 'Prices',
+    blurb: 'The price each course sells at on Edmingle becomes a one-time pricing plan here, only on courses that have no plan yet. Instalment schedules are set here by hand.',
+    counts: ['price'],
+  },
+  {
+    key: 'learners',
+    title: 'Learners',
+    blurb:
+      'Every learner on Edmingle, with their registration number, contact details and parent details. Somebody who already has an account here is linked by email, not doubled. Nobody gets a password: they sign in with a code. About eight hundred a press.',
+    caution: 'Religion, Aadhaar and similar fields on the Edmingle record are deliberately not read.',
+    counts: ['learner'],
+  },
+  {
+    key: 'batches',
+    title: 'Batches',
+    blurb: 'Every batch, under its course, with its dates; finished batches arrive as completed, archived ones as archived. Needs the courses step done first.',
+    counts: ['batch'],
+  },
+  {
+    key: 'enrolments',
+    title: 'Enrolments',
+    blurb: 'Who sits in which batch, read from each batch roll, with their progress. Needs learners and batches done first; a learner not yet here is reported and picked up on the next press.',
+    caution: 'Attendance history, certificates and test results stay behind for now.',
+    counts: ['enrolment'],
+  },
+  {
+    key: 'questions',
+    title: 'Question banks',
+    blurb:
+      'Every question bank and its questions: choices with the right ones marked, blanks with the accepted answers, written answers for a trainer to mark. A question with several parts becomes several questions. Audio and pictures on questions do not come and are tagged "media to add".',
+    counts: ['qbank', 'question'],
+  },
+  {
     key: 'videos',
     title: 'Videos',
     blurb:
@@ -88,6 +122,12 @@ export function EdmingleConsole({ connected, canApply, done }: { connected: bool
                 </Badge>
               )}
               {step.key === 'files' && (count.get('file') ?? 0) > 0 && <Badge tone="ok">{count.get('file')} files attached</Badge>}
+              {step.key === 'questions' && across > 0 && (
+                <Badge tone="ok">
+                  {count.get('qbank') ?? 0} banks, {count.get('question') ?? 0} questions across
+                </Badge>
+              )}
+              {['prices', 'learners', 'batches', 'enrolments'].includes(step.key) && across > 0 && <Badge tone="ok">{across} across</Badge>}
               {waiting > 0 && <Badge tone="warn">{waiting} waiting</Badge>}
             </p>
             <p className="t-small muted mt-1">{step.blurb}</p>
