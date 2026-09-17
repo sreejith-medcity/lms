@@ -187,7 +187,9 @@ export async function importCatalogue(organizationId: string, options: { dryRun:
     try {
       sections = await curriculum(client, m.course_id);
     } catch (err) {
-      problem(r, `${m.name}: curriculum not read (${err instanceof Error ? err.message : String(err)})`);
+      const message = err instanceof Error ? err.message : String(err);
+      problem(r, `${m.name}: curriculum not read (${message})`);
+      if (/rate-limiting/.test(message)) break;
       continue;
     }
     processed += 1;

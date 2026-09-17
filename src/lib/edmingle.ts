@@ -9,7 +9,23 @@ import type { EdmingleAsset, EdmingleBundle, EdmingleModule, EdmingleSection } f
  * in the browser under that name) and an `orgid` header, JSON back with a
  * `code` field. Read-only: the importer only ever asks. If Edmingle changes
  * a route the step that uses it reports the failure rather than guessing.
+ *
+ * Edmingle rate-limits a burst of calls (429), so every call is spaced out
+ * and a 429 waits and tries again rather than failing the item.
  */
+
+/** Gap between calls, so a step reads a library without tripping the limit. */
+const PACE_MS = 400;
+const RETRIES = 4;
+let lastCallAt = 0;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function paced() {
+  const wait = lastCallAt + PACE_MS - Date.now();
+  if (wait > 0) await sleep(wait);
+  lastCallAt = Date.now();
+}
 
 export interface EdmingleClient {
   baseUrl: string;
@@ -31,15 +47,23 @@ export async function edmingleFor(organizationId: string): Promise<EdmingleClien
     async get<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
       const url = new URL(`${baseUrl}/nuSource/api/v1/${path.replace(/^\//, '')}`);
       for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-      const res = await fetch(url, {
-        headers: { accept: 'application/json, text/plain, */*', apikey: apiKey, orgid: orgId },
-        cache: 'no-store',
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!res.ok) throw new Error(`Edmingle answered ${res.status} for ${path}`);
-      const body = (await res.json()) as T & { code?: number; message?: string };
-      if (typeof body.code === 'number' && body.code >= 400) throw new Error(`Edmingle refused ${path}: ${body.message ?? body.code}`);
-      return body;
+      for (let attempt = 0; ; attempt += 1) {
+        await paced();
+        const res = await fetch(url, {
+          headers: { accept: 'application/json, text/plain, */*', apikey: apiKey, orgid: orgId },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (res.status === 429 && attempt < RETRIES) {
+          const after = Number(res.headers.get('retry-after'));
+          await sleep(Number.isFinite(after) && after > 0 ? Math.min(after, 15) * 1000 : 1500 * 2 ** attempt);
+          continue;
+        }
+        if (!res.ok) throw new Error(res.status === 429 ? `Edmingle is rate-limiting us on ${path}: wait a minute and press again` : `Edmingle answered ${res.status} for ${path}`);
+        const body = (await res.json()) as T & { code?: number; message?: string };
+        if (typeof body.code === 'number' && body.code >= 400) throw new Error(`Edmingle refused ${path}: ${body.message ?? body.code}`);
+        return body;
+      }
     },
   };
 }
