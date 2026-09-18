@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
@@ -41,6 +42,12 @@ export async function saveProgram(_prev: ActionState, formData: FormData): Promi
       categories: String(formData.get('categories') ?? ''),
       passPercent: String(formData.get('passPercent') ?? ''),
       retestRule: String(formData.get('retestRule') ?? ''),
+      lateAfterMinutes: String(formData.get('lateAfterMinutes') ?? ''),
+      onlineAbsentAfterMinutes: String(formData.get('onlineAbsentAfterMinutes') ?? ''),
+      ratingAttendance: String(formData.get('ratingAttendance') ?? ''),
+      ratingTests: String(formData.get('ratingTests') ?? ''),
+      ratingHomework: String(formData.get('ratingHomework') ?? ''),
+      ratingBands: String(formData.get('ratingBands') ?? ''),
     });
     if (!parsed.ok) return { error: parsed.error };
     const v = parsed.value;
@@ -54,7 +61,7 @@ export async function saveProgram(_prev: ActionState, formData: FormData): Promi
     const gradeScaleId = String(formData.get('gradeScaleId') ?? '').trim();
     const scale = gradeScaleId ? await db.gradeScale.findFirst({ where: { id: gradeScaleId, organizationId: tenant.organizationId }, select: { id: true } }) : null;
 
-    const data = { ...v, gradeScaleId: scale?.id ?? null };
+    const data = { ...v, ratingRubric: v.ratingRubric ?? Prisma.DbNull, gradeScaleId: scale?.id ?? null };
     let programId = id;
     if (id) {
       const owned = await db.program.findFirst({ where: { id, organizationId: tenant.organizationId }, select: { id: true } });
@@ -71,7 +78,7 @@ export async function saveProgram(_prev: ActionState, formData: FormData): Promi
       action: id ? 'program.updated' : 'program.created',
       entity: 'Program',
       entityId: programId,
-      after: { name: v.name, levels: v.levels.length, skills: v.skills.length, categories: v.assessmentCategories.length, passPercent: v.passPercent, retestRule: v.retestRule },
+      after: { name: v.name, levels: v.levels.length, skills: v.skills.length, categories: v.assessmentCategories.length, passPercent: v.passPercent, retestRule: v.retestRule, rubric: v.ratingRubric !== null, lateAfterMinutes: v.lateAfterMinutes, onlineAbsentAfterMinutes: v.onlineAbsentAfterMinutes },
     });
     revalidatePath('/admin/settings/programs');
     return { ok: true, message: 'Saved.' };

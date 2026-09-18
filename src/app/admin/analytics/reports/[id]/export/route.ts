@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { staffScope } from '@/lib/scope';
 import { recordAudit } from '@/lib/audit';
 import { permissionFor, reportById } from '@/lib/reports';
 import { rangeFrom } from '../../../data';
@@ -37,6 +38,7 @@ export async function GET(
 
   const rangeParam = new URL(request.url).searchParams.get('range') ?? undefined;
   const { since, days, label } = rangeFrom(rangeParam);
+  const scope = await staffScope(staff);
 
   const result = await report.run({
     organizationId: tenant.organizationId,
@@ -45,6 +47,7 @@ export async function GET(
     timeZone: tenant.timezone,
     since,
     days,
+    branchIds: scope.kind === 'all' ? null : scope.branchIds,
   });
 
   // The file carries what it is and what it counts, because a CSV opened three

@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import { cookies } from 'next/headers';
 import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import type { SessionUser } from '@/lib/auth';
@@ -26,6 +27,9 @@ export type StaffScope =
   | { kind: 'branches'; branchIds: string[] }
   | { kind: 'batches'; batchIds: string[]; branchIds: string[] };
 
+/** Head Office looking at one branch: a cookie, honoured only for a scope that is otherwise the whole academy. */
+export const BRANCH_VIEW_COOKIE = 'mlms_branch';
+
 export const staffScope = cache(async (user: SessionUser): Promise<StaffScope> => {
   if (user.restrictBatchAccess) {
     const rows = await db.batchStaff.findMany({
@@ -39,8 +43,20 @@ export const staffScope = cache(async (user: SessionUser): Promise<StaffScope> =
     };
   }
   if (user.restrictBranchAccess) return { kind: 'branches', branchIds: user.branchIds };
+  // The branch switcher narrows an academy-wide view to one branch for a
+  // while. It never widens anybody: a Branch Head's cookie is ignored.
+  const viewing = (await cookies()).get(BRANCH_VIEW_COOKIE)?.value;
+  if (viewing) {
+    const branch = await db.branch.findFirst({ where: { id: viewing, organizationId: user.organizationId }, select: { id: true } });
+    if (branch) return { kind: 'branches', branchIds: [branch.id] };
+  }
   return { kind: 'all' };
 });
+
+/** Whether this person could switch branches at all: their own scope is the academy. */
+export function canSwitchBranch(user: SessionUser): boolean {
+  return !user.restrictBatchAccess && !user.restrictBranchAccess;
+}
 
 /** True when the scope is not the whole academy. */
 export function isScoped(scope: StaffScope): boolean {

@@ -23,6 +23,7 @@ export const ADMIN_NAV: NavGroup[] = [
   { label: 'Register', href: '/admin/register', icon: 'check' },
   { label: 'Mark sheets', href: '/admin/marksheets', icon: 'chart' },
   { label: 'Approvals', href: '/admin/approvals', icon: 'check' },
+  { label: 'Branch desk', href: '/admin/branch', icon: 'home' },
   {
     label: 'Products',
     icon: 'box',

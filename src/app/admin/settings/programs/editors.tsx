@@ -20,7 +20,9 @@ export interface ProgramRow {
   passPercent: number | null;
   gradeScaleId: string | null;
   retestRule: 'FIRST' | 'LATEST' | 'BEST';
-  hasRubric: boolean;
+  rubric: { attendance: number; tests: number; homework: number; bands: { label: string; minPercent: number }[] } | null;
+  lateAfterMinutes: number | null;
+  onlineAbsentAfterMinutes: number | null;
   isActive: boolean;
   courses: number;
 }
@@ -66,7 +68,17 @@ export function ProgramCard({ program, scales, canEdit }: { program: ProgramRow;
             <dt className="faint">Retests</dt>
             <dd>{RETEST_RULES.find((r) => r.value === program.retestRule)?.label ?? program.retestRule}</dd>
             <dt className="faint">Overall rating</dt>
-            <dd>{program.hasRubric ? 'rubric set' : 'not yet assessed: no rubric approved, so parents see no overall rating'}</dd>
+            <dd>
+              {program.rubric
+                ? `attendance ${program.rubric.attendance}%, tests ${program.rubric.tests}%, homework ${program.rubric.homework}%; ${program.rubric.bands.map((b) => `${b.label} from ${b.minPercent}%`).join(', ')}`
+                : 'not yet assessed: no rubric approved, so parents see no overall rating'}
+            </dd>
+            <dt className="faint">Attendance timing</dt>
+            <dd>
+              {program.lateAfterMinutes != null ? `late after ${program.lateAfterMinutes} min` : 'late after the academy setting'}
+              {' · '}
+              {program.onlineAbsentAfterMinutes != null ? `online absent after ${program.onlineAbsentAfterMinutes} min` : 'online check time from the academy setting'}
+            </dd>
           </dl>
           <p className="t-small faint mt-2 tabular-nums">
             {program.courses} course{program.courses === 1 ? '' : 's'}
@@ -165,6 +177,38 @@ export function ProgramForm({ program, scales, onDone }: { program?: ProgramRow;
           </Select>
         </Field>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Late after (minutes)" hint="Blank: the academy's attendance setting.">
+          <Input type="number" name="lateAfterMinutes" min={0} max={120} defaultValue={program?.lateAfterMinutes ?? ''} />
+        </Field>
+        <Field label="Online no-show absent after (minutes)" hint="Blank: the academy's attendance setting.">
+          <Input type="number" name="onlineAbsentAfterMinutes" min={0} max={180} defaultValue={program?.onlineAbsentAfterMinutes ?? ''} />
+        </Field>
+      </div>
+
+      <fieldset className="rounded-[var(--radius-sm)] border p-4">
+        <legend className="px-1 text-sm font-medium">Overall rating rubric</legend>
+        <p className="t-small muted">
+          Leave the weights blank and parents see &ldquo;Not yet assessed&rdquo;. Fill them in only once management has approved the rubric. Weights add to 100; a part with no data in the period is left out and the rest rescaled, and the parent&rsquo;s screen says so.
+        </p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+          <Field label="Attendance %">
+            <Input type="number" name="ratingAttendance" min={0} max={100} defaultValue={program?.rubric?.attendance ?? ''} />
+          </Field>
+          <Field label="Tests %">
+            <Input type="number" name="ratingTests" min={0} max={100} defaultValue={program?.rubric?.tests ?? ''} />
+          </Field>
+          <Field label="Homework %">
+            <Input type="number" name="ratingHomework" min={0} max={100} defaultValue={program?.rubric?.homework ?? ''} />
+          </Field>
+        </div>
+        <div className="mt-3">
+          <Field label="Bands" hint='"Label:minimum percent", comma-separated, the lowest at 0.'>
+            <Input name="ratingBands" defaultValue={program?.rubric ? program.rubric.bands.map((b) => `${b.label}:${b.minPercent}`).join(', ') : ''} placeholder="Excellent:85, Good:70, Satisfactory:50, Needs attention:0" />
+          </Field>
+        </div>
+      </fieldset>
 
       <div className="flex gap-2">
         <Button type="submit" disabled={pending}>

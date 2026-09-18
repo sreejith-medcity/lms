@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { staffScope } from '@/lib/scope';
 import { permissionFor, reportById } from '@/lib/reports';
 import { rangeFrom } from '../../data';
 import { Card, Cell, EmptyState, Row, Table } from '@/components/ui';
@@ -23,7 +24,8 @@ export default async function ReportPage({
   if (!report) notFound();
 
   const tenant = await requireTenant();
-  await requireStaff(permissionFor(report), 'view');
+  const me = await requireStaff(permissionFor(report), 'view');
+  const scope = await staffScope(me);
 
   const sp = await searchParams;
   const rangeParam = (Array.isArray(sp.range) ? sp.range[0] : sp.range) as string | undefined;
@@ -36,6 +38,7 @@ export default async function ReportPage({
     timeZone: tenant.timezone,
     since,
     days,
+    branchIds: scope.kind === 'all' ? null : scope.branchIds,
   });
 
   const exportHref = `/admin/analytics/reports/${report.id}/export${

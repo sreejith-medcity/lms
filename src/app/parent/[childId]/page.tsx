@@ -176,7 +176,12 @@ export default async function ChildPage({ params }: { params: Promise<{ childId:
 
         <Card>
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h2 className="t-heading">Tests</h2>
+            <h2 className="t-heading">
+              Tests{' '}
+              <Link href={`/parent/${child.id}/progress`} className="t-small font-normal underline">
+                progress view →
+              </Link>
+            </h2>
             {d.marksSummary.marked > 0 && (
               <span className="t-small muted">Average {d.marksSummary.average}% over {d.marksSummary.marked} marked, {d.marksSummary.passed} passed</span>
             )}

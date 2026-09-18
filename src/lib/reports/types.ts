@@ -34,6 +34,13 @@ export interface ReportContext {
   /** Start of the window, already floored to a local day. */
   since: Date;
   days: number;
+  /**
+   * The branches this person answers for, or null for the academy. A report
+   * that groups by branch or batch applies it; one that has no branch in it
+   * (storage, notifications) ignores it. Set by the page from the person's
+   * scope; a scheduled report runs for the academy.
+   */
+  branchIds?: string[] | null;
 }
 
 export const REPORT_CATEGORIES = [

@@ -8,6 +8,7 @@ import {
   operationsReports,
 } from './operations';
 import { extraReports } from './extra';
+import { academicReports } from './academic';
 import { CATEGORY_PERMISSIONS, REPORT_CATEGORIES, type ReportDef } from './types';
 
 export * from './types';
@@ -29,6 +30,7 @@ export const REPORTS: ReportDef[] = [
   ...assessmentReports,
   ...operationsReports,
   ...extraReports,
+  ...academicReports,
 ];
 
 export function reportById(id: string): ReportDef | undefined {

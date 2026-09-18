@@ -3,6 +3,10 @@ import { redirect } from 'next/navigation';
 import { Sidebar } from '@/components/nav';
 import { MobileAdminNav } from '@/components/admin-nav';
 import { getSessionUser } from '@/lib/auth';
+import { cookies } from 'next/headers';
+import { db } from '@/lib/db';
+import { BRANCH_VIEW_COOKIE, canSwitchBranch } from '@/lib/scope';
+import { BranchSwitcher } from '@/components/branch-switcher';
 import { getTenantContext } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +31,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .join('')
     .toUpperCase();
 
+  // Head Office can look at one branch at a time; anyone already scoped
+  // to a branch or a batch gets no switcher, because it would do nothing.
+  const switcher = canSwitchBranch(user)
+    ? {
+        branches: await db.branch.findMany({ where: { organizationId: user.organizationId, isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+        current: (await cookies()).get(BRANCH_VIEW_COOKIE)?.value ?? null,
+      }
+    : null;
+
   return (
     <div className="flex min-h-screen bg-[var(--canvas)]">
       <Sidebar features={tenant.features} orgName={tenant.name} logoUrl={tenant.logoUrl} />
@@ -44,6 +57,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
 
           <div className="flex items-center gap-3">
+            {switcher && <BranchSwitcher branches={switcher.branches} current={switcher.current} />}
             <Link href="/" className="t-small muted hover:text-[var(--ink)]">
               View site
             </Link>

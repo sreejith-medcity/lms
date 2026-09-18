@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { parseRubric } from '@/lib/progress-rules';
 import { Card, PageHeader } from '@/components/ui';
 import { ProgramCard, ProgramForm } from './editors';
 
@@ -36,6 +37,8 @@ export default async function ProgramsSettings() {
         gradeScaleId: true,
         retestRule: true,
         ratingRubric: true,
+        lateAfterMinutes: true,
+        onlineAbsentAfterMinutes: true,
         isActive: true,
         _count: { select: { courses: true } },
       },
@@ -78,7 +81,9 @@ export default async function ProgramsSettings() {
                   passPercent: p.passPercent,
                   gradeScaleId: p.gradeScaleId,
                   retestRule: p.retestRule,
-                  hasRubric: p.ratingRubric !== null,
+                  rubric: parseRubric(p.ratingRubric),
+                  lateAfterMinutes: p.lateAfterMinutes,
+                  onlineAbsentAfterMinutes: p.onlineAbsentAfterMinutes,
                   isActive: p.isActive,
                   courses: p._count.courses,
                 }}
