@@ -79,6 +79,13 @@ model Branch {
   city           String?
   state          String?
   isActive       Boolean  @default(true)
+  /// A virtual branch is where online batches live: it has a head and an
+  /// approval queue like any other, and no address.
+  kind           BranchKind @default(PHYSICAL)
+  /// The Branch Head responsible for this branch's approvals, and a deputy
+  /// who covers when the head is away. Both are staff accounts here.
+  headUserId     String?
+  deputyUserId   String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -94,6 +101,11 @@ model Branch {
   @@unique([organizationId, code])
   @@index([organizationId])
   @@map("branches")
+}
+
+enum BranchKind {
+  PHYSICAL
+  VIRTUAL
 }
 
 model OrgSetting {
@@ -243,6 +255,7 @@ model User {
   apiTokens            ApiToken[]
   deviceTokens         DeviceToken[]
   streaks              LearnerStreak[]
+  parentLinks          ParentLink[]
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
   @@unique([organizationId, email])
@@ -569,6 +582,9 @@ model Role {
   description         String?
   isSystem            Boolean @default(false) // Super Admin, Admin, Instructor
   restrictBatchAccess Boolean @default(false) // only batches where user is tutor/manager
+  /// Only the branches the person is a member of: a Branch Head or an
+  /// Academic Manager. Enforced in queries, not by hiding menus.
+  restrictBranchAccess Boolean @default(false)
 
   permissions     RolePermission[]
   userAssignments UserRole[]
@@ -956,9 +972,11 @@ model Course {
   modulesArePrerequisite Boolean @default(false)
   aiContextEnabled       Boolean @default(false)
   legacyEdmingleId       String?
+  programId              String?
 
   product      Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  program      Program?           @relation(fields: [programId], references: [id], onDelete: SetNull)
   categories   CourseCategory[]
   modules      CourseModule[]
   batches      Batch[]
@@ -1338,6 +1356,10 @@ model Batch {
   endDate          DateTime?
   capacity         Int?
   progressPercent  Float       @default(0)
+  /// The level or module this batch teaches, from the course's program
+  /// (A1, B2, Module 3); free text when the program lists none.
+  level            String?
+  mode             BatchMode   @default(IN_PERSON)
   legacyEdmingleId String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -1364,6 +1386,12 @@ enum BatchStatus {
   ARCHIVED
 }
 
+enum BatchMode {
+  IN_PERSON
+  ONLINE
+  HYBRID
+}
+
 model BatchModule {
   batchId   String
   moduleId  String
@@ -1376,14 +1404,24 @@ model BatchModule {
   @@map("batch_modules")
 }
 
+/// Who teaches or manages a batch, and from when to when. An assignment
+/// that has ended stays as a row with `endsOn` in the past, so the history
+/// of who taught a batch is the table itself rather than a reconstruction;
+/// access is decided by the dates, never by the row's presence alone.
 model BatchStaff {
-  batchId String
-  userId  String
-  role    BatchRole
+  batchId      String
+  userId       String
+  role         BatchRole
+  startsOn     DateTime?
+  endsOn       DateTime?
+  assignedById String?
+  assignedAt   DateTime  @default(now())
+  note         String?
 
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   @@id([batchId, userId, role])
+  @@index([userId])
   @@map("batch_staff")
 }
 
@@ -2298,6 +2336,88 @@ model GradeScale {
   isActive       Boolean @default(false)
 
   @@map("grade_scales")
+}
+
+/// The academic shape above a course: which levels or modules it runs
+/// through, which skills it assesses, which kinds of test it sets, and the
+/// rules that turn marks into an outcome. German runs A1 to B2 across four
+/// skills; NCLEX runs modules with one score. A course belongs to one
+/// program; a batch names the level it teaches. Read by the register, the
+/// mark sheet and the progress view; owned by Head Office.
+model Program {
+  id                   String     @id @default(cuid())
+  organizationId       String
+  name                 String
+  code                 String?
+  description          String?
+  /// Ordered. "A1", "A2" or "Module 1", "Module 2". Empty means the program
+  /// has no levels and a batch's level is free text.
+  levels               String[]   @default([])
+  /// Ordered. "Reading", "Writing", "Listening", "Speaking". Empty means one
+  /// undivided score.
+  skills               String[]   @default([])
+  /// The kinds of test a teacher may set; the seven standard ones by default.
+  assessmentCategories String[]   @default(["Class Test", "Homework", "Mock Test", "Module Test", "Monthly Test", "Final Examination", "Other"])
+  /// Percentage that counts as a pass when the grading scale does not say.
+  passPercent          Int?
+  gradeScaleId         String?
+  retestRule           RetestRule @default(LATEST)
+  /// The overall rating rubric, once management approves one. Null means the
+  /// parent sees "Not yet assessed" rather than a number nobody agreed.
+  ratingRubric         Json?
+  isActive             Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  courses Course[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("programs")
+}
+
+enum RetestRule {
+  FIRST
+  LATEST
+  BEST
+}
+
+/// A parent's verified link to a child. The office creates it from the
+/// learner's record after checking the contact against the file; the
+/// parent portal reads only these, so revoking one ends the parent's access
+/// on the spot, and a phone number that merely matches a record opens
+/// nothing. One parent may be linked to several children and one child to
+/// more than one parent; the contact is what the parent signs in with.
+model ParentLink {
+  id             String           @id @default(cuid())
+  organizationId String
+  learnerId      String
+  /// Ten digits, or a lowercased email: the same shape ParentSession keeps.
+  contact        String
+  name           String
+  relationship   String?
+  status         ParentLinkStatus @default(ACTIVE)
+  /// How the contact was checked: "record" when it came off the learner's
+  /// file, "staff" when a person verified it in the office.
+  verifiedHow    String?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  revokedById    String?
+  revokedAt      DateTime?
+  revokedReason  String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  learner User @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, contact])
+  @@index([organizationId, contact, status])
+  @@map("parent_links")
+}
+
+enum ParentLinkStatus {
+  ACTIVE
+  REVOKED
 }
 
 // ---------------------------------------------------------------------------

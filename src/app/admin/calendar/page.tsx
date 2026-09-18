@@ -1,6 +1,8 @@
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { batchWhere, sessionWhere, staffScope } from '@/lib/scope';
+import { activeStaffWhere } from '@/lib/scope-rules';
 import {
   addDays,
   addMonths,
@@ -42,6 +44,7 @@ export default async function CalendarPage({
   const me = await requireStaff('scheduling.calendar', 'view');
   const canEdit = me.permissions['scheduling.mark_holiday']?.edit ?? false;
   const tz = tenant.timezone;
+  const scope = await staffScope(me);
 
   const view: View = VIEWS.includes(params.view as View) ? (params.view as View) : 'week';
   const anchor = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? '') ? params.date! : todayKey(tz);
@@ -70,11 +73,12 @@ export default async function CalendarPage({
         ...(trainerId
           ? {
               OR: [
-                { batch: { staff: { some: { userId: trainerId } } } },
+                { batch: { staff: { some: { userId: trainerId, ...activeStaffWhere(new Date()) } } } },
                 { instructors: { some: { userId: trainerId } } },
               ],
             }
           : {}),
+        ...sessionWhere(scope),
       },
       orderBy: { startsAt: 'asc' },
       take: 600,
@@ -90,7 +94,7 @@ export default async function CalendarPage({
           select: {
             id: true,
             name: true,
-            staff: { select: { userId: true, role: true } },
+            staff: { where: activeStaffWhere(new Date()), select: { userId: true, role: true } },
             _count: { select: { enrollments: true } },
           },
         },
@@ -98,14 +102,14 @@ export default async function CalendarPage({
       },
     }),
     db.batch.findMany({
-      where: { organizationId: tenant.organizationId, deletedAt: null },
+      where: { organizationId: tenant.organizationId, deletedAt: null, ...batchWhere(scope) },
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
     }),
     // BatchStaff carries no relation to User, so the names come in one pass here
     // rather than a join per session.
     db.batchStaff.findMany({
-      where: { batch: { organizationId: tenant.organizationId, deletedAt: null } },
+      where: { batch: { organizationId: tenant.organizationId, deletedAt: null, ...batchWhere(scope) }, ...activeStaffWhere(new Date()) },
       select: { userId: true },
       distinct: ['userId'],
     }),

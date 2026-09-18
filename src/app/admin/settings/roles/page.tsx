@@ -4,12 +4,16 @@ import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { Badge, Card } from '@/components/ui';
 import { NewRoleForm, DeleteRole } from './editors';
+import { ensureStandardRoles } from '@/lib/roles-ensure';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RolesSettings() {
   const tenant = await requireTenant();
   await requireStaff('settings.roles', 'view');
+  // Standard roles added since this academy was set up (Teacher, Branch
+  // Head, Academic Manager) appear the first time somebody opens this page.
+  await ensureStandardRoles(tenant.organizationId);
 
   const roles = await db.role.findMany({
     where: { organizationId: tenant.organizationId },
@@ -20,6 +24,7 @@ export default async function RolesSettings() {
       description: true,
       isSystem: true,
       restrictBatchAccess: true,
+      restrictBranchAccess: true,
       _count: { select: { userAssignments: true, permissions: true } },
     },
   });
@@ -40,6 +45,7 @@ export default async function RolesSettings() {
                   </Link>
                   {r.isSystem && <Badge tone="neutral">built in</Badge>}
                   {r.restrictBatchAccess && <Badge tone="warn">own batches only</Badge>}
+                  {r.restrictBranchAccess && !r.restrictBatchAccess && <Badge tone="warn">own branches only</Badge>}
                 </div>
                 {r.description && <p className="t-small muted mt-1">{r.description}</p>}
                 <p className="t-small faint mt-1 tabular-nums">

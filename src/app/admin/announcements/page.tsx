@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { announcementWhere, batchWhere, isScoped, staffScope } from '@/lib/scope';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { AnnouncementForm, DeleteAnnouncement } from './editors';
 
@@ -9,11 +10,13 @@ export const metadata = { robots: { index: false, follow: false } };
 
 export default async function AnnouncementsPage() {
   const tenant = await requireTenant();
-  await requireStaff('announcements.manage_announcements', 'view');
+  const scope = await staffScope(await requireStaff('announcements.manage_announcements', 'view'));
 
   const [announcements, batches] = await Promise.all([
     db.announcement.findMany({
-      where: { organizationId: tenant.organizationId },
+      // Academy-wide notices (no batch on the target) are everyone's to see;
+      // a batch notice is the branch's.
+      where: { organizationId: tenant.organizationId, ...(isScoped(scope) ? { OR: [announcementWhere(scope), { targets: { every: { batchId: null } } }] } : {}) },
       orderBy: { publishAt: 'desc' },
       take: 50,
       select: {
@@ -30,6 +33,7 @@ export default async function AnnouncementsPage() {
         organizationId: tenant.organizationId,
         deletedAt: null,
         status: { in: ['UPCOMING', 'ACTIVE'] },
+        ...batchWhere(scope),
       },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, course: { select: { product: { select: { title: true } } } } },

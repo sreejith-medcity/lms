@@ -164,12 +164,17 @@ export async function updateCourse(_prev: ActionState, formData: FormData): Prom
     });
     if (!product) return { error: 'Course not found.' };
 
+    // The program is this academy's or nothing; an id from elsewhere is dropped.
+    const programId = String(formData.get('programId') ?? '').trim();
+    const program = programId ? await db.program.findFirst({ where: { id: programId, organizationId: tenant.organizationId }, select: { id: true } }) : null;
+
     await db.product.update({
       where: { id: d.productId },
       data: {
         title: d.title,
         course: {
           update: {
+            programId: program?.id ?? null,
             description: d.description,
             level: d.level,
             language: d.language,

@@ -15,6 +15,7 @@ const TABS = [
   { href: '/admin/settings/website', label: 'Website' },
   { href: '/admin/settings/redirects', label: 'Redirects' },
   { href: '/admin/settings/grading', label: 'Grading' },
+  { href: '/admin/settings/programs', label: 'Programs' },
   { href: '/admin/settings/integrations', label: 'Integrations' },
   { href: '/admin/settings/messaging', label: 'Messaging' },
   { href: '/admin/settings/email-domain', label: 'Email domain' },

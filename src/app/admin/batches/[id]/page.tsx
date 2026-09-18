@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { batchWhere, canSeeBatch, staffScope } from '@/lib/scope';
 import { Badge } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { Classroom } from './classroom';
@@ -24,6 +25,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
   const tenant = await requireTenant();
   const me = await requireStaff('batches.batch_management', 'view');
   const canEdit = me.permissions['batches.batch_management']?.edit ?? false;
+  const scope = await staffScope(me);
 
   const batch = await db.batch.findFirst({
     where: { id, organizationId: tenant.organizationId, deletedAt: null },
@@ -36,11 +38,15 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
       capacity: true,
       isDefault: true,
       progressPercent: true,
+      level: true,
+      mode: true,
+      branchId: true,
       branch: { select: { name: true } },
       course: {
         select: {
           id: true,
           product: { select: { id: true, title: true } },
+          program: { select: { levels: true } },
           modules: {
             orderBy: { sortOrder: 'asc' },
             select: {
@@ -79,12 +85,34 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
       },
     },
   });
-  if (!batch) notFound();
+  // Outside the person's branch or assignment reads as not there, the same
+  // as a wrong id: a link somebody pasted is not a way round the scope.
+  if (!batch || !canSeeBatch(scope, batch)) notFound();
 
-  const team = await db.user.findMany({
-    where: { organizationId: tenant.organizationId, kind: 'STAFF', deletedAt: null },
-    orderBy: { name: 'asc' },
-    select: { id: true, name: true },
+  const [team, staffEvents, siblings] = await Promise.all([
+    db.user.findMany({
+      where: { organizationId: tenant.organizationId, kind: 'STAFF', deletedAt: null, status: { notIn: ['SUSPENDED', 'ARCHIVED'] } },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+    db.auditLog.findMany({
+      where: { organizationId: tenant.organizationId, entity: 'BatchStaff', entityId: batch.id },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      select: { action: true, after: true, createdAt: true, actor: { select: { name: true } } },
+    }),
+    db.batch.findMany({
+      where: { organizationId: tenant.organizationId, courseId: batch.course.id, deletedAt: null, id: { not: batch.id }, status: { in: ['UPCOMING', 'ACTIVE'] }, ...batchWhere(scope) },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+  ]);
+  const teamName = new Map(team.map((t) => [t.id, t.name]));
+  const history = staffEvents.map((e) => {
+    const a = (e.after ?? {}) as { name?: string; role?: string; startsOn?: string | null; endsOn?: string | null };
+    const span = `${a.startsOn ? String(a.startsOn).slice(0, 10) : 'open'} to ${a.endsOn ? String(a.endsOn).slice(0, 10) : 'open'}`;
+    const verb = e.action === 'batch.staff.ended' ? 'ended' : e.action === 'batch.staff.redated' ? 'redated' : 'assigned';
+    return { at: e.createdAt.toISOString(), who: e.actor?.name ?? null, line: `${a.name ?? 'Somebody'} ${verb} as ${a.role ?? ''} (${span})` };
   });
 
   const learnerIds = batch.enrollments.map((e) => e.user.id);
@@ -197,6 +225,9 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
           endDate: batch.endDate?.toISOString().slice(0, 10) ?? '',
           capacity: batch.capacity ?? 0,
           isDefault: batch.isDefault,
+          level: batch.level ?? '',
+          mode: batch.mode,
+          levels: batch.course.program?.levels ?? [],
         }}
         learners={batch.enrollments.map((e) => {
           const came = attendedBy.get(e.user.id) ?? 0;
@@ -232,8 +263,19 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
           lessons: cm.module.sections.reduce((n, s) => n + s.materials.length, 0),
         }))}
         selectedModules={batch.modules.map((m) => m.moduleId)}
-        staff={batch.staff.map((s) => ({ userId: s.userId, role: s.role }))}
+        staff={batch.staff.map((s) => ({
+          userId: s.userId,
+          name: teamName.get(s.userId) ?? 'Former staff',
+          role: s.role,
+          startsOn: s.startsOn?.toISOString() ?? null,
+          endsOn: s.endsOn?.toISOString() ?? null,
+          note: s.note,
+          assignedBy: s.assignedById ? (teamName.get(s.assignedById) ?? null) : null,
+          assignedAt: s.assignedAt.toISOString(),
+        }))}
+        history={history}
         team={team}
+        siblings={siblings}
       />
     </div>
   );

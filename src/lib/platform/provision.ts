@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { allPermissionKeys } from '@/lib/permissions';
+import { ensureStandardRoles } from '@/lib/roles-ensure';
 import { hashPassword } from '@/lib/password';
 import { trialEnd } from './signup';
 
@@ -36,17 +37,6 @@ export interface Provisioned {
   hostname: string;
 }
 
-const ROLE_DEFS = [
-  { name: 'Super Admin', description: 'Full access to every module', all: true, restrict: false, grants: [] as string[] },
-  { name: 'Admin', description: 'Branch level admin', all: true, restrict: false, grants: [] as string[] },
-  {
-    name: 'Instructor',
-    description: 'Edits batches and curriculum; for sessions can sign in, remind and cancel',
-    all: false,
-    restrict: true,
-    grants: ['batches.', 'module.', 'scheduling.sessions', 'submission.', 'class_recording.view_recordings', 'learner.learner_management'],
-  },
-];
 
 const NOTIFICATION_EVENTS = [
   'account.otp', 'account.two_factor', 'account.welcome',
@@ -153,24 +143,7 @@ export async function provisionTenant(input: ProvisionInput): Promise<Provisione
   });
 
   await step(tenant.id, 'SEED_ROLES', async () => {
-    const allPerms = await db.permission.findMany({ select: { id: true, key: true } });
-    for (const def of ROLE_DEFS) {
-      const role = await db.role.upsert({
-        where: { organizationId_name: { organizationId, name: def.name } },
-        create: { organizationId, name: def.name, description: def.description, isSystem: true, restrictBatchAccess: def.restrict },
-        update: {},
-        select: { id: true },
-      });
-      for (const perm of allPerms) {
-        const granted = def.all || def.grants.some((g) => perm.key.startsWith(g));
-        if (!granted) continue;
-        await db.rolePermission.upsert({
-          where: { roleId_permissionId: { roleId: role.id, permissionId: perm.id } },
-          create: { roleId: role.id, permissionId: perm.id, canView: true, canEdit: true, canDelete: def.all },
-          update: {},
-        });
-      }
-    }
+    await ensureStandardRoles(organizationId);
   });
 
   await step(tenant.id, 'OWNER', async () => {

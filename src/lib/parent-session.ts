@@ -54,21 +54,58 @@ export async function clearParentSession(): Promise<void> {
   jar.delete(PARENT_COOKIE);
 }
 
-/** The learners whose record names this contact as the parent. */
+/**
+ * The learners this contact is linked to. Only an active `ParentLink`
+ * counts: a phone number that merely appears on a learner's record opens
+ * nothing until the office has linked it, and a revoked link closes the
+ * child on the parent's next request.
+ */
 export async function childrenOf(organizationId: string, contact: string) {
-  const byEmail = contact.includes('@');
   return db.user.findMany({
     where: {
       organizationId,
       kind: 'LEARNER',
       deletedAt: null,
-      learnerProfile: byEmail
-        ? { parentEmail: { equals: contact, mode: 'insensitive' } }
-        : { parentPhone: { endsWith: contact } },
+      parentLinks: { some: { organizationId, contact, status: 'ACTIVE' } },
     },
     orderBy: { name: 'asc' },
     select: { id: true, name: true, avatarUrl: true, registrationNo: true, learnerProfile: { select: { parentName: true } } },
   });
+}
+
+/**
+ * Links made from the learner's own record, for contacts that have never
+ * been linked or revoked. Run when a parent asks for a code, so a parent
+ * who could sign in before links existed still can, while a revoked
+ * contact stays revoked: the office's decision is never undone by a form.
+ */
+export async function linkFromRecords(organizationId: string, contact: string): Promise<number> {
+  const byEmail = contact.includes('@');
+  const learners = await db.user.findMany({
+    where: {
+      organizationId,
+      kind: 'LEARNER',
+      deletedAt: null,
+      learnerProfile: byEmail ? { parentEmail: { equals: contact, mode: 'insensitive' } } : { parentPhone: { endsWith: contact } },
+      parentLinks: { none: { contact } },
+    },
+    select: { id: true, learnerProfile: { select: { parentName: true } } },
+    take: 20,
+  });
+  if (learners.length === 0) return 0;
+  await db.parentLink.createMany({
+    data: learners.map((l) => ({
+      organizationId,
+      learnerId: l.id,
+      contact,
+      name: l.learnerProfile?.parentName?.trim() || 'Parent',
+      status: 'ACTIVE' as const,
+      verifiedHow: 'record',
+      verifiedAt: new Date(),
+    })),
+    skipDuplicates: true,
+  });
+  return learners.length;
 }
 
 /** One child, only if this session's contact is on their record. */

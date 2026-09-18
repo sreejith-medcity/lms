@@ -34,7 +34,7 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
   const me = await requireStaff('courses.course_management', 'view');
   const canEdit = me.permissions['courses.course_management']?.edit ?? false;
 
-  const [attachedRows, candidateRows, prerequisites, unlocks, courseOptions] = await Promise.all([
+  const [attachedRows, candidateRows, prerequisites, programs, unlocks, courseOptions] = await Promise.all([
     db.productAddon.findMany({
       where: { organizationId: tenant.organizationId, productId: product.id },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -61,6 +61,11 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
       select: { id: true, title: true, pricingPlans: planSelect },
     }),
     prerequisitesFor(tenant.organizationId, product.course.id),
+    db.program.findMany({
+      where: { organizationId: tenant.organizationId, OR: [{ isActive: true }, { id: product.course.programId ?? '' }] },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, levels: true },
+    }),
     db.coursePrerequisite.findMany({
       where: { organizationId: tenant.organizationId, requiredCourseId: product.course.id },
       select: { course: { select: { productId: true, product: { select: { title: true } } } } },
@@ -82,6 +87,7 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
       <DetailsForm
         productId={product.id}
         title={product.title}
+        programs={programs}
         course={{
           description: product.course.description ?? '',
           level: product.course.level ?? '',
@@ -91,6 +97,7 @@ export default async function CourseDetailsPage({ params }: { params: Promise<{ 
             ? Math.round((product.course.durationMinutes / 60) * 2) / 2
             : 0,
           mockTestAttempts: product.course.mockTestAttempts,
+          programId: product.course.programId ?? '',
           promoVideoUrl: product.course.promoVideoUrl ?? '',
           overviewLinkOverride: product.course.overviewLinkOverride ?? '',
           thumbnailAssetId: product.course.thumbnailAssetId,

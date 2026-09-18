@@ -7,6 +7,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { allPermissionKeys } from '../src/lib/permissions';
+import { STANDARD_ROLES, roleGrants } from '../src/lib/standard-roles';
 import { hashPassword } from '../src/lib/password';
 
 const db = new PrismaClient();
@@ -215,19 +216,7 @@ async function main() {
   console.log('Seeding roles...');
   const allPerms = await db.permission.findMany();
 
-  const roleDefs = [
-    { name: 'Super Admin', description: 'Full access to every module', all: true, restrict: false },
-    { name: 'Admin', description: 'Branch level admin', all: true, restrict: false },
-    {
-      name: 'Instructor',
-      description: 'Edits batches and curriculum; for sessions can sign in, remind and cancel',
-      all: false,
-      restrict: true,
-      grants: ['batches.', 'module.', 'scheduling.sessions', 'submission.', 'class_recording.view_recordings'],
-    },
-  ];
-
-  for (const def of roleDefs) {
+  for (const def of STANDARD_ROLES) {
     const role = await db.role.upsert({
       where: { organizationId_name: { organizationId: org.id, name: def.name } },
       create: {
@@ -235,23 +224,18 @@ async function main() {
         name: def.name,
         description: def.description,
         isSystem: true,
-        restrictBatchAccess: def.restrict,
+        restrictBatchAccess: def.restrictBatch,
+        restrictBranchAccess: def.restrictBranch,
       },
       update: {},
     });
 
     for (const perm of allPerms) {
-      const granted = def.all || (def.grants ?? []).some((g) => perm.key.startsWith(g));
-      if (!granted) continue;
+      const grant = roleGrants(def, perm.key);
+      if (!grant) continue;
       await db.rolePermission.upsert({
         where: { roleId_permissionId: { roleId: role.id, permissionId: perm.id } },
-        create: {
-          roleId: role.id,
-          permissionId: perm.id,
-          canView: true,
-          canEdit: true,
-          canDelete: def.all,
-        },
+        create: { roleId: role.id, permissionId: perm.id, ...grant },
         update: {},
       });
     }

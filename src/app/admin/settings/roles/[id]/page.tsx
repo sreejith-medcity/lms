@@ -22,6 +22,7 @@ export default async function RoleDetail({ params }: { params: Promise<{ id: str
       description: true,
       isSystem: true,
       restrictBatchAccess: true,
+      restrictBranchAccess: true,
       permissions: {
         select: {
           canView: true,
@@ -74,6 +75,7 @@ export default async function RoleDetail({ params }: { params: Promise<{ id: str
         roleId={role.id}
         readOnly={role.isSystem}
         restrictBatchAccess={role.restrictBatchAccess}
+        restrictBranchAccess={role.restrictBranchAccess}
         groups={groups}
         current={current}
       />

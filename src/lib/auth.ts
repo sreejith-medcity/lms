@@ -16,6 +16,8 @@ export interface SessionUser {
   roleIds: string[];
   permissions: PermissionSet;
   restrictBatchAccess: boolean;
+  /** A Branch Head or Academic Manager: only their branches. See `lib/scope.ts`. */
+  restrictBranchAccess: boolean;
 }
 
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
@@ -53,9 +55,11 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
 
   const permissions: PermissionSet = {};
   let restrictBatchAccess = false;
+  let restrictBranchAccess = false;
 
   for (const assignment of session.user.roleAssignments) {
     if (assignment.role.restrictBatchAccess) restrictBatchAccess = true;
+    if (assignment.role.restrictBranchAccess) restrictBranchAccess = true;
     for (const rp of assignment.role.permissions) {
       const key = rp.permission.key;
       const existing = permissions[key] ?? { view: false, edit: false, delete: false };
@@ -77,6 +81,10 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     roleIds: session.user.roleAssignments.map((r) => r.roleId),
     permissions,
     restrictBatchAccess,
+    // Both flags set means the narrower one wins: a teacher who is also a
+    // Branch Head still opens the batch view as a Branch Head elsewhere, but
+    // a role that says "own batches only" is not widened by a second role.
+    restrictBranchAccess: restrictBranchAccess && !restrictBatchAccess,
   };
 });
 

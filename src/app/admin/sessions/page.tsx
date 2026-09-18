@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
+import { requireStaff } from '@/lib/auth';
+import { batchWhere, sessionWhere, staffScope } from '@/lib/scope';
 import { Badge, Card, EmptyState, PageHeader, Section } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { ScheduleForm } from './schedule-form';
@@ -10,6 +12,7 @@ export const dynamic = 'force-dynamic';
 export default async function SessionsPage() {
   const tenant = await requireTenant();
   const orgId = tenant.organizationId;
+  const scope = await staffScope(await requireStaff());
 
   const now = new Date();
   const dayStart = new Date(now);
@@ -21,7 +24,7 @@ export default async function SessionsPage() {
 
   const [today, upcoming, batches, todayStats] = await Promise.all([
     db.liveSession.findMany({
-      where: { organizationId: orgId, startsAt: { gte: dayStart, lt: dayEnd } },
+      where: { organizationId: orgId, startsAt: { gte: dayStart, lt: dayEnd }, ...sessionWhere(scope) },
       orderBy: { startsAt: 'asc' },
       include: {
         batch: { select: { name: true, _count: { select: { enrollments: true } } } },
@@ -29,19 +32,19 @@ export default async function SessionsPage() {
       },
     }),
     db.liveSession.findMany({
-      where: { organizationId: orgId, startsAt: { gte: dayEnd, lt: weekEnd }, status: { not: 'CANCELLED' } },
+      where: { organizationId: orgId, startsAt: { gte: dayEnd, lt: weekEnd }, status: { not: 'CANCELLED' }, ...sessionWhere(scope) },
       orderBy: { startsAt: 'asc' },
       take: 40,
       include: { batch: { select: { name: true } } },
     }),
     db.batch.findMany({
-      where: { organizationId: orgId, deletedAt: null, status: { in: ['ACTIVE', 'UPCOMING'] } },
+      where: { organizationId: orgId, deletedAt: null, status: { in: ['ACTIVE', 'UPCOMING'] }, ...batchWhere(scope) },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, course: { select: { product: { select: { title: true } } } } },
     }),
     db.liveSession.groupBy({
       by: ['status'],
-      where: { organizationId: orgId, startsAt: { gte: dayStart, lt: dayEnd } },
+      where: { organizationId: orgId, startsAt: { gte: dayStart, lt: dayEnd }, ...sessionWhere(scope) },
       _count: true,
     }),
   ]);

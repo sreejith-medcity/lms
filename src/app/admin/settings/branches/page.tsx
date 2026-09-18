@@ -21,23 +21,32 @@ export default async function BranchesSettings() {
       state: true,
       addressLine: true,
       isActive: true,
+      kind: true,
+      headUserId: true,
+      deputyUserId: true,
       _count: { select: { batches: true, enrollments: true } },
     },
+  });
+  const staff = await db.user.findMany({
+    where: { organizationId: tenant.organizationId, kind: 'STAFF', deletedAt: null, status: { notIn: ['SUSPENDED', 'ARCHIVED'] } },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
   });
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
       <div>
-        <BranchList branches={branches} />
+        <BranchList branches={branches} staff={staff} />
       </div>
       <Card>
         <h2 className="t-heading">Add a branch</h2>
         <p className="t-small muted mt-1">
-          Batches, enrolments and orders each belong to a branch, which is what makes
-          branch-level reporting and branch-scoped staff access possible later.
+          Batches, enrolments and orders each belong to a branch. A Branch Head sees
+          their own branch and approves its results; a virtual branch is where online
+          batches live and works the same way.
         </p>
         <div className="mt-5">
-          <BranchForm />
+          <BranchForm staff={staff} />
         </div>
       </Card>
     </div>

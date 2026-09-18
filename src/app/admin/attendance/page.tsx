@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { sessionWhere, staffScope } from '@/lib/scope';
 import { Badge, Card, Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { Meter } from '@/components/chart';
@@ -22,7 +23,7 @@ export default async function AttendancePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const tenant = await requireTenant();
-  await requireStaff('scheduling.sessions', 'view');
+  const scope = await staffScope(await requireStaff('scheduling.sessions', 'view'));
 
   const sp = await searchParams;
   const days = Number((Array.isArray(sp.days) ? sp.days[0] : sp.days) ?? 30) || 30;
@@ -36,6 +37,7 @@ export default async function AttendancePage({
       organizationId: tenant.organizationId,
       startsAt: { gte: since, lte: new Date() },
       status: { not: 'CANCELLED' },
+      ...sessionWhere(scope),
     },
     orderBy: { startsAt: 'desc' },
     select: {

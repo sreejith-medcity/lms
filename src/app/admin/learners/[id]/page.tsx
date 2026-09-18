@@ -3,6 +3,11 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { canSeeLearner, staffScope } from '@/lib/scope';
+import { maskContact } from '@/lib/parents';
+import { contactFromRecord } from '@/lib/scope-rules';
+import { settingNumber } from '@/lib/settings/store';
+import { ParentLinks } from './parents';
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, Cell, EmptyState, Row, Table, ProgressRing } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
@@ -24,6 +29,11 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
   const me = await requireStaff('learner.learner_management', 'view');
   const canEdit = me.permissions['learner.learner_management']?.edit ?? false;
   const canImpersonate = me.permissions['learner.learner_impersonate']?.edit ?? false;
+  // Money is its own permission. A teacher with the learner's record open
+  // sees the courses and the classes, and nothing about what was paid.
+  const canSeeFees = Boolean(me.permissions['sales.fee_tracking']?.view || me.permissions['sales.payments']?.view);
+  const scope = await staffScope(me);
+  if (!(await canSeeLearner(scope, tenant.organizationId, id))) notFound();
 
   const learner = await db.user.findFirst({
     where: { id, organizationId: tenant.organizationId, kind: 'LEARNER', deletedAt: null },
@@ -38,6 +48,10 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
       emailOptOut: true,
       smsOptOut: true,
       learnerProfile: { select: { parentEmail: true, parentPhone: true } },
+      parentLinks: {
+        orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, name: true, relationship: true, contact: true, status: true, verifiedHow: true, verifiedById: true, verifiedAt: true, revokedAt: true, revokedReason: true },
+      },
       whatsappOptOut: true,
       createdAt: true,
       lastSeenAt: true,
@@ -149,6 +163,17 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
     .filter((o) => o.status === 'PAID')
     .reduce((n, o) => n + o.totalPaise, 0);
 
+  const verifierIds = learner.parentLinks.map((l) => l.verifiedById).filter((x): x is string => Boolean(x));
+  const verifiers = verifierIds.length
+    ? new Map((await db.user.findMany({ where: { id: { in: verifierIds }, organizationId: tenant.organizationId }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
+    : new Map<string, string>();
+  const linkedContacts = new Set(learner.parentLinks.map((l) => l.contact));
+  const onRecord = contactFromRecord(learner.learnerProfile)
+    .filter((c) => !linkedContacts.has(c.contact))
+    .map((c) => ({ contact: c.contact, masked: maskContact(c.contact), kind: c.kind }));
+  const parentsPerChild = Math.max(1, Math.min(4, Math.round((await settingNumber(tenant.organizationId, 'auth.parentsPerChild')) || 2)));
+  const day = (d: Date | null) => (d ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : null);
+
   const present = learner.attendances.filter(
     (a) => a.status === 'PRESENT' || a.status === 'LATE',
   ).length;
@@ -203,7 +228,7 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
       <div className="space-y-6">
         <StatGrid>
           <Stat label="Courses" value={String(learner.enrollments.length)} />
-          <Stat label="Paid" value={formatMoney(paid, tenant.currency)} sub="across all orders" />
+          {canSeeFees && <Stat label="Paid" value={formatMoney(paid, tenant.currency)} sub="across all orders" />}
           <Stat label="Classes attended" value={String(present)} />
           <Stat label="Certificates" value={String(learner.certificates.length)} />
         </StatGrid>
@@ -231,9 +256,11 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
                     <span className="t-small faint shrink-0">
                       {e.createdAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                     </span>
-                    <Link href={`/admin/fees/${e.id}`} className="t-small shrink-0 underline">
-                      Fees
-                    </Link>
+                    {canSeeFees && (
+                      <Link href={`/admin/fees/${e.id}`} className="t-small shrink-0 underline">
+                        Fees
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -270,6 +297,29 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
         )}
 
         <section>
+          <h2 className="t-heading mb-3">Parents</h2>
+          <ParentLinks
+            learnerId={learner.id}
+            canEdit={canEdit}
+            limit={parentsPerChild}
+            onRecord={onRecord}
+            links={learner.parentLinks.map((l) => ({
+              id: l.id,
+              name: l.name,
+              relationship: l.relationship,
+              contactMasked: maskContact(l.contact),
+              status: l.status,
+              verifiedHow: l.verifiedHow,
+              verifiedBy: l.verifiedById ? (verifiers.get(l.verifiedById) ?? null) : null,
+              verifiedOn: day(l.verifiedAt),
+              revokedOn: day(l.revokedAt),
+              revokedReason: l.revokedReason,
+            }))}
+          />
+        </section>
+
+        {canSeeFees && (
+        <section>
           <h2 className="t-heading mb-3">Orders</h2>
           {learner.orders.length === 0 ? (
             <EmptyState title="No orders" hint="Free and manually enrolled courses have none." />
@@ -295,6 +345,7 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
             </Table>
           )}
         </section>
+        )}
 
         {canGrantTests && (
           <section>
@@ -346,7 +397,7 @@ export default async function LearnerDetail({ params }: { params: Promise<{ id: 
           <ReportCards
             learnerId={learner.id}
             canEdit={canEdit}
-            parentOnFile={Boolean(learner.learnerProfile?.parentEmail || learner.learnerProfile?.parentPhone)}
+            parentOnFile={learner.parentLinks.some((l) => l.status === 'ACTIVE')}
             enrolments={learner.enrollments.filter((e) => e.status !== 'CANCELLED').map((e) => ({ id: e.id, label: `${e.product.title}${e.batch ? ` · ${e.batch.name}` : ''}` }))}
             cards={reportCards.map((c) => {
               const data = readReportCard(c.data);

@@ -151,6 +151,9 @@ const branch = z.object({
   city: z.string().trim().max(80).optional().or(z.literal('')),
   state: z.string().trim().max(80).optional().or(z.literal('')),
   addressLine: z.string().trim().max(240).optional().or(z.literal('')),
+  kind: z.enum(['PHYSICAL', 'VIRTUAL']).optional(),
+  headUserId: z.string().optional().or(z.literal('')),
+  deputyUserId: z.string().optional().or(z.literal('')),
 });
 
 export async function saveBranch(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -161,13 +164,23 @@ export async function saveBranch(_prev: ActionState, formData: FormData): Promis
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
     const d = parsed.data;
+    // The head and deputy must be staff of this academy; anything else is
+    // dropped rather than trusted from the form.
+    const people = [d.headUserId, d.deputyUserId].filter((x): x is string => Boolean(x));
+    const staff = people.length
+      ? new Set((await db.user.findMany({ where: { id: { in: people }, organizationId: tenant.organizationId, kind: 'STAFF', deletedAt: null }, select: { id: true } })).map((u) => u.id))
+      : new Set<string>();
     const data = {
       name: d.name,
       code: d.code.toUpperCase(),
       city: d.city || null,
       state: d.state || null,
       addressLine: d.addressLine || null,
+      kind: d.kind ?? 'PHYSICAL',
+      headUserId: d.headUserId && staff.has(d.headUserId) ? d.headUserId : null,
+      deputyUserId: d.deputyUserId && staff.has(d.deputyUserId) ? d.deputyUserId : null,
     };
+    if (data.headUserId && data.headUserId === data.deputyUserId) return { error: 'The deputy has to be somebody other than the head.' };
 
     if (d.id) {
       const owned = await db.branch.findFirst({

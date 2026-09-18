@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { branchWhere, enrollmentWhere, paymentWhere, staffScope } from '@/lib/scope';
 import { formatMoney } from '@/lib/money';
 import { AGE_BUCKETS, summariseAccount, worstFirst, type AgeBucket } from '@/lib/dues';
 import { Badge, Card, Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
@@ -38,7 +39,7 @@ export default async function FeesPage({
   searchParams: Promise<{ q?: string; branch?: string; course?: string; bucket?: string; show?: string }>;
 }) {
   const tenant = await requireTenant();
-  await requireStaff('sales.fee_tracking', 'view');
+  const scope = await staffScope(await requireStaff('sales.fee_tracking', 'view'));
   const { q, branch, course, bucket, show } = await searchParams;
 
   const now = new Date();
@@ -49,6 +50,7 @@ export default async function FeesPage({
       where: {
         organizationId: tenant.organizationId,
         instalments: { some: {} },
+        ...enrollmentWhere(scope),
         ...(branch ? { branchId: branch } : {}),
         ...(course ? { productId: course } : {}),
         ...(q
@@ -74,12 +76,12 @@ export default async function FeesPage({
       },
     }),
     db.branch.findMany({
-      where: { organizationId: tenant.organizationId, isActive: true },
+      where: { organizationId: tenant.organizationId, isActive: true, ...branchWhere(scope) },
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
     }),
     db.product.findMany({
-      where: { organizationId: tenant.organizationId, enrollments: { some: { instalments: { some: {} } } } },
+      where: { organizationId: tenant.organizationId, enrollments: { some: { instalments: { some: {} }, ...enrollmentWhere(scope) } } },
       orderBy: { title: 'asc' },
       select: { id: true, title: true },
     }),
@@ -89,6 +91,7 @@ export default async function FeesPage({
         status: 'CAPTURED',
         capturedAt: { gte: monthStart },
         gateway: { in: ['CASH', 'CHEQUE', 'BANK', 'MANUAL'] },
+        ...paymentWhere(scope),
       },
       _sum: { amountPaise: true },
       _count: true,
@@ -99,6 +102,7 @@ export default async function FeesPage({
         status: 'ENROLLED',
         isFreePreview: false,
         instalments: { none: {} },
+        ...enrollmentWhere(scope),
       },
       orderBy: { createdAt: 'desc' },
       take: 30,
@@ -112,7 +116,7 @@ export default async function FeesPage({
 
   // The other charges still open, so the book here is the whole book.
   const openCharges = await db.miscFee.aggregate({
-    where: { organizationId: tenant.organizationId, status: 'PENDING' },
+    where: { organizationId: tenant.organizationId, status: 'PENDING', enrollment: enrollmentWhere(scope) },
     _sum: { amountPaise: true },
     _count: true,
   });

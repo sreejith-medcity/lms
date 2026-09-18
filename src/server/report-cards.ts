@@ -94,16 +94,21 @@ export async function sendReportCard(id: string): Promise<ActionState> {
         title: true,
         sentAt: true,
         userId: true,
-        user: { select: { id: true, name: true, email: true, phone: true, learnerProfile: { select: { parentName: true, parentEmail: true, parentPhone: true } } } },
+        user: { select: { id: true, name: true, email: true, phone: true, parentLinks: { where: { status: 'ACTIVE' }, select: { name: true, contact: true } } } },
         enrollment: { select: { productId: true, product: { select: { title: true } } } },
       },
     });
     if (!card) return { error: 'Report card not found.' };
     if (card.sentAt) return { error: 'Already sent.' };
 
-    const parent = card.user.learnerProfile;
-    const recipients: { userId: string | null; email: string | null; phone: string | null }[] = [{ userId: card.user.id, email: card.user.email, phone: card.user.phone }];
-    if (parent?.parentEmail || parent?.parentPhone) recipients.push({ userId: null, email: parent.parentEmail ?? null, phone: parent.parentPhone ?? null });
+    // Every linked parent gets a copy: the links are who may see this
+    // child, and a report card is the child's record in the post.
+    const parents = card.user.parentLinks.map((l) => ({ name: l.name, email: l.contact.includes('@') ? l.contact : null, phone: l.contact.includes('@') ? null : l.contact }));
+    const recipients: { userId: string | null; email: string | null; phone: string | null }[] = [
+      { userId: card.user.id, email: card.user.email, phone: card.user.phone },
+      ...parents.map((p) => ({ userId: null, email: p.email, phone: p.phone })),
+    ];
+    const parentName = (person: { email: string | null; phone: string | null }) => parents.find((p) => (p.email && p.email === person.email) || (p.phone && p.phone === person.phone))?.name || 'Parent';
 
     await queueNotifications({
       organizationId: tenant.organizationId,
@@ -111,7 +116,7 @@ export async function sendReportCard(id: string): Promise<ActionState> {
       recipients,
       dedupeKey: `report_card:${card.id}`,
       context: { name: card.user.name, item: card.title, course: card.enrollment.product.title, url: `/api/report-cards/${card.id}/pdf`, attachReportCard: card.id },
-      contextFor: (person): Record<string, string> => (person.userId ? {} : { name: parent?.parentName || 'Parent', learner: card.user.name }),
+      contextFor: (person): Record<string, string> => (person.userId ? {} : { name: parentName(person), learner: card.user.name }),
     });
     await happened({
       organizationId: tenant.organizationId,
@@ -119,7 +124,7 @@ export async function sendReportCard(id: string): Promise<ActionState> {
       userId: card.userId,
       subjectId: card.id,
       productId: card.enrollment.productId,
-      data: { reportCardId: card.id, item: card.title, course: card.enrollment.product.title, toParent: Boolean(parent?.parentEmail || parent?.parentPhone) },
+      data: { reportCardId: card.id, item: card.title, course: card.enrollment.product.title, toParent: parents.length > 0 },
     });
     await db.reportCard.update({ where: { id: card.id }, data: { sentAt: new Date() } });
     await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: 'report_card.sent', entity: 'ReportCard', entityId: card.id, after: { recipients: recipients.length } });

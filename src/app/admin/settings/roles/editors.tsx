@@ -41,7 +41,13 @@ export function NewRoleForm({ roles }: { roles: { id: string; name: string }[] }
       <Checkbox
         name="restrictBatchAccess"
         label="Only their own batches"
-        hint="They see batches where they are the tutor or manager, and nothing else."
+        hint="A teacher: batches they are assigned to today, by the dates on the assignment, and nothing else."
+      />
+
+      <Checkbox
+        name="restrictBranchAccess"
+        label="Only their own branches"
+        hint="A Branch Head or Academic Manager: the branches they are a member of, and everything in them. Ignored when own batches only is also on."
       />
 
       <Button type="submit" disabled={pending}>

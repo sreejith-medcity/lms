@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/auth';
+import { learnerWhere, staffScope } from '@/lib/scope';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { toCsv } from '@/lib/csv';
@@ -33,12 +34,16 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const batchId = url.searchParams.get('batch') ?? '';
   const productId = url.searchParams.get('course') ?? '';
+  // The export is scoped the way the list is: a Branch Head's file holds
+  // their branch, never the academy.
+  const scope = await staffScope(staff);
 
   const learners = await db.user.findMany({
     where: {
       organizationId: tenant.organizationId,
       kind: 'LEARNER',
       deletedAt: null,
+      ...learnerWhere(scope),
       ...(batchId || productId
         ? {
             enrollments: {

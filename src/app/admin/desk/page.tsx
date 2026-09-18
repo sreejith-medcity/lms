@@ -45,7 +45,7 @@ export default async function DeskPage() {
       </StatGrid>
 
       {d.batches.length === 0 && d.upcoming.length === 0 ? (
-        <EmptyState title="Nothing assigned to you yet" hint="The office puts trainers on batches from the batch page; classes then appear here." />
+        <EmptyState title="No batch assigned" hint="Your Branch Head assigns batches from the batch page, with the dates the assignment runs. Until then there is nothing here to keep a register or enter marks for; if you expected a batch, ask them." />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <div className="space-y-6">

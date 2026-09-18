@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import type { $Enums } from '@prisma/client';
 import {
   updateBatch,
-  setBatchStaff,
   setBatchModules,
   setEnrollmentStatus,
+  moveEnrollment,
 } from '@/server/batch';
+import { Assignments, type AssignmentEvent, type AssignmentRow } from './assignments';
 import type { ActionState } from '@/server/courses';
 import {
   Badge,
@@ -69,6 +70,10 @@ interface Props {
     endDate: string;
     capacity: number;
     isDefault: boolean;
+    level: string;
+    mode: 'IN_PERSON' | 'ONLINE' | 'HYBRID';
+    /** Levels the course's program lists; empty means free text. */
+    levels: string[];
   };
   learners: ClassroomLearner[];
   sessions: ClassroomSession[];
@@ -76,8 +81,11 @@ interface Props {
   totalLessons: number;
   courseModules: { id: string; name: string; lessons: number }[];
   selectedModules: string[];
-  staff: { userId: string; role: string }[];
+  staff: AssignmentRow[];
+  history: AssignmentEvent[];
   team: { id: string; name: string }[];
+  /** Other batches of the same course a learner could move to. */
+  siblings: { id: string; name: string }[];
 }
 
 const TABS = ['Learners', 'Classes', 'Curriculum', 'Team and settings'] as const;
@@ -91,13 +99,6 @@ const STATUSES: { value: $Enums.EnrollmentStatus; label: string }[] = [
   { value: 'EXPIRED', label: 'Expired' },
   { value: 'CANCELLED', label: 'Cancelled' },
   { value: 'ARCHIVED', label: 'Archived' },
-];
-
-const ROLES: { value: $Enums.BatchRole; label: string; hint: string }[] = [
-  { value: 'PRIMARY_TUTOR', label: 'Tutor', hint: 'Teaches the classes' },
-  { value: 'BATCH_MANAGER', label: 'Manager', hint: 'Owns the batch' },
-  { value: 'ADDITIONAL_MANAGER', label: 'Co-manager', hint: 'Shares the batch' },
-  { value: 'ASSISTANT', label: 'Assistant', hint: 'Helps out' },
 ];
 
 function statusTone(status: string): 'ok' | 'warn' | 'bad' | 'neutral' | 'brand' {
@@ -156,6 +157,7 @@ export function Classroom(props: Props) {
           learners={props.learners}
           canEdit={props.canEdit}
           totalLessons={props.totalLessons}
+          siblings={props.siblings}
         />
       )}
       {tab === 'Classes' && <Classes sessions={props.sessions} roster={props.roster} />}
@@ -171,6 +173,7 @@ export function Classroom(props: Props) {
         <TeamAndSettings
           batch={props.batch}
           staff={props.staff}
+          history={props.history}
           team={props.team}
           canEdit={props.canEdit}
         />
@@ -187,10 +190,12 @@ function Learners({
   learners,
   canEdit,
   totalLessons,
+  siblings,
 }: {
   learners: ClassroomLearner[];
   canEdit: boolean;
   totalLessons: number;
+  siblings: { id: string; name: string }[];
 }) {
   const [sort, setSort] = useState<Sort>('concern');
   const [query, setQuery] = useState('');
@@ -298,7 +303,10 @@ function Learners({
             </Cell>
             <Cell>
               {canEdit ? (
-                <StatusPicker enrollmentId={l.enrollmentId} status={l.status} />
+                <div className="space-y-1">
+                  <StatusPicker enrollmentId={l.enrollmentId} status={l.status} />
+                  {siblings.length > 0 && <MovePicker enrollmentId={l.enrollmentId} siblings={siblings} />}
+                </div>
               ) : (
                 <Badge tone={statusTone(l.status)}>{l.status.toLowerCase().replace('_', ' ')}</Badge>
               )}
@@ -353,6 +361,45 @@ function StatusPicker({ enrollmentId, status }: { enrollmentId: string; status: 
         ))}
       </Select>
       {error && <p className="t-micro mt-1 text-[var(--bad)]">{error}</p>}
+    </div>
+  );
+}
+
+function MovePicker({ enrollmentId, siblings }: { enrollmentId: string; siblings: { id: string; name: string }[] }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string>();
+  const [note, setNote] = useState<string>();
+
+  return (
+    <div className="w-36">
+      <Select
+        value=""
+        disabled={pending}
+        aria-label="Move to another batch"
+        onChange={(e) => {
+          const to = e.target.value;
+          if (!to) return;
+          start(async () => {
+            const res = await moveEnrollment(enrollmentId, to);
+            if (res.error) setError(res.error);
+            else {
+              setError(undefined);
+              setNote(res.message);
+              router.refresh();
+            }
+          });
+        }}
+      >
+        <option value="">Move to…</option>
+        {siblings.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </Select>
+      {error && <p className="t-micro mt-1 text-[var(--bad)]">{error}</p>}
+      {note && <p className="t-micro mt-1 faint">{note}</p>}
     </div>
   );
 }
@@ -532,11 +579,13 @@ const initial: ActionState = {};
 function TeamAndSettings({
   batch,
   staff,
+  history,
   team,
   canEdit,
 }: {
   batch: Props['batch'];
-  staff: { userId: string; role: string }[];
+  staff: AssignmentRow[];
+  history: AssignmentEvent[];
   team: { id: string; name: string }[];
   canEdit: boolean;
 }) {
@@ -544,42 +593,7 @@ function TeamAndSettings({
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
-        <h2 className="t-heading">Who runs it</h2>
-        <p className="t-small muted mt-1">
-          Tutors see the batch in their own dashboard; managers can act on it.
-        </p>
-
-        {team.length === 0 ? (
-          <p className="t-small faint mt-4">No staff accounts yet.</p>
-        ) : (
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="t-micro faint py-2 text-left font-semibold">Person</th>
-                  {ROLES.map((r) => (
-                    <th key={r.value} className="t-micro faint px-2 py-2 text-center font-semibold">
-                      {r.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {team.map((member) => (
-                  <StaffRow
-                    key={member.id}
-                    batchId={batch.id}
-                    member={member}
-                    staff={staff}
-                    canEdit={canEdit}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+      <Assignments batchId={batch.id} rows={staff} team={team} history={history} canEdit={canEdit} />
 
       <Card>
         <h2 className="t-heading">Batch settings</h2>
@@ -596,6 +610,30 @@ function TeamAndSettings({
             </Field>
             <Field label="Ends">
               <Input type="date" name="endDate" defaultValue={batch.endDate} disabled={!canEdit} />
+            </Field>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Level" hint={batch.levels.length ? 'From the course\u2019s program' : 'A1, Module 3: free text until the course has a program'}>
+              {batch.levels.length ? (
+                <Select name="level" defaultValue={batch.level} disabled={!canEdit}>
+                  <option value="">Not set</option>
+                  {batch.levels.map((l) => (
+                    <option key={l} value={l}>
+                      {l}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input name="level" defaultValue={batch.level} maxLength={60} disabled={!canEdit} />
+              )}
+            </Field>
+            <Field label="Mode" hint="Online batches belong in the virtual branch.">
+              <Select name="mode" defaultValue={batch.mode} disabled={!canEdit}>
+                <option value="IN_PERSON">In person</option>
+                <option value="ONLINE">Online</option>
+                <option value="HYBRID">Both</option>
+              </Select>
             </Field>
           </div>
 
@@ -628,60 +666,5 @@ function TeamAndSettings({
         </form>
       </Card>
     </div>
-  );
-}
-
-function StaffRow({
-  batchId,
-  member,
-  staff,
-  canEdit,
-}: {
-  batchId: string;
-  member: { id: string; name: string };
-  staff: { userId: string; role: string }[];
-  canEdit: boolean;
-}) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [roles, setRoles] = useState<string[]>(
-    staff.filter((s) => s.userId === member.id).map((s) => s.role),
-  );
-  const [error, setError] = useState<string>();
-
-  function toggle(role: $Enums.BatchRole, on: boolean) {
-    const previous = roles;
-    setRoles(on ? [...roles, role] : roles.filter((r) => r !== role));
-    start(async () => {
-      const res = await setBatchStaff(batchId, member.id, role, on);
-      if (res.error) {
-        setRoles(previous);
-        setError(res.error);
-      } else {
-        setError(undefined);
-        router.refresh();
-      }
-    });
-  }
-
-  return (
-    <tr className="border-b last:border-0">
-      <td className="py-2">
-        {member.name}
-        {error && <p className="t-micro text-[var(--bad)]">{error}</p>}
-      </td>
-      {ROLES.map((r) => (
-        <td key={r.value} className="px-2 py-2 text-center">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-[var(--line-strong)] accent-[var(--brand)]"
-            checked={roles.includes(r.value)}
-            disabled={!canEdit || pending}
-            aria-label={`${member.name} as ${r.label}`}
-            onChange={(e) => toggle(r.value, e.target.checked)}
-          />
-        </td>
-      ))}
-    </tr>
   );
 }

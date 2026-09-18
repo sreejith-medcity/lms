@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { orderWhere, staffScope } from '@/lib/scope';
 import { formatMoney } from '@/lib/money';
 import { Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
@@ -19,10 +20,10 @@ interface TaxBreakup {
 
 export default async function InvoicesPage() {
   const tenant = await requireTenant();
-  await requireStaff('sales.payments', 'view');
+  const scope = await staffScope(await requireStaff('sales.payments', 'view'));
 
   const invoices = await db.invoice.findMany({
-    where: { order: { organizationId: tenant.organizationId } },
+    where: { order: { organizationId: tenant.organizationId, ...orderWhere(scope) } },
     orderBy: { issuedAt: 'desc' },
     take: 100,
     select: {

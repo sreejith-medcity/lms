@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/auth';
+import { batchWhere, isScoped, staffScope } from '@/lib/scope';
 import { requireTenant } from '@/lib/tenant';
 import type { ActionState } from '@/server/courses';
 
@@ -57,11 +58,16 @@ export async function postAnnouncement(
 
     const d = parsed.data;
     const batchIds = formData.getAll('batchId').map((v) => String(v)).filter(Boolean);
+    const scope = await staffScope(user);
 
     const valid = await db.batch.findMany({
-      where: { id: { in: batchIds }, organizationId: tenant.organizationId, deletedAt: null },
+      where: { id: { in: batchIds }, organizationId: tenant.organizationId, deletedAt: null, ...batchWhere(scope) },
       select: { id: true },
     });
+    // A Branch Head reaches their own batches, never the academy: a notice
+    // with no batch goes to everyone, which is Head Office's to send.
+    if (isScoped(scope) && valid.length === 0) return { error: 'Pick at least one batch in your branch. Academy-wide notices are sent by Head Office.' };
+    if (valid.length < batchIds.length) return { error: 'One of those batches is outside your branch.' };
 
     await db.announcement.create({
       data: {

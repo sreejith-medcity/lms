@@ -29,12 +29,14 @@ export function PermissionMatrix({
   roleId,
   readOnly,
   restrictBatchAccess,
+  restrictBranchAccess,
   groups,
   current,
 }: {
   roleId: string;
   readOnly: boolean;
   restrictBatchAccess: boolean;
+  restrictBranchAccess: boolean;
   groups: Group[];
   current: Grants;
 }) {
@@ -130,12 +132,18 @@ export function PermissionMatrix({
       )}
 
       {!readOnly && (
-        <div className="mb-4">
+        <div className="mb-4 space-y-3">
           <Checkbox
             name="restrictBatchAccess"
             label="Only their own batches"
-            hint="They see batches where they are the tutor or manager, and every list in the app filters through it."
+            hint="A teacher: batches they are assigned to today, by the dates on the assignment. Every list, record and export filters through it."
             defaultChecked={restrictBatchAccess}
+          />
+          <Checkbox
+            name="restrictBranchAccess"
+            label="Only their own branches"
+            hint="A Branch Head or Academic Manager: the branches they are a member of, and everything in them. Ignored when own batches only is also on."
+            defaultChecked={restrictBranchAccess}
           />
         </div>
       )}

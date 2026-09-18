@@ -7,7 +7,7 @@ import { sendOtp } from '@/lib/otp-delivery';
 import { checkOtp } from '@/lib/otp';
 import { settingBool } from '@/lib/settings/store';
 import { contactProblem, maskContact, normaliseContact } from '@/lib/parents';
-import { clearParentSession, issueParentSession } from '@/lib/parent-session';
+import { clearParentSession, issueParentSession, linkFromRecords } from '@/lib/parent-session';
 import { recordAudit } from '@/lib/audit';
 
 /**
@@ -36,14 +36,11 @@ export async function requestParentCode(_prev: ParentCodeState, formData: FormDa
     return { error: 'The parent view is not switched on at this academy.' };
   }
 
-  const byEmail = contact.includes('@');
-  const child = await db.user.findFirst({
-    where: {
-      organizationId: tenant.organizationId,
-      kind: 'LEARNER',
-      deletedAt: null,
-      learnerProfile: byEmail ? { parentEmail: { equals: contact, mode: 'insensitive' } } : { parentPhone: { endsWith: contact } },
-    },
+  // Contacts on a learner's record that were never linked become links
+  // now; anything the office revoked stays revoked.
+  await linkFromRecords(tenant.organizationId, contact);
+  const child = await db.parentLink.findFirst({
+    where: { organizationId: tenant.organizationId, contact, status: 'ACTIVE', learner: { deletedAt: null } },
     select: { id: true },
   });
 

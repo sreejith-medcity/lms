@@ -4,6 +4,7 @@ import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { learnerWhere, scopeNote, staffScope } from '@/lib/scope';
 import {
   Badge, Button, Cell, EmptyState, Input, LinkButton, PageHeader, ProgressRing, Row, Table,
 } from '@/components/ui';
@@ -27,12 +28,15 @@ export default async function LearnersPage({
   const me = await requireStaff('learner.learner_management', 'view');
   const canExport = me.permissions['learner.learner_export']?.view ?? false;
   const { q, status } = await searchParams;
+  const scope = await staffScope(me);
+  const note = scopeNote(scope);
 
   const learners = await db.user.findMany({
     where: {
       organizationId: tenant.organizationId,
       kind: 'LEARNER',
       deletedAt: null,
+      ...learnerWhere(scope),
       ...(status ? { status: status as $Enums.UserStatus } : {}),
       ...(q
         ? {
@@ -68,7 +72,7 @@ export default async function LearnersPage({
           </div>
         }
         title="Learners"
-        description="Everyone enrolled or registered with the academy."
+        description={note ? `Everyone enrolled or registered with the academy. ${note}` : 'Everyone enrolled or registered with the academy.'}
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">

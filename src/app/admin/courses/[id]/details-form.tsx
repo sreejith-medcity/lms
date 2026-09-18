@@ -12,6 +12,7 @@ import {
   FormError,
   FormSuccess,
   Input,
+  Select,
   Textarea,
 } from '@/components/ui';
 import { IMAGE_ACCEPT } from '@/lib/image-formats';
@@ -28,9 +29,11 @@ export function DetailsForm({
   productId,
   title,
   course,
+  programs,
 }: {
   productId: string;
   title: string;
+  programs: { id: string; name: string; levels: string[] }[];
   course: {
     description: string;
     level: string;
@@ -38,6 +41,7 @@ export function DetailsForm({
     prettyName: string;
     durationHours: number;
     mockTestAttempts: number | null;
+    programId: string;
     promoVideoUrl: string;
     overviewLinkOverride: string;
     thumbnailAssetId: string | null;
@@ -235,6 +239,21 @@ export function DetailsForm({
             hint="Full-length partner mock tests (the TELC AI Mocktest) a learner on this course may take. Added up across their courses and set on the partner at login. Blank leaves the partner's own default."
           >
             <Input name="mockTestAttempts" type="number" min={0} max={1000} step={1} defaultValue={course.mockTestAttempts ?? ''} placeholder="Partner default" className="max-w-[12rem]" />
+          </Field>
+
+          <Field
+            label="Program"
+            hint="The academic shape above this course: its levels, skills and kinds of test. Set under Settings, Programs."
+          >
+            <Select name="programId" defaultValue={course.programId}>
+              <option value="">Not part of a program</option>
+              {programs.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.levels.length ? ` (${p.levels.join(', ')})` : ''}
+                </option>
+              ))}
+            </Select>
           </Field>
 
           <Field label="Promo video" hint="A YouTube link shown on the course page.">

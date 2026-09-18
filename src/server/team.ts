@@ -206,6 +206,7 @@ export async function createRole(_prev: ActionState, formData: FormData): Promis
     const description = String(formData.get('description') ?? '').trim();
     const copyFromId = String(formData.get('copyFromId') ?? '').trim();
     const restrictBatchAccess = formData.get('restrictBatchAccess') === 'on';
+    const restrictBranchAccess = formData.get('restrictBranchAccess') === 'on' && !restrictBatchAccess;
 
     if (name.length < 2) return { error: 'Give the role a name.' };
 
@@ -228,6 +229,7 @@ export async function createRole(_prev: ActionState, formData: FormData): Promis
         name,
         description: description || null,
         restrictBatchAccess,
+        restrictBranchAccess,
         permissions: source
           ? {
               create: source.permissions.map((p) => ({
@@ -281,6 +283,7 @@ export async function saveRolePermissions(
     }
 
     const restrictBatchAccess = formData.get('restrictBatchAccess') === 'on';
+    const restrictBranchAccess = formData.get('restrictBranchAccess') === 'on' && !restrictBatchAccess;
     const keys = allPermissionKeys().map((p) => p.key);
     const permissions = await db.permission.findMany({
       where: { key: { in: keys } },
@@ -295,7 +298,7 @@ export async function saveRolePermissions(
     });
 
     await db.$transaction([
-      db.role.update({ where: { id: role.id }, data: { restrictBatchAccess } }),
+      db.role.update({ where: { id: role.id }, data: { restrictBatchAccess, restrictBranchAccess } }),
       db.rolePermission.deleteMany({ where: { roleId: role.id } }),
       db.rolePermission.createMany({
         data: rows
@@ -310,7 +313,7 @@ export async function saveRolePermissions(
       action: 'role.permissions.updated',
       entity: 'Role',
       entityId: role.id,
-      after: { granted: rows.filter((r) => r.canView).length, restrictBatchAccess },
+      after: { granted: rows.filter((r) => r.canView).length, restrictBatchAccess, restrictBranchAccess },
     });
 
     revalidatePath('/admin/settings/roles');

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { batchWhere, enrollmentWhere, learnerWhere, staffScope } from '@/lib/scope';
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
 import { EnrolForm } from './form';
@@ -11,7 +12,7 @@ export const metadata = { robots: { index: false, follow: false } };
 
 export default async function EnrolPage() {
   const tenant = await requireTenant();
-  await requireStaff('new_enrollment.single', 'view');
+  const scope = await staffScope(await requireStaff('new_enrollment.single', 'view'));
 
   const [products, learners, batches, recent] = await Promise.all([
     db.product.findMany({
@@ -29,7 +30,7 @@ export default async function EnrolPage() {
       },
     }),
     db.user.findMany({
-      where: { organizationId: tenant.organizationId, kind: 'LEARNER', deletedAt: null },
+      where: { organizationId: tenant.organizationId, kind: 'LEARNER', deletedAt: null, ...learnerWhere(scope) },
       orderBy: { name: 'asc' },
       take: 500,
       select: { id: true, name: true, email: true, phone: true },
@@ -39,12 +40,13 @@ export default async function EnrolPage() {
         organizationId: tenant.organizationId,
         deletedAt: null,
         status: { in: ['UPCOMING', 'ACTIVE'] },
+        ...batchWhere(scope),
       },
       orderBy: { name: 'asc' },
       select: { id: true, name: true, courseId: true, capacity: true, _count: { select: { enrollments: true } } },
     }),
     db.enrollment.findMany({
-      where: { organizationId: tenant.organizationId, source: { in: ['ADMIN_SINGLE', 'ADMIN_BULK'] } },
+      where: { organizationId: tenant.organizationId, source: { in: ['ADMIN_SINGLE', 'ADMIN_BULK'] }, ...enrollmentWhere(scope) },
       orderBy: { createdAt: 'desc' },
       take: 15,
       select: {

@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { activeStaffWhere } from '@/lib/scope-rules';
 import { computePayout, sessionMinutes, type PayoutLine } from '@/lib/payouts';
 
 /**
@@ -87,7 +88,9 @@ export async function myDesk(organizationId: string, userId: string, now: Date, 
   const weekAhead = new Date(now.getTime() + 7 * 864e5);
   const [staffRows, profile] = await Promise.all([
     db.batchStaff.findMany({
-      where: { userId, batch: { organizationId, deletedAt: null } },
+      // Only what is assigned today: an ended assignment leaves the desk the
+      // day after its end date, an upcoming one arrives on its start date.
+      where: { userId, batch: { organizationId, deletedAt: null }, ...activeStaffWhere(now) },
       select: { role: true, batch: { select: { id: true, name: true, status: true, startDate: true, endDate: true, course: { select: { id: true, product: { select: { id: true, title: true } } } }, _count: { select: { enrollments: true } } } } },
     }),
     db.instructorProfile.findUnique({ where: { userId }, select: { hourlyRatePaise: true, perSessionPaise: true, isMentor: true } }),

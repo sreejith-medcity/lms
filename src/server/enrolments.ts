@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { requireStaff } from '@/lib/auth';
+import { batchWhere, canSeeBatch, canSeeBranch, staffScope } from '@/lib/scope';
 import { requireTenant } from '@/lib/tenant';
 import { hashPassword } from '@/lib/password';
 import { recordAudit } from '@/lib/audit';
@@ -75,11 +76,37 @@ export async function enrolManually(
     });
     if (!product?.course) return { error: 'Course not found.' };
 
-    const branch = await db.branch.findFirst({
-      where: { organizationId: tenant.organizationId, isActive: true },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true },
-    });
+    const scope = await staffScope(actor);
+
+    /* The batch. */
+    const batch = d.batchId
+      ? await db.batch.findFirst({
+          where: { id: d.batchId, organizationId: tenant.organizationId, deletedAt: null },
+          select: { id: true, branchId: true },
+        })
+      : await db.batch.findFirst({
+          where: {
+            organizationId: tenant.organizationId,
+            courseId: product.course.id,
+            status: { in: ['ACTIVE', 'UPCOMING'] },
+            deletedAt: null,
+            ...batchWhere(scope),
+          },
+          orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
+          select: { id: true, branchId: true },
+        });
+    if (d.batchId && !batch) return { error: 'Batch not found.' };
+    if (batch && !canSeeBatch(scope, batch)) return { error: 'That batch is outside your branch.' };
+
+    // The enrolment belongs to the batch's branch; without a batch, to the
+    // person's own branch, and only then to the academy's first.
+    const branch = batch
+      ? { id: batch.branchId }
+      : await db.branch.findFirst({
+          where: { organizationId: tenant.organizationId, isActive: true, ...(actor.branchIds.length ? { id: { in: actor.branchIds } } : {}) },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        });
     if (!branch) return { error: 'This academy has no active branch.' };
 
     /* The learner: an existing account, or a new one. */
@@ -134,23 +161,6 @@ export async function enrolManually(
       select: { id: true, name: true },
     });
     if (!owned) return { error: 'Learner not found.' };
-
-    /* The batch. */
-    const batch = d.batchId
-      ? await db.batch.findFirst({
-          where: { id: d.batchId, organizationId: tenant.organizationId, deletedAt: null },
-          select: { id: true },
-        })
-      : await db.batch.findFirst({
-          where: {
-            organizationId: tenant.organizationId,
-            courseId: product.course.id,
-            status: { in: ['ACTIVE', 'UPCOMING'] },
-            deletedAt: null,
-          },
-          orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
-          select: { id: true },
-        });
 
     const existing = await db.enrollment.findFirst({
       where: {
@@ -349,6 +359,8 @@ export async function createBatch(_prev: ActionState, formData: FormData): Promi
       select: { id: true },
     });
     if (!course) return { error: 'Course not found.' };
+    // A Branch Head creates batches in their own branch only.
+    if (!canSeeBranch(await staffScope(user), d.branchId)) return { error: 'That branch is outside your scope.' };
 
     const start = d.startDate ? new Date(d.startDate) : null;
     const end = d.endDate ? new Date(d.endDate) : null;

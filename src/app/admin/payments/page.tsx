@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { describeAttribution, parseAttributionValue } from '@/lib/attribution';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { orderWhere, paymentWhere, staffScope } from '@/lib/scope';
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
@@ -21,12 +22,12 @@ export const metadata = { robots: { index: false, follow: false } };
  */
 export default async function PaymentsPage() {
   const tenant = await requireTenant();
-  await requireStaff('sales.payments', 'view');
+  const scope = await staffScope(await requireStaff('sales.payments', 'view'));
   const orgId = tenant.organizationId;
 
   const [orders, payments, refusals, collected, pending] = await Promise.all([
     db.order.findMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, ...orderWhere(scope) },
       orderBy: { placedAt: 'desc' },
       take: 50,
       select: {
@@ -45,7 +46,7 @@ export default async function PaymentsPage() {
       },
     }),
     db.payment.findMany({
-      where: { organizationId: orgId },
+      where: { organizationId: orgId, ...paymentWhere(scope) },
       orderBy: { createdAt: 'desc' },
       take: 25,
       select: {
@@ -67,12 +68,12 @@ export default async function PaymentsPage() {
       select: { id: true, error: true, payload: true, receivedAt: true },
     }),
     db.payment.aggregate({
-      where: { organizationId: orgId, status: { in: ['CAPTURED', 'PARTIALLY_REFUNDED'] } },
+      where: { organizationId: orgId, status: { in: ['CAPTURED', 'PARTIALLY_REFUNDED'] }, ...paymentWhere(scope) },
       _sum: { amountPaise: true },
       _count: true,
     }),
     db.order.aggregate({
-      where: { organizationId: orgId, status: 'PENDING' },
+      where: { organizationId: orgId, status: 'PENDING', ...orderWhere(scope) },
       _sum: { totalPaise: true },
       _count: true,
     }),

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { batchWhere, branchWhere, scopeNote, staffScope } from '@/lib/scope';
 import { Badge, Card, Cell, EmptyState, PageHeader, ProgressRing, Row, Table } from '@/components/ui';
 import { NewBatchForm, BatchStatus } from './editors';
 
@@ -11,6 +12,7 @@ export default async function BatchesPage() {
   const tenant = await requireTenant();
   const me = await requireStaff('batches.batch_management', 'view');
   const canEdit = me.permissions['batches.batch_management']?.edit ?? false;
+  const scope = await staffScope(me);
 
   const [courses, branches] = await Promise.all([
     db.course.findMany({
@@ -18,14 +20,14 @@ export default async function BatchesPage() {
       select: { id: true, product: { select: { title: true } } },
     }),
     db.branch.findMany({
-      where: { organizationId: tenant.organizationId, isActive: true },
+      where: { organizationId: tenant.organizationId, isActive: true, ...branchWhere(scope) },
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
     }),
   ]);
 
   const batches = await db.batch.findMany({
-    where: { organizationId: tenant.organizationId, deletedAt: null },
+    where: { organizationId: tenant.organizationId, deletedAt: null, ...batchWhere(scope) },
     include: {
       course: { include: { product: { select: { title: true } } } },
       _count: { select: { enrollments: true, sessions: true } },
@@ -38,7 +40,7 @@ export default async function BatchesPage() {
     <div>
       <PageHeader
         title="Batches"
-        description="A batch is a cohort running a course on a schedule, with its own learners and sessions."
+        description={`A batch is a cohort running a course on a schedule, with its own learners and sessions.${scopeNote(scope) ? ` ${scopeNote(scope)}` : ''}`}
       />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
