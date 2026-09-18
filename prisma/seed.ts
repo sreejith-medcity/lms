@@ -20,7 +20,7 @@ const NOTIFICATION_EVENTS = [
   'session.scheduled', 'session.updated', 'session.manual_reminder',
   'session.reminder', 'session.start', 'session.holiday', 'session.cancelled',
   'session.absentee',
-  'attendance.absent', 'attendance.late', 'attendance.corrected',
+  'attendance.absent', 'attendance.late', 'attendance.corrected', 'result.published',
   // Payments
   'payment.received', 'payment.reminder', 'payment.failed', 'payment.refunded',
   // Courses

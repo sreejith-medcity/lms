@@ -8,6 +8,7 @@ import { curriculumGate } from '@/lib/curriculum-access';
 import { settingText } from '@/lib/settings/store';
 import { redirectResponse } from '@/lib/http-headers';
 import { assignmentsWhereFor, learnerEnrolments } from '@/lib/assignment-access';
+import { getParentSession } from '@/lib/parent-session';
 import { playbackFor } from '@/lib/video';
 
 export const dynamic = 'force-dynamic';
@@ -132,6 +133,25 @@ export async function GET(
   // Anyone, signed in or not, may see a material marked as a free preview.
   const freePreview = asset.materials.some((m) => m.isFreePreview);
   if (!allowed && freePreview) allowed = true;
+
+  // A parent may open a file on a mark sheet that is published, current,
+  // and carries a line for a child they are linked to. Draft, submitted,
+  // returned and superseded sheets are invisible here as everywhere.
+  if (!allowed && !user) {
+    const parent = await getParentSession();
+    if (parent && parent.organizationId === tenant.organizationId) {
+      const onSheet = await db.markSheet.count({
+        where: {
+          organizationId: tenant.organizationId,
+          status: 'PUBLISHED',
+          supersededById: null,
+          assetIds: { has: asset.id },
+          entries: { some: { user: { parentLinks: { some: { organizationId: tenant.organizationId, contact: parent.contact, status: 'ACTIVE' } } } } },
+        },
+      });
+      if (onSheet > 0) allowed = true;
+    }
+  }
 
   // What a person uploaded themselves they may read back: a hand-in, a
   // recorded answer, a photo of working. Staff uploads are covered above.

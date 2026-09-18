@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
+import { batchWhere, staffScope } from '@/lib/scope';
+import { DrawSheet } from './draw-sheet';
 import { parseBlueprint } from '@/lib/paper-blueprint';
 import { Badge, Card } from '@/components/ui';
 import { SettingsForm, QuestionPicker, CoursePicker, PaperList, RedrawButton, SectionsPanel } from './editors';
@@ -13,7 +15,7 @@ export const metadata = { robots: { index: false, follow: false } };
 export default async function AssessmentDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const tenant = await requireTenant();
-  await requireStaff('courses.assessments', 'view');
+  const me = await requireStaff('courses.assessments', 'view');
 
   const assessment = await db.assessment.findFirst({
     where: { id, organizationId: tenant.organizationId },
@@ -27,6 +29,9 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
       passPercent: true,
       shuffleQuestions: true,
       showResultsImmediately: true,
+      category: true,
+      skill: true,
+      level: true,
       blueprint: true,
       courses: { select: { courseId: true } },
       sections: { orderBy: { sortOrder: 'asc' }, select: { id: true, title: true, instructions: true, durationMinutes: true, _count: { select: { questions: true } } } },
@@ -51,6 +56,12 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
     },
   });
   if (!assessment) notFound();
+
+  const sheetBatches = await db.batch.findMany({
+    where: { organizationId: tenant.organizationId, deletedAt: null, courseId: { in: assessment.courses.map((c) => c.courseId) }, status: { in: ['ACTIVE', 'UPCOMING', 'COMPLETED'] }, ...batchWhere(await staffScope(me)) },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  });
 
   const recipe = parseBlueprint(((assessment.blueprint ?? {}) as { sections?: unknown }).sections);
 
@@ -145,6 +156,17 @@ export default async function AssessmentDetail({ params }: { params: Promise<{ i
             <h2 className="t-heading">Settings</h2>
             <div className="mt-5">
               <SettingsForm assessment={assessment} />
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="t-heading">To parents</h2>
+            <p className="t-small muted mt-1">
+              Marks reach a parent only through a mark sheet the Branch Head has published. Draw one from this paper&rsquo;s
+              evaluated attempts for a batch, check it, submit it.
+            </p>
+            <div className="mt-4">
+              <DrawSheet assessmentId={assessment.id} batches={sheetBatches} />
             </div>
           </Card>
 

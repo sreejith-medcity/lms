@@ -31,10 +31,12 @@ export async function childOverview(organizationId: string, childId: string, now
       select: { instalments: { select: { amountPaise: true, paidPaise: true, dueDate: true, paidAt: true } } },
     }),
     db.miscFee.findMany({ where: { organizationId, userId: childId, status: 'PENDING' }, select: { amountPaise: true, dueDate: true, status: true } }),
-    db.attempt.findFirst({
-      where: { userId: childId, status: { in: ['SUBMITTED', 'EVALUATED'] }, assessment: { organizationId } },
-      orderBy: { submittedAt: 'desc' },
-      select: { scorePercent: true, passed: true, assessment: { select: { title: true } } },
+    // Only what the Branch Head has published; a paper still being marked
+    // or waiting for approval does not exist from here.
+    db.markSheetEntry.findFirst({
+      where: { userId: childId, sheet: { organizationId, status: 'PUBLISHED', supersededById: null } },
+      orderBy: { sheet: { publishedAt: 'desc' } },
+      select: { outcome: true, marks: true, passed: true, sheet: { select: { title: true, maxMarks: true } } },
     }),
     db.enrollment.findMany({ where: { organizationId, userId: childId, status: { in: ['REGISTERED', 'ENROLLED', 'ON_LEAVE'] }, batchId: { not: null } }, select: { batchId: true } }),
   ]);
@@ -67,7 +69,9 @@ export async function childOverview(organizationId: string, childId: string, now
     feesOpenPaise,
     feesOverduePaise,
     nextClassAt: next?.startsAt ?? null,
-    latestMark: attempts ? { title: attempts.assessment.title, scorePercent: attempts.scorePercent, passed: attempts.passed } : null,
+    latestMark: attempts
+      ? { title: attempts.sheet.title, scorePercent: attempts.outcome === 'SCORED' && attempts.marks !== null ? Math.round((attempts.marks / attempts.sheet.maxMarks) * 1000) / 10 : null, passed: attempts.passed }
+      : null,
   };
 }
 
@@ -112,11 +116,11 @@ export async function childDetail(organizationId: string, childId: string, now =
       take: 20,
       select: { id: true, label: true, amountPaise: true, dueDate: true, status: true, paidAt: true, enrollment: { select: { product: { select: { title: true } } } } },
     }),
-    db.attempt.findMany({
-      where: { userId: childId, status: { in: ['SUBMITTED', 'EVALUATED'] }, assessment: { organizationId } },
-      orderBy: { submittedAt: 'desc' },
-      take: 30,
-      select: { id: true, scorePercent: true, passed: true, submittedAt: true, status: true, assessment: { select: { title: true, passPercent: true } } },
+    db.markSheetEntry.findMany({
+      where: { userId: childId, sheet: { organizationId, status: 'PUBLISHED', supersededById: null } },
+      orderBy: { sheet: { testDate: 'desc' } },
+      take: 40,
+      select: { id: true, outcome: true, marks: true, grade: true, passed: true, remark: true, sheet: { select: { id: true, title: true, category: true, skill: true, level: true, testDate: true, maxMarks: true, passPercent: true, publishedAt: true, version: true, assetIds: true } } },
     }),
     db.reportCard.findMany({
       where: { organizationId, userId: childId },
@@ -132,7 +136,27 @@ export async function childDetail(organizationId: string, childId: string, now =
     }),
   ]);
 
-  const marks = attempts.map((a) => ({ id: a.id, title: a.assessment.title, scorePercent: a.status === 'EVALUATED' ? a.scorePercent : null, passed: a.status === 'EVALUATED' ? a.passed : null, submittedAt: a.submittedAt, passPercent: a.assessment.passPercent, marked: a.status === 'EVALUATED' }));
+  const marks = attempts.map((a) => ({
+    id: a.id,
+    title: a.sheet.title,
+    category: a.sheet.category,
+    skill: a.sheet.skill,
+    level: a.sheet.level,
+    outcome: a.outcome,
+    marks: a.outcome === 'SCORED' ? a.marks : null,
+    maxMarks: a.sheet.maxMarks,
+    scorePercent: a.outcome === 'SCORED' && a.marks !== null ? Math.round((a.marks / a.sheet.maxMarks) * 1000) / 10 : null,
+    grade: a.grade,
+    passed: a.outcome === 'SCORED' ? a.passed : null,
+    // A remark on a published sheet passed the same gate as the mark.
+    remark: a.remark,
+    submittedAt: a.sheet.testDate,
+    publishedAt: a.sheet.publishedAt,
+    passPercent: a.sheet.passPercent,
+    marked: a.outcome === 'SCORED',
+    corrected: a.sheet.version > 1,
+    files: a.sheet.assetIds,
+  }));
 
   return {
     enrolments,

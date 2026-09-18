@@ -342,6 +342,9 @@ const assessment = z.object({
   passPercent: z.coerce.number().min(0).max(100),
   shuffleQuestions: z.boolean(),
   showResultsImmediately: z.boolean(),
+  category: z.string().trim().max(60).optional().or(z.literal('')),
+  skill: z.string().trim().max(60).optional().or(z.literal('')),
+  level: z.string().trim().max(60).optional().or(z.literal('')),
 });
 
 export async function createAssessment(
@@ -419,6 +422,9 @@ export async function updateAssessment(
       passPercent: formData.get('passPercent') || 40,
       shuffleQuestions: formData.get('shuffleQuestions') === 'on',
       showResultsImmediately: formData.get('showResultsImmediately') === 'on',
+      category: formData.get('category') || '',
+      skill: formData.get('skill') || '',
+      level: formData.get('level') || '',
     });
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -435,6 +441,9 @@ export async function updateAssessment(
         passPercent: d.passPercent,
         shuffleQuestions: d.shuffleQuestions,
         showResultsImmediately: d.showResultsImmediately,
+        category: d.category || null,
+        skill: d.skill || null,
+        level: d.level || null,
       },
     });
 

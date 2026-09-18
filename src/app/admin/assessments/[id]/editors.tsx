@@ -55,6 +55,9 @@ export function SettingsForm({
     passPercent: number;
     shuffleQuestions: boolean;
     showResultsImmediately: boolean;
+    category: string | null;
+    skill: string | null;
+    level: string | null;
   };
 }) {
   const [state, action, pending] = useActionState(updateAssessment, initial);
@@ -94,6 +97,18 @@ export function SettingsForm({
         </Field>
         <Field label="Pass %">
           <Input name="passPercent" type="number" min={0} max={100} defaultValue={assessment.passPercent} />
+        </Field>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Kind of test" hint="Class Test, Mock Test, Final Examination: how a parent's trend groups it">
+          <Input name="category" maxLength={60} defaultValue={assessment.category ?? ''} placeholder="Class Test" />
+        </Field>
+        <Field label="Skill" hint="Reading, Speaking; blank for the whole test">
+          <Input name="skill" maxLength={60} defaultValue={assessment.skill ?? ''} />
+        </Field>
+        <Field label="Level" hint="A1, Module 3">
+          <Input name="level" maxLength={60} defaultValue={assessment.level ?? ''} />
         </Field>
       </div>
 

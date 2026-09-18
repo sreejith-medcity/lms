@@ -55,6 +55,7 @@ export const SETTING_GROUPS = [
   { key: 'ai', label: 'The AI examiner', blurb: 'What learners may practise with it, and how much.' },
   { key: 'messaging', label: 'Messaging', blurb: 'When promotional messages may go out, and when they wait.' },
   { key: 'attendance', label: 'Attendance', blurb: 'What counts as late, when an online no-show is absent, and how long a register may be corrected.' },
+  { key: 'academics', label: 'Marks and approval', blurb: 'What reaches a parent only after the Branch Head has approved it.' },
 ] as const;
 
 export type SettingGroupKey = (typeof SETTING_GROUPS)[number]['key'];
@@ -592,6 +593,26 @@ export const SETTINGS: SettingDef[] = [
     group: 'attendance',
     label: 'Tell parents at once when their child is absent or late',
     help: 'One message per child, class and status, sent the moment a register is confirmed or the platform reports it. Off means attendance still records and shows in the parent view, but nothing is sent.',
+    kind: 'boolean',
+    default: true,
+    live: true,
+  },
+
+  /* Academics ----------------------------------------------------------------- */
+  {
+    key: 'academics.gateRemarks',
+    group: 'academics',
+    label: 'Teacher remarks and homework feedback wait for approval too',
+    help: 'On, a remark or homework feedback reaches a parent only through a published mark sheet, the same gate as marks. Off, homework feedback shows to parents as soon as the teacher writes it; marks still wait.',
+    kind: 'boolean',
+    default: true,
+    live: true,
+  },
+  {
+    key: 'academics.notifyResults',
+    group: 'academics',
+    label: 'Tell parents when a result is published',
+    help: 'One message per child and sheet, the moment the Branch Head publishes. Off, results still appear in the parent view without a message.',
     kind: 'boolean',
     default: true,
     live: true,

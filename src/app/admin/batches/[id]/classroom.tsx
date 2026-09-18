@@ -160,7 +160,19 @@ export function Classroom(props: Props) {
           siblings={props.siblings}
         />
       )}
-      {tab === 'Classes' && <Classes sessions={props.sessions} roster={props.roster} />}
+      {tab === 'Classes' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/admin/marksheets/new?batch=${props.batch.id}`} className="t-small rounded-[var(--radius-sm)] border px-3 py-2 font-medium hover:bg-[var(--surface-2)]">
+              New mark sheet for this batch →
+            </Link>
+            <Link href="/admin/register" className="t-small rounded-[var(--radius-sm)] border px-3 py-2 font-medium hover:bg-[var(--surface-2)]">
+              Register →
+            </Link>
+          </div>
+          <Classes sessions={props.sessions} roster={props.roster} />
+        </div>
+      )}
       {tab === 'Curriculum' && (
         <Curriculum
           batchId={props.batch.id}

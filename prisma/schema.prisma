@@ -256,6 +256,7 @@ model User {
   deviceTokens         DeviceToken[]
   streaks              LearnerStreak[]
   parentLinks          ParentLink[]
+  markSheetEntries     MarkSheetEntry[]
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
   @@unique([organizationId, email])
@@ -1374,6 +1375,8 @@ model Batch {
   announcements AnnouncementTarget[]
 
   assignments   Assignment[]
+  markSheets    MarkSheet[]
+
   @@index([organizationId, status])
   @@index([courseId])
   @@map("batches")
@@ -2090,6 +2093,13 @@ model Assessment {
   organizationId         String
   title                  String
   kind                   AssessmentKind @default(TEST)
+  /// The kind of test in the program's terms (Class Test, Mock Test, Final
+  /// Examination), the skill it assesses and the level it belongs to, so
+  /// a parent's trend compares like with like. Free when the course has no
+  /// program.
+  category               String?
+  skill                  String?
+  level                  String?
   instructions           String?
   durationMinutes        Int?
   maxAttempts            Int            @default(1)
@@ -2113,6 +2123,7 @@ model Assessment {
   attempts  Attempt[]
   grants    AssessmentGrant[]
   pools     AssessmentPoolItem[]
+  markSheets MarkSheet[]
 
   @@index([organizationId])
   @@map("assessments")
@@ -2571,6 +2582,13 @@ model AssignmentSubmission {
   feedback       String?
   gradedAt       DateTime?
   gradedById     String?
+  /// The teacher's verification of homework, a status without a mark:
+  /// complete, incomplete, or hand it in again. Null means not yet looked
+  /// at. Reaches a parent only through a published mark sheet or the
+  /// progress view's gate.
+  verification   HomeworkVerification?
+  verifiedAt     DateTime?
+  verifiedById   String?
 
   assignment Assignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2590,6 +2608,104 @@ enum AssignmentSubmissionStatus {
   GRADED
   /// Sent back for another go without a mark.
   RETURNED
+}
+
+enum HomeworkVerification {
+  COMPLETE
+  INCOMPLETE
+  RESUBMIT
+}
+
+// ---------------------------------------------------------------------------
+// MARK SHEETS AND THE APPROVAL GATE
+// ---------------------------------------------------------------------------
+
+/// A batch's marks for one test, entered by a teacher and published by the
+/// batch's Branch Head. Nothing academic reaches a parent except through a
+/// PUBLISHED sheet: a test sat on paper is typed in here; a test sat online
+/// is drawn in from its evaluated attempts; a report card and the parent
+/// view read only what was published. A correction after publication is a
+/// new sheet that supersedes this one once it is approved in turn, so both
+/// versions and the reason stay.
+model MarkSheet {
+  id               String          @id @default(cuid())
+  organizationId   String
+  batchId          String
+  /// The online paper this sheet was drawn from, when it was one.
+  assessmentId     String?
+  title            String
+  category         String
+  skill            String?
+  level            String?
+  testDate         DateTime
+  maxMarks         Float
+  /// Percentage that passes; from the program, else the academy's default.
+  passPercent      Float?
+  status           MarkSheetStatus @default(DRAFT)
+  /// Files the teacher attached: the question paper, a scan of the marks.
+  assetIds         String[]        @default([])
+  createdById      String?
+  submittedAt      DateTime?
+  submittedById    String?
+  decidedAt        DateTime?
+  decidedById      String?
+  returnReason     String?
+  publishedAt      DateTime?
+  /// The published sheet this one corrects, and the reason.
+  supersedesId     String?         @unique
+  correctionReason String?
+  /// Set on the older sheet once its correction is published.
+  supersededById   String?
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  batch      Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  assessment Assessment?      @relation(fields: [assessmentId], references: [id], onDelete: SetNull)
+  supersedes MarkSheet?       @relation("MarkSheetVersions", fields: [supersedesId], references: [id], onDelete: SetNull)
+  corrected  MarkSheet?       @relation("MarkSheetVersions")
+  entries    MarkSheetEntry[]
+
+  @@index([organizationId, status, submittedAt])
+  @@index([organizationId, batchId, status])
+  @@map("mark_sheets")
+}
+
+enum MarkSheetStatus {
+  DRAFT
+  SUBMITTED
+  RETURNED
+  PUBLISHED
+}
+
+/// One learner's line on a sheet. `outcome` keeps Absent and Not assessed
+/// apart from a score of zero, which is the difference between a learner
+/// who was ill and one who failed.
+model MarkSheetEntry {
+  id       String           @id @default(cuid())
+  sheetId  String
+  userId   String
+  outcome  MarkOutcome      @default(NOT_ASSESSED)
+  marks    Float?
+  grade    String?
+  passed   Boolean?
+  /// Seen by the parent once published.
+  remark   String?
+  /// An override of the computed grade or pass, with the reason it was made.
+  override String?
+
+  sheet MarkSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sheetId, userId])
+  @@index([userId])
+  @@map("mark_sheet_entries")
+}
+
+enum MarkOutcome {
+  SCORED
+  ABSENT
+  NOT_ASSESSED
 }
 
 /// A file the learner handed in.

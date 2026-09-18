@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { DEFAULT_BANDS, parseBands } from '@/lib/grading';
-import { bestAttempts, buildReportCard, latestGraded, type ReportCardData } from '@/lib/report-card';
+import { buildReportCard, latestGraded, type ReportCardData } from '@/lib/report-card';
 import { dayKey, formatDayLabel } from '@/lib/clock';
 
 /**
@@ -45,15 +45,18 @@ export async function gatherReportCard(input: {
           select: { id: true, attendances: { where: { userId: enrolment.userId }, select: { status: true } } },
         })
       : Promise.resolve([]),
-    courseId
-      ? db.attempt.findMany({
+    // Tests are what the Branch Head published for this batch in the
+    // period, and only that: a sheet still waiting for approval, or one
+    // that a correction replaced, is not on the card.
+    enrolment.batchId
+      ? db.markSheetEntry.findMany({
           where: {
             userId: enrolment.userId,
-            status: 'EVALUATED',
-            submittedAt: window,
-            assessment: { organizationId: input.organizationId, courses: { some: { courseId } } },
+            outcome: 'SCORED',
+            marks: { not: null },
+            sheet: { organizationId: input.organizationId, batchId: enrolment.batchId, status: 'PUBLISHED', supersededById: null, testDate: window },
           },
-          select: { assessmentId: true, scorePercent: true, passed: true, submittedAt: true, assessment: { select: { title: true } } },
+          select: { sheetId: true, marks: true, passed: true, sheet: { select: { title: true, maxMarks: true, testDate: true } } },
         })
       : Promise.resolve([]),
     courseId
@@ -71,7 +74,7 @@ export async function gatherReportCard(input: {
 
   const data = buildReportCard({
     attendance: { held, attended, late },
-    tests: bestAttempts(attempts).map((a) => ({ title: a.assessment.title, percent: a.scorePercent ?? 0, passed: a.passed, on: a.submittedAt ? on(a.submittedAt) : '' })),
+    tests: attempts.map((a) => ({ title: a.sheet.title, percent: a.marks !== null ? Math.round((a.marks / a.sheet.maxMarks) * 1000) / 10 : 0, passed: a.passed, on: on(a.sheet.testDate) })),
     homework: latestGraded(handIns).map((h) => ({ title: h.assignment.title, marks: h.marks ?? 0, maxMarks: h.assignment.maxMarks, on: h.gradedAt ? on(h.gradedAt) : '' })),
     bands: scale ? parseBands(scale.bands) : DEFAULT_BANDS,
   });

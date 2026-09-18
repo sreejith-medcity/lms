@@ -182,17 +182,46 @@ export default async function ChildPage({ params }: { params: Promise<{ childId:
             )}
           </div>
           {d.marks.length === 0 ? (
-            <p className="t-small faint mt-2">No tests taken yet.</p>
+            <p className="t-small faint mt-2">No results published yet. A result appears here once the branch has approved it.</p>
           ) : (
             <div className="mt-3">
-              <Table head={['Test', 'Taken', 'Score', 'Result']}>
+              <Table head={['Test', 'Date', 'Marks', 'Result']}>
                 {d.marks.map((m) => (
                   <Row key={m.id}>
-                    <Cell>{m.title}</Cell>
-                    <Cell className="tabular-nums">{m.submittedAt ? day(m.submittedAt) : '—'}</Cell>
-                    <Cell className="tabular-nums">{m.marked && m.scorePercent !== null ? `${Math.round(m.scorePercent)}%` : <span className="faint">being marked</span>}</Cell>
                     <Cell>
-                      {!m.marked ? <Badge tone="neutral">awaiting marks</Badge> : m.passed ? <Badge tone="ok">passed</Badge> : <Badge tone="bad">below {m.passPercent}%</Badge>}
+                      {m.title}
+                      <p className="t-micro faint">
+                        {m.category}
+                        {m.skill ? ` · ${m.skill}` : ''}
+                        {m.level ? ` · ${m.level}` : ''}
+                        {m.corrected ? ' · corrected' : ''}
+                      </p>
+                      {m.remark && <p className="t-small mt-1">{m.remark}</p>}
+                      {m.files.length > 0 && (
+                        <p className="t-micro mt-1">
+                          {m.files.map((f, i) => (
+                            <a key={f} href={`/api/assets/${f}`} target="_blank" rel="noreferrer" className="underline">
+                              file {i + 1}
+                            </a>
+                          ))}
+                        </p>
+                      )}
+                    </Cell>
+                    <Cell className="tabular-nums">{day(m.submittedAt)}</Cell>
+                    <Cell className="tabular-nums">
+                      {m.marked && m.marks !== null ? (
+                        <>
+                          {m.marks} / {m.maxMarks}
+                          <p className="t-micro faint">
+                            {m.scorePercent}%{m.grade ? ` · ${m.grade}` : ''}
+                          </p>
+                        </>
+                      ) : (
+                        <span className="faint">{m.outcome === 'ABSENT' ? 'absent' : 'not assessed'}</span>
+                      )}
+                    </Cell>
+                    <Cell>
+                      {!m.marked ? <Badge tone="neutral">{m.outcome === 'ABSENT' ? 'absent' : 'not assessed'}</Badge> : m.passed === true ? <Badge tone="ok">passed</Badge> : m.passed === false ? <Badge tone="bad">{m.passPercent !== null ? `below ${m.passPercent}%` : 'did not pass'}</Badge> : <Badge tone="neutral">scored</Badge>}
                     </Cell>
                   </Row>
                 ))}

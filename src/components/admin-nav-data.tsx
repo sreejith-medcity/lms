@@ -21,6 +21,8 @@ export const ADMIN_NAV: NavGroup[] = [
   { label: 'Home', href: '/admin', icon: 'home' },
   { label: 'My teaching', href: '/admin/desk', icon: 'book' },
   { label: 'Register', href: '/admin/register', icon: 'check' },
+  { label: 'Mark sheets', href: '/admin/marksheets', icon: 'chart' },
+  { label: 'Approvals', href: '/admin/approvals', icon: 'check' },
   {
     label: 'Products',
     icon: 'box',

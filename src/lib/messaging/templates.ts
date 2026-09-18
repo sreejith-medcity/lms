@@ -66,6 +66,10 @@ const DEFAULTS: Record<string, Default> = {
     subject: '{{learner}} arrived late: {{title}}',
     body: 'Hello {{name}}, {{learner}} arrived late to {{title}} on {{date}}.',
   },
+  'result.published': {
+    subject: 'Result published: {{learner}}, {{title}}',
+    body: 'Hello {{name}}, the result of {{title}} ({{category}}, {{date}}) for {{learner}} has been published. Sign in to the parent view to see the mark, the grade and the teacher\'s remark.',
+  },
   'attendance.corrected': {
     subject: 'Correction: {{learner}}, {{title}}',
     body: 'Hello {{name}}, earlier we said {{learner}} was {{was}} for {{title}} on {{date}}. That has been corrected: {{learner}} was {{status}}.',

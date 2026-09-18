@@ -144,6 +144,11 @@ export default async function AssignmentPage({ params }: { params: Promise<{ id:
             <Stat label="To mark" value={tally.toMark} tone={tally.toMark ? 'warn' : undefined} />
             <Stat label="Missing" value={tally.missing} tone={tally.missing && a.dueAt && a.dueAt < new Date() ? 'bad' : undefined} />
           </div>
+          {canMark && (
+            <Link href={`/admin/assignments/${a.id}/verify`} className="t-small block rounded-[var(--radius-sm)] border border-dashed px-3 py-2 font-medium hover:bg-[var(--surface-2)]">
+              Verify: complete, incomplete, hand in again →
+            </Link>
+          )}
           {tally.toMark > 1 && canMark && (
             <Link href={`/admin/assignments/${a.id}/mark-all`} className="t-small block rounded-[var(--radius-sm)] border border-dashed px-3 py-2 font-medium hover:bg-[var(--surface-2)]">
               Mark all {tally.toMark} on one screen →
