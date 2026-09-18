@@ -1,6 +1,6 @@
 import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
-import { queueNotifications } from '@/lib/notify';
+import { notifyParents } from '@/lib/parent-notify';
 import { happened } from '@/lib/events';
 import { settingBool, settingNumber } from '@/lib/settings/store';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
@@ -126,10 +126,12 @@ export async function alertParents(input: { organizationId: string; sessionId: s
   const key = input.kind === 'correction' ? `${alertKey(input.sessionId, input.userId, input.status)}:from:${input.previous}` : alertKey(input.sessionId, input.userId, input.status);
   const eventKey = input.kind === 'correction' ? 'attendance.corrected' : input.status === 'LATE' ? 'attendance.late' : 'attendance.absent';
 
-  const created = await db.parentNotification.createMany({
-    data: links.map((l) => ({
-      organizationId: input.organizationId,
+  const sent = await notifyParents({
+    organizationId: input.organizationId,
+    eventKey,
+    alerts: links.map((l) => ({
       contact: l.contact,
+      name: l.name,
       learnerId: input.userId,
       kind: eventKey,
       title: line.title,
@@ -137,34 +139,19 @@ export async function alertParents(input: { organizationId: string; sessionId: s
       href: `/parent/${input.userId}`,
       dedupeKey: `${key}:${l.contact}`,
     })),
-    skipDuplicates: true,
-  });
-  if (created.count === 0) return 0;
-
-  // Which contacts were new: the ones whose row now carries this key.
-  const fresh = await db.parentNotification.findMany({
-    where: { organizationId: input.organizationId, dedupeKey: { in: links.map((l) => `${key}:${l.contact}`) }, createdAt: { gte: new Date(Date.now() - 60_000) } },
-    select: { contact: true },
-  });
-  const freshContacts = new Set(fresh.map((f) => f.contact));
-  const recipients = links.filter((l) => freshContacts.has(l.contact)).map((l) => ({ userId: null, email: l.contact.includes('@') ? l.contact : null, phone: l.contact.includes('@') ? null : l.contact, name: l.name }));
-
-  await queueNotifications({
-    organizationId: input.organizationId,
-    eventKey,
-    recipients: recipients.map(({ name: _n, ...r }) => r),
     context: { learner: learner.name, title: session.title, date: when, status: input.status.toLowerCase(), was: (input.previous ?? '').toLowerCase(), batch: session.batch?.name ?? '', organization: organization?.name ?? '' },
-    contextFor: (person) => ({ name: recipients.find((r) => r.email === person.email && r.phone === person.phone)?.name ?? 'Parent' }),
+    pushBody: `About ${learner.name}. Open the parent view to read it.`,
   });
+  if (sent.written === 0) return 0;
 
   await happened({
     organizationId: input.organizationId,
     key: eventKey,
     userId: input.userId,
     subjectId: input.sessionId,
-    data: { status: input.status, previous: input.previous ?? '', parents: String(recipients.length) },
+    data: { status: input.status, previous: input.previous ?? '', parents: String(sent.written) },
   });
-  return recipients.length;
+  return sent.written;
 }
 
 /** The late threshold for a class: the program's, else the academy's. */

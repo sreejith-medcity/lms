@@ -1,8 +1,10 @@
 import { cache } from 'react';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { randomBytes } from 'node:crypto';
 import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
+import { settingNumber } from '@/lib/settings/store';
 
 /**
  * The parent's session: a cookie of its own, separate from a learner's or
@@ -11,7 +13,6 @@ import { getTenantContext } from '@/lib/tenant';
  */
 
 export const PARENT_COOKIE = 'mlms_parent';
-const SESSION_DAYS = 30;
 
 export interface ParentSession {
   id: string;
@@ -22,17 +23,42 @@ export interface ParentSession {
 export const getParentSession = cache(async (): Promise<ParentSession | null> => {
   const token = (await cookies()).get(PARENT_COOKIE)?.value;
   if (!token) return null;
-  const row = await db.parentSession.findUnique({ where: { token }, select: { id: true, organizationId: true, contact: true, expiresAt: true } });
+  const row = await db.parentSession.findUnique({ where: { token }, select: { id: true, organizationId: true, contact: true, expiresAt: true, lastSeenAt: true } });
   if (!row || row.expiresAt < new Date()) return null;
   const tenant = await getTenantContext();
   if (!tenant || row.organizationId !== tenant.organizationId) return null;
+  // "Last seen" on the account page, kept to the hour so a busy page is not a write per request.
+  if (Date.now() - row.lastSeenAt.getTime() > 36e5) {
+    db.parentSession.update({ where: { id: row.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
+  }
   return { id: row.id, organizationId: row.organizationId, contact: row.contact };
 });
 
+/**
+ * The session, or a redirect to sign in that says why: a phone that held a
+ * session which has since expired or been signed out everywhere lands on
+ * "signed out" rather than a blank sign-in, so a parent who did nothing
+ * wrong is told so.
+ */
+export async function requireParentSession(): Promise<ParentSession> {
+  const session = await getParentSession();
+  if (session) return session;
+  const hadCookie = Boolean((await cookies()).get(PARENT_COOKIE)?.value);
+  redirect(hadCookie ? '/parent/login?expired=1' : '/parent/login');
+}
+
+/** Sign this contact out of every device, this one included. */
+export async function endAllParentSessions(organizationId: string, contact: string): Promise<number> {
+  const r = await db.parentSession.deleteMany({ where: { organizationId, contact } });
+  return r.count;
+}
+
 export async function issueParentSession(organizationId: string, contact: string): Promise<void> {
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
-  await db.parentSession.create({ data: { organizationId, contact, token, expiresAt } });
+  const days = await settingNumber(organizationId, 'auth.parentSessionDays').catch(() => 30);
+  const expiresAt = new Date(Date.now() + Math.max(1, days || 30) * 864e5);
+  const userAgent = (await headers()).get('user-agent')?.slice(0, 300) ?? null;
+  await db.parentSession.create({ data: { organizationId, contact, token, expiresAt, userAgent } });
   (await cookies()).set(PARENT_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',

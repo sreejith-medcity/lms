@@ -5,7 +5,7 @@ import { getTenantContext } from '@/lib/tenant';
 import { meter } from '@/lib/usage';
 import { readUrlFor, storageConfigured } from '@/lib/storage';
 import { curriculumGate } from '@/lib/curriculum-access';
-import { settingText } from '@/lib/settings/store';
+import { settingBool, settingText } from '@/lib/settings/store';
 import { redirectResponse } from '@/lib/http-headers';
 import { assignmentsWhereFor, learnerEnrolments } from '@/lib/assignment-access';
 import { getParentSession } from '@/lib/parent-session';
@@ -150,6 +150,14 @@ export async function GET(
         },
       });
       if (onSheet > 0) allowed = true;
+      // Or a file on a published notice that reached this parent.
+      if (!allowed) {
+        const notices = await db.notice.findMany({ where: { organizationId: tenant.organizationId, status: 'PUBLISHED', assetIds: { has: asset.id } }, select: { id: true } });
+        if (notices.length > 0) {
+          const reached = await db.parentNotification.count({ where: { organizationId: tenant.organizationId, contact: parent.contact, noticeId: { in: notices.map((n) => n.id) } } });
+          if (reached > 0) allowed = true;
+        }
+      }
     }
   }
 
@@ -322,6 +330,9 @@ export async function GET(
 
   const wantsDownload = query.get('download') === '1';
   const downloadAllowed = asset.materials.some((m) => m.isDownloadable);
+  // A teacher's phone keeps nothing unless the academy says it may: the
+  // file opens for viewing, and is never offered as a download.
+  const staffMayDownload = user?.kind === 'STAFF' && (!user.restrictBatchAccess || (await settingBool(tenant.organizationId, 'notices.teacherDownloads')));
 
   // A ninety-minute class outlives a five-minute link, and the player would stall
   // on the first seek past the expiry. Media gets two hours; everything else stays
@@ -331,7 +342,7 @@ export async function GET(
   const url = readUrlFor(asset.storageKey, {
     expiresIn: streaming ? 7200 : 300,
     mimeType: asset.mimeType,
-    downloadName: wantsDownload && (downloadAllowed || user?.kind === 'STAFF') ? asset.fileName : null,
+    downloadName: wantsDownload && (downloadAllowed || staffMayDownload) ? asset.fileName : null,
   });
 
   // Egress is estimated per full fetch until CDN logs feed this properly. Range

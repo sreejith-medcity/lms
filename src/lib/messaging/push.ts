@@ -57,3 +57,34 @@ export async function pushToUser(organizationId: string, userId: string, payload
   }
   return { sent, gone, failed };
 }
+
+/**
+ * The same, for a parent: their browsers are keyed on the contact they sign
+ * in with, since a parent is not a User. The lock-screen text is generic by
+ * default (the title says which child, never the mark or the absence) so a
+ * glance at a phone on a table gives nothing away.
+ */
+export async function pushToParent(organizationId: string, contact: string, payload: PushPayload): Promise<{ sent: number; gone: number; failed: string[] }> {
+  if (!pushConfigured()) return { sent: 0, gone: 0, failed: ['Web push keys are not set.'] };
+  configure();
+  const subs = await db.parentPushSubscription.findMany({ where: { organizationId, contact }, select: { id: true, endpoint: true, p256dh: true, auth: true } });
+  let sent = 0;
+  let gone = 0;
+  const failed: string[] = [];
+  for (const s of subs) {
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: 60 * 60 * 24 });
+      sent += 1;
+      await db.parentPushSubscription.update({ where: { id: s.id }, data: { lastUsedAt: new Date() } });
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 404 || status === 410) {
+        gone += 1;
+        await db.parentPushSubscription.delete({ where: { id: s.id } }).catch(() => undefined);
+      } else {
+        failed.push(err instanceof Error ? err.message.slice(0, 120) : String(err));
+      }
+    }
+  }
+  return { sent, gone, failed };
+}

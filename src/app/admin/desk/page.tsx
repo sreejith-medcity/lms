@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
-import { formatDateTime, formatTime, dayKey } from '@/lib/clock';
+import { formatDateTime, formatTime, dayKey, dayStart, dayEnd, todayKey, formatDayLabel } from '@/lib/clock';
+import { teacherDesk } from '@/lib/teacher-desk';
 import { PAYOUT_STATUS_LABEL, hoursLabel, monthWindow } from '@/lib/payouts';
 import { myDesk } from '@/lib/teaching-data';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
@@ -25,7 +26,12 @@ export default async function DeskPage() {
   const now = new Date();
   const monthKey = dayKey(now, tenant.timezone).slice(0, 7);
   const month = monthWindow(monthKey, tenant.timezone)!;
-  const d = await myDesk(tenant.organizationId, me.id, now, month.from, month.to);
+  const todayK = todayKey(tenant.timezone);
+  const [d, t] = await Promise.all([
+    myDesk(tenant.organizationId, me.id, now, month.from, month.to),
+    teacherDesk(tenant.organizationId, me.id, now, dayStart(todayK, tenant.timezone), dayEnd(todayK, tenant.timezone)),
+  ]);
+  const sheetsWaiting = t.sheets.drafts + t.sheets.returned;
   const label = (from: Date) => monthWindow(dayKey(new Date(from.getTime() + 36e5 * 36), tenant.timezone).slice(0, 7), tenant.timezone)?.label ?? '';
 
   const waiting = d.toMark + d.homeworkToMark + d.questionsWaiting;
@@ -49,6 +55,51 @@ export default async function DeskPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <div className="space-y-6">
+            <Card>
+              <h2 className="t-heading">Today</h2>
+              {t.today.length === 0 ? (
+                <p className="t-small faint mt-2">No class of yours today.</p>
+              ) : (
+                <ul className="mt-3 divide-y">
+                  {t.today.map((s) => (
+                    <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {s.title}
+                          {s.status === 'LIVE' && <Badge tone="ok"> live now</Badge>}
+                        </p>
+                        <p className="t-small faint">{s.batch} · {formatTime(s.startsAt, tenant.timezone)} to {formatTime(s.endsAt, tenant.timezone)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {s.registered ? <Badge tone="ok">register confirmed</Badge> : s.endsAt <= now || s.status === 'LIVE' || s.status === 'COMPLETED' ? (
+                          <Link href={`/admin/register/${s.id}`} className="rounded-[var(--radius-sm)] px-2.5 py-1 text-xs font-medium text-[var(--brand-ink)]" style={{ background: 'var(--brand)' }}>
+                            Take register
+                          </Link>
+                        ) : (
+                          <Link href={`/admin/register/${s.id}`} className="rounded-[var(--radius-sm)] border px-2.5 py-1 text-xs hover:bg-[var(--surface-2)]">
+                            Register
+                          </Link>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {t.registersWaiting.length > 0 && (
+                <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--warn)] px-3 py-2" style={{ background: 'var(--warn-soft)' }}>
+                  <p className="t-small font-medium">{t.registersWaiting.length} register{t.registersWaiting.length === 1 ? '' : 's'} not confirmed yet</p>
+                  <ul className="mt-1 space-y-1">
+                    {t.registersWaiting.slice(0, 5).map((s) => (
+                      <li key={s.id} className="t-small">
+                        <Link href={`/admin/register/${s.id}`} className="underline">{s.title}</Link> · {s.batch} · {formatDayLabel(dayKey(s.startsAt, tenant.timezone), tenant.timezone)}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="t-micro faint mt-1">Parents are told about an absence only when a register is confirmed. Every class of the last seven days should be here as confirmed.</p>
+                </div>
+              )}
+            </Card>
+
             <Card>
               <h2 className="t-heading">Coming up</h2>
               {d.upcoming.length === 0 ? (
@@ -98,6 +149,39 @@ export default async function DeskPage() {
           </div>
 
           <div className="space-y-6">
+            <Card>
+              <h2 className="t-heading">Mark sheets</h2>
+              <ul className="mt-3 space-y-2">
+                <li className="flex items-center justify-between gap-2 text-sm">
+                  <Link href="/admin/marksheets" className="hover:underline">Drafts to finish</Link>
+                  <span className="tabular-nums font-medium">{t.sheets.drafts}</span>
+                </li>
+                <li className="flex items-center justify-between gap-2 text-sm">
+                  <Link href="/admin/marksheets" className="hover:underline">Sent back to you</Link>
+                  <span className="tabular-nums font-medium">{t.sheets.returned}</span>
+                </li>
+                <li className="flex items-center justify-between gap-2 text-sm">
+                  <Link href="/admin/marksheets" className="hover:underline">Waiting for approval</Link>
+                  <span className="tabular-nums font-medium">{t.sheets.awaiting}</span>
+                </li>
+                <li className="flex items-center justify-between gap-2 text-sm">
+                  <Link href="/admin/assignments" className="hover:underline">Homework to verify</Link>
+                  <span className="tabular-nums font-medium">{t.homeworkToVerify}</span>
+                </li>
+              </ul>
+              {t.sheets.returnedList.length > 0 && (
+                <ul className="mt-3 space-y-1.5 border-t pt-3">
+                  {t.sheets.returnedList.map((r) => (
+                    <li key={r.id} className="t-small">
+                      <Link href={`/admin/marksheets/${r.id}`} className="font-medium underline">{r.title}</Link> · {r.batch}
+                      {r.reason && <p className="t-micro faint">Returned: {r.reason}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {sheetsWaiting === 0 && t.sheets.awaiting === 0 && <p className="t-micro faint mt-2">Nothing open. A sheet reaches parents only once the Branch Head approves it.</p>}
+            </Card>
+
             <Card>
               <h2 className="t-heading">To mark</h2>
               <ul className="mt-3 space-y-2">

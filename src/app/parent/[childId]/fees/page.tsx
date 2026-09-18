@@ -1,8 +1,7 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
-import { childOf, getParentSession } from '@/lib/parent-session';
+import { childOf, requireParentSession } from '@/lib/parent-session';
 import { balanceOf, summariseAccount } from '@/lib/dues';
 import { feeStatusLabel } from '@/lib/misc-fees';
 import { failedOrders, inFlightFor, instalmentState, payOffer, processingOrders } from '@/lib/parent-fees';
@@ -11,6 +10,9 @@ import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { paymentsAvailable } from '@/lib/payments';
 import { Badge, Card, Cell, Row, Table } from '@/components/ui';
 import { ParentPay } from './pay';
+
+import { AccessRemoved } from '../../access-removed';
+import { ChildTabs } from '../../child-tabs';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Fees', robots: { index: false, follow: false } };
@@ -26,10 +28,9 @@ export const metadata = { title: 'Fees', robots: { index: false, follow: false }
 export default async function ParentFees({ params }: { params: Promise<{ childId: string }> }) {
   const { childId } = await params;
   const tenant = await requireTenant();
-  const session = await getParentSession();
-  if (!session) redirect('/parent/login');
+  const session = await requireParentSession();
   const child = await childOf(tenant.organizationId, session.contact, childId);
-  if (!child) notFound();
+  if (!child) return <AccessRemoved />;
   const tz = tenant.timezone;
   const now = new Date();
   const day = (d: Date) => formatDayLabel(dayKey(d, tz), tz);
@@ -67,13 +68,10 @@ export default async function ParentFees({ params }: { params: Promise<{ childId
   const failed = failedOrders(orders);
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-4xl space-y-4 px-5 py-7">
+      <ChildTabs child={child} current="fees" />
       <div>
-        <Link href={`/parent/${child.id}`} className="t-small faint hover:underline">
-          {child.name}
-        </Link>
-        <h1 className="t-title mt-1">Fees</h1>
-        <p className="t-small faint mt-1">
+        <p className="t-small faint">
           Figures are the academy&rsquo;s own ledger, live.
           {tax?.enabled ? (tax.pricesAreExclusive ? ' Course fees are shown before tax; tax is added at payment and printed on the receipt.' : ' Fees include applicable tax.') : ''}
         </p>

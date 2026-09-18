@@ -12,7 +12,7 @@ import { parseBands } from '@/lib/grading';
 import { canTransition, computeEntry, editable, entryProblem, reviewSheet, type EntryInput, type Outcome, type SheetRules } from '@/lib/mark-sheets';
 import { STANDARD_CATEGORIES } from '@/lib/programs';
 import { settingBool } from '@/lib/settings/store';
-import { queueNotifications } from '@/lib/notify';
+import { notifyParents, type ParentAlert } from '@/lib/parent-notify';
 import { happened } from '@/lib/events';
 import { dayKey, formatDayLabel } from '@/lib/clock';
 import type { ActionState } from '@/server/courses';
@@ -368,31 +368,24 @@ async function tellParents(organizationId: string, sheetId: string, corrected: b
   const org = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true, name: true } });
   const tz = org?.timezone || 'Asia/Kolkata';
   const when = formatDayLabel(dayKey(sheet.testDate, tz), tz);
-  const rows: { organizationId: string; contact: string; learnerId: string; kind: string; title: string; body: string; href: string; dedupeKey: string }[] = [];
-  const recipients: { userId: null; email: string | null; phone: string | null; name: string; learner: string }[] = [];
+  const alerts: ParentAlert[] = [];
   for (const e of sheet.entries) {
     for (const l of e.user.parentLinks) {
       const title = corrected ? `Corrected result: ${e.user.name}, ${sheet.title}` : `Result published: ${e.user.name}, ${sheet.title}`;
       const body = `${sheet.category} on ${when}. Open the academics page to see the mark, the grade and the teacher's remark.`;
-      rows.push({ organizationId, contact: l.contact, learnerId: e.userId, kind: 'result.published', title, body, href: `/parent/${e.userId}`, dedupeKey: `result:${sheet.id}:${e.userId}:${l.contact}` });
-      recipients.push({ userId: null, email: l.contact.includes('@') ? l.contact : null, phone: l.contact.includes('@') ? null : l.contact, name: l.name, learner: e.user.name });
+      alerts.push({ contact: l.contact, name: l.name, learnerId: e.userId, kind: 'result.published', title, body, href: `/parent/${e.userId}`, dedupeKey: `result:${sheet.id}:${e.userId}:${l.contact}`, vars: { learner: e.user.name } });
     }
   }
-  if (rows.length === 0) return;
-  const created = await db.parentNotification.createMany({ data: rows.map((r) => ({ ...r, organizationId })), skipDuplicates: true });
-  if (created.count === 0) return;
-  await queueNotifications({
+  if (alerts.length === 0) return;
+  const sent = await notifyParents({
     organizationId,
     eventKey: 'result.published',
-    recipients: recipients.map(({ name: _n, learner: _l, ...r }) => r),
-    dedupeKey: `result:${sheet.id}`,
+    alerts,
     context: { title: sheet.title, category: sheet.category, date: when, organization: org?.name ?? '' },
-    contextFor: (p) => {
-      const hit = recipients.find((r) => r.email === p.email && r.phone === p.phone);
-      return { name: hit?.name ?? 'Parent', learner: hit?.learner ?? '' };
-    },
+    pushBody: 'A result was published. Open the parent view to see it.',
   });
-  await happened({ organizationId, key: 'result.published', subjectId: sheet.id, data: { title: sheet.title, parents: String(recipients.length), corrected: String(corrected) } });
+  if (sent.written === 0) return;
+  await happened({ organizationId, key: 'result.published', subjectId: sheet.id, data: { title: sheet.title, parents: String(sent.written), corrected: String(corrected) } });
 }
 
 /* Homework verification ---------------------------------------------------- */

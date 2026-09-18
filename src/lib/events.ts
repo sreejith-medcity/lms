@@ -51,6 +51,7 @@ export const DOMAIN_EVENTS: DomainEventDef[] = [
   { key: 'attendance.late', label: 'A register marked somebody late', group: 'Classes', filters: ['batches'], notification: 'attendance.late', subject: 'the class' },
   { key: 'attendance.corrected', label: 'An attendance record was corrected', group: 'Classes', filters: ['batches'], notification: 'attendance.corrected', subject: 'the class' },
   { key: 'result.published', label: 'A mark sheet was published', group: 'Learning', filters: ['batches'], notification: 'result.published', subject: 'the sheet' },
+  { key: 'notice.published', label: 'A notice was published', group: 'Learning', filters: [], notification: 'notice.published', subject: 'the notice' },
   { key: 'learner.inactive', label: 'A learner has gone quiet', group: 'Learning', filters: ['days', 'products'], scheduled: true, subject: 'the quiet spell' },
   { key: 'payment.captured', label: 'A payment succeeded', group: 'Money', filters: [], subject: 'the order' },
   { key: 'payment.failed', label: 'A payment failed', group: 'Money', filters: [], notification: 'payment.failed', subject: 'the order' },

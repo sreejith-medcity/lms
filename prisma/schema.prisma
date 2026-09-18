@@ -323,6 +323,7 @@ model ParentSession {
   expiresAt      DateTime
   createdAt      DateTime @default(now())
   lastSeenAt     DateTime @default(now())
+  userAgent      String?
 
   @@index([organizationId, contact])
   @@map("parent_sessions")
@@ -1860,10 +1861,32 @@ model ParentNotification {
   dedupeKey      String
   readAt         DateTime?
   createdAt      DateTime  @default(now())
+  /// Set when the row is a company notice; the inbox opens the notice itself.
+  noticeId       String?
+  /// Every child the row is about, when a notice reaches a parent through several; `learnerId` is the first.
+  learnerIds     String[]  @default([])
 
   @@unique([organizationId, dedupeKey])
   @@index([organizationId, contact, createdAt])
+  @@index([organizationId, noticeId])
   @@map("parent_notifications")
+}
+
+/// A parent's browser that asked to be pushed. Keyed on the contact, because a
+/// parent is a contact, not a User.
+model ParentPushSubscription {
+  id             String    @id @default(cuid())
+  organizationId String
+  contact        String
+  endpoint       String    @unique
+  p256dh         String
+  auth           String
+  userAgent      String?
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+
+  @@index([organizationId, contact])
+  @@map("parent_push_subscriptions")
 }
 
 enum AttendanceStatus {
@@ -2505,6 +2528,71 @@ model ParentLink {
 enum ParentLinkStatus {
   ACTIVE
   REVOKED
+}
+
+// ---------------------------------------------------------------------------
+// Company notices: what the office tells parents (and learners, when asked).
+// Drafted, previewed against a real recipient count, published once. A
+// correction is a new version that supersedes the old, and says so.
+// ---------------------------------------------------------------------------
+
+enum NoticeKind {
+  GENERAL
+  MEETING
+  HOLIDAY
+  EXAM
+  FEE
+  EVENT
+}
+
+enum NoticeStatus {
+  DRAFT
+  PUBLISHED
+  WITHDRAWN
+}
+
+model Notice {
+  id             String       @id @default(cuid())
+  organizationId String
+  kind           NoticeKind   @default(GENERAL)
+  title          String
+  body           String
+  assetIds       String[]     @default([])
+  /// Audience. Everyone in the academy, or the union of branches, batches and learners; a learner reached twice is counted once.
+  everyone       Boolean      @default(false)
+  branchIds      String[]     @default([])
+  batchIds       String[]     @default([])
+  learnerIds     String[]     @default([])
+  toParents      Boolean      @default(true)
+  toLearners     Boolean      @default(false)
+  /// Meeting notices only.
+  meetingAt      DateTime?
+  meetingEndsAt  DateTime?
+  venue          String?
+  link           String?
+  instructions   String?
+  status         NoticeStatus @default(DRAFT)
+  version        Int          @default(1)
+  supersedesId   String?      @unique
+  supersededById String?
+  correctionNote String?
+  /// Counted at publish: parents reached, and learners.
+  parentCount    Int          @default(0)
+  learnerCount   Int          @default(0)
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  publishedAt    DateTime?
+  publishedById  String?
+  withdrawnAt    DateTime?
+  withdrawnById  String?
+  withdrawReason String?
+
+  supersedes   Notice?  @relation("NoticeVersions", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy Notice[] @relation("NoticeVersions")
+
+  @@index([organizationId, status, publishedAt])
+  @@map("notices")
 }
 
 // ---------------------------------------------------------------------------

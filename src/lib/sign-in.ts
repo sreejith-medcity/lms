@@ -5,6 +5,7 @@ import { SESSION_COOKIE } from '@/lib/auth';
 import { WHO_COOKIE } from '@/lib/who-cookie';
 import { resolveTenantByHost } from '@/lib/tenant';
 import { adoptGuestBasket, publishBasketCountForUser } from '@/lib/cart';
+import { settingNumber } from '@/lib/settings/store';
 
 /**
  * Becoming signed in.
@@ -77,7 +78,10 @@ export async function completeSignIn(userId: string): Promise<SignInOutcome> {
 export async function issueSession(userId: string): Promise<void> {
   const h = await headers();
   const token = randomBytes(32).toString('base64url');
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
+  // Staff sessions run for as long as the academy says; a learner's for the default.
+  const who = await db.user.findUnique({ where: { id: userId }, select: { kind: true, organizationId: true } });
+  const days = who?.kind === 'STAFF' ? await settingNumber(who.organizationId, 'auth.staffSessionDays').catch(() => SESSION_DAYS) : SESSION_DAYS;
+  const expiresAt = new Date(Date.now() + Math.max(1, days || SESSION_DAYS) * 864e5);
 
   await db.authSession.create({
     data: {

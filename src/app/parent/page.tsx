@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { requireTenant } from '@/lib/tenant';
-import { childrenOf, getParentSession } from '@/lib/parent-session';
+import { childrenOf, requireParentSession } from '@/lib/parent-session';
 import { childOverview } from '@/lib/parent-data';
 import { attendanceNote, maskContact } from '@/lib/parents';
 import { formatMoney } from '@/lib/money';
@@ -19,8 +18,7 @@ export const metadata = { title: 'Parent view', robots: { index: false, follow: 
  */
 export default async function ParentHome() {
   const tenant = await requireTenant();
-  const session = await getParentSession();
-  if (!session) redirect('/parent/login');
+  const session = await requireParentSession();
 
   const children = await childrenOf(tenant.organizationId, session.contact);
   const overviews = await Promise.all(children.map((c) => childOverview(tenant.organizationId, c.id)));

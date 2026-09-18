@@ -3,6 +3,8 @@ import { queueNotifications } from '@/lib/notify';
 import { happened } from '@/lib/events';
 import { balanceOf, reminderDue } from '@/lib/dues';
 import { formatMoney } from '@/lib/money';
+import { settingBool } from '@/lib/settings/store';
+import { notifyParents } from '@/lib/parent-notify';
 
 /**
  * Fee reminders, sent by the clock.
@@ -43,7 +45,7 @@ export async function queueFeeReminders(organizationId: string): Promise<FeeRemi
         select: {
           productId: true,
           product: { select: { title: true } },
-          user: { select: { id: true, name: true, email: true, phone: true } },
+          user: { select: { id: true, name: true, email: true, phone: true, parentLinks: { where: { status: 'ACTIVE' }, select: { contact: true, name: true } } } },
         },
       },
     },
@@ -57,6 +59,9 @@ export async function queueFeeReminders(organizationId: string): Promise<FeeRemi
     select: { name: true, currency: true },
   });
   const currency = organization?.currency ?? 'INR';
+  // Parents are reminded only once management has switched it on; the
+  // fees page shows the next due either way.
+  const remindParents = await settingBool(organizationId, 'notices.feeReminders');
 
   let queued = 0;
 
@@ -80,6 +85,30 @@ export async function queueFeeReminders(organizationId: string): Promise<FeeRemi
         organization: organization?.name ?? '',
       },
     });
+
+    if (remindParents && learner.parentLinks.length > 0) {
+      const amount = formatMoney(balanceOf(row), currency);
+      const date = row.dueDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      const overdue = due.stage !== 'BEFORE';
+      const sent = await notifyParents({
+        organizationId,
+        eventKey: 'fee.reminder',
+        alerts: learner.parentLinks.map((l) => ({
+          contact: l.contact,
+          name: l.name,
+          learnerId: learner.id,
+          kind: 'fee.reminder',
+          title: overdue ? `Fee overdue: ${learner.name}, ${row.enrollment.product.title}` : `Fee due: ${learner.name}, ${row.enrollment.product.title}`,
+          body: `${amount}, instalment ${row.sequence}, ${overdue ? 'was due' : 'due'} ${date}. Open the fees page to pay online or see what is owed.`,
+          href: `/parent/${learner.id}/fees`,
+          dedupeKey: `${due.dedupeKey}:parent:${l.contact}`,
+          vars: { learner: learner.name },
+        })),
+        context: { amount, item: row.enrollment.product.title, date, stage: due.tone, organization: organization?.name ?? '' },
+        pushBody: `About ${learner.name}'s fees. Open the parent view to read it.`,
+      });
+      queued += sent.queued;
+    }
 
     if (result.queued > 0) {
       queued += result.queued;

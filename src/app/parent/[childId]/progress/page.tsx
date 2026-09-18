@@ -1,11 +1,13 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
-import { childOf, getParentSession } from '@/lib/parent-session';
+import { childOf, requireParentSession } from '@/lib/parent-session';
 import { courseProgress } from '@/lib/progress-data';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { Badge, Card, ProgressBar } from '@/components/ui';
+
+import { AccessRemoved } from '../../access-removed';
+import { ChildTabs } from '../../child-tabs';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Progress', robots: { index: false, follow: false } };
@@ -21,10 +23,9 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   const { childId } = await params;
   const { course } = await searchParams;
   const tenant = await requireTenant();
-  const session = await getParentSession();
-  if (!session) redirect('/parent/login');
+  const session = await requireParentSession();
   const child = await childOf(tenant.organizationId, session.contact, childId);
-  if (!child) notFound();
+  if (!child) return <AccessRemoved />;
   const tz = tenant.timezone;
 
   const enrolments = await db.enrollment.findMany({
@@ -37,12 +38,9 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   const day = (d: Date) => formatDayLabel(dayKey(d, tz), tz);
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-4xl space-y-4 px-5 py-7">
+      <ChildTabs child={child} current="academics" />
       <div>
-        <Link href={`/parent/${child.id}`} className="t-small faint hover:underline">
-          {child.name}
-        </Link>
-        <h1 className="t-title mt-1">Progress</h1>
         {enrolments.length > 1 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {enrolments.map((e) => (

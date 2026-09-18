@@ -70,6 +70,14 @@ const DEFAULTS: Record<string, Default> = {
     subject: 'Result published: {{learner}}, {{title}}',
     body: 'Hello {{name}}, the result of {{title}} ({{category}}, {{date}}) for {{learner}} has been published. Sign in to the parent view to see the mark, the grade and the teacher\'s remark.',
   },
+  'fee.reminder': {
+    subject: 'Fee {{stage}}: {{learner}}, {{item}}',
+    body: 'Hello {{name}}, {{amount}} for {{learner}}\'s {{item}} is {{stage}} ({{date}}). Sign in to the parent view to see what is owed or pay online. If it is already paid, please ignore this.',
+  },
+  'notice.published': {
+    subject: '{{title}}',
+    body: 'Hello {{name}}, a notice from {{organization}}: {{title}}. Sign in to read it.',
+  },
   'attendance.corrected': {
     subject: 'Correction: {{learner}}, {{title}}',
     body: 'Hello {{name}}, earlier we said {{learner}} was {{was}} for {{title}} on {{date}}. That has been corrected: {{learner}} was {{status}}.',

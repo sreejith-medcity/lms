@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
 import { requireTenant } from '@/lib/tenant';
-import { childOf, getParentSession } from '@/lib/parent-session';
+import { childOf, requireParentSession } from '@/lib/parent-session';
 import { childDetail } from '@/lib/parent-data';
 import { attendanceNote } from '@/lib/parents';
 import { balanceOf } from '@/lib/dues';
@@ -9,6 +8,9 @@ import { feeStatusLabel } from '@/lib/misc-fees';
 import { formatMoney } from '@/lib/money';
 import { formatDateTime, formatTime } from '@/lib/clock';
 import { Badge, Card, Cell, ProgressBar, Row, Table } from '@/components/ui';
+
+import { AccessRemoved } from '../access-removed';
+import { ChildTabs } from '../child-tabs';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Parent view', robots: { index: false, follow: false } };
@@ -24,10 +26,9 @@ const STATUS_WORD = { PRESENT: 'present', LATE: 'late', ABSENT: 'absent', EXCUSE
 export default async function ChildPage({ params }: { params: Promise<{ childId: string }> }) {
   const { childId } = await params;
   const tenant = await requireTenant();
-  const session = await getParentSession();
-  if (!session) redirect('/parent/login');
+  const session = await requireParentSession();
   const child = await childOf(tenant.organizationId, session.contact, childId);
-  if (!child) notFound();
+  if (!child) return <AccessRemoved />;
 
   const now = new Date();
   const d = await childDetail(tenant.organizationId, child.id, now);
@@ -37,12 +38,7 @@ export default async function ChildPage({ params }: { params: Promise<{ childId:
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-7">
-      <Link href="/parent" className="t-small faint hover:underline">Your children</Link>
-      <h1 className="mt-1 text-xl font-semibold">{child.name}</h1>
-      <p className="t-small faint mt-1">
-        {child.registrationNo ? `Registration no. ${child.registrationNo} · ` : ''}
-        {d.enrolments.length} {d.enrolments.length === 1 ? 'course' : 'courses'}
-      </p>
+      <ChildTabs child={child} current="overview" />
 
       <div className="mt-6 space-y-5">
         <Card>

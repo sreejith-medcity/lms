@@ -85,6 +85,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Segments', href: '/admin/segments' },
       { label: 'Community', href: '/admin/community' },
       { label: 'Points and referrals', href: '/admin/loyalty' },
+      { label: 'Notices', href: '/admin/notices' },
       { label: 'Announcements', href: '/admin/announcements' },
       { label: 'Storefront', href: '/admin/storefront' },
       { label: 'Course landing pages', href: '/admin/storefront/landing' },
