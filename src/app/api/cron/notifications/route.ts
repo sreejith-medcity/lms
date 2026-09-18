@@ -8,6 +8,7 @@ import { queueFeeReminders } from '@/lib/messaging/fee-reminders';
 import { sendDueCampaigns } from '@/lib/messaging/campaigns';
 import { runDueWorkflows } from '@/lib/workflows';
 import { runEdmingleAuto } from '@/lib/migrate-edmingle-auto';
+import { markOnlineNoShows } from '@/lib/attendance-jobs';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -46,6 +47,12 @@ export async function GET(request: Request) {
     // about on this run rather than the next one.
     const reminders = await queueUpcomingReminders(organization.id);
     const fees = await queueFeeReminders(organization.id);
+    // Online no-shows past the check time: their parents' alerts join this
+    // run's drain rather than waiting for the next.
+    const noShows = await markOnlineNoShows(organization.id).catch((err) => {
+      console.error('[cron] no-shows', err instanceof Error ? err.message : err);
+      return { checked: 0, marked: 0 };
+    });
     // Automations and campaigns write into the same outbox, so they go
     // before the drain and their messages leave on this run.
     const workflows = await runDueWorkflows(organization.id, 50);
@@ -56,7 +63,7 @@ export async function GET(request: Request) {
     // The Edmingle import, a little each run while its switch is on, with
     // whatever is left of this run's time after the messages have gone.
     const edmingle = await runEdmingleAuto(organization.id, Math.max(0, 48_000 - (Date.now() - started)));
-    results[organization.name] = { ...result, reminders, fees, workflows, campaigns, ...(edmingle ? { edmingle } : {}) };
+    results[organization.name] = { ...result, reminders, fees, noShows, workflows, campaigns, ...(edmingle ? { edmingle } : {}) };
   }
 
   const purged = await purgeExpiredOtps();

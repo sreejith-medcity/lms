@@ -54,6 +54,7 @@ export const SETTING_GROUPS = [
   { key: 'website', label: 'The public site', blurb: 'What a stranger sees before they have an account.' },
   { key: 'ai', label: 'The AI examiner', blurb: 'What learners may practise with it, and how much.' },
   { key: 'messaging', label: 'Messaging', blurb: 'When promotional messages may go out, and when they wait.' },
+  { key: 'attendance', label: 'Attendance', blurb: 'What counts as late, when an online no-show is absent, and how long a register may be corrected.' },
 ] as const;
 
 export type SettingGroupKey = (typeof SETTING_GROUPS)[number]['key'];
@@ -548,6 +549,54 @@ export const SETTINGS: SettingDef[] = [
           ? 'Nobody awards anything. Existing balances are left alone rather than cleared.'
           : 'The wallet in this product awards and redeems, which is what runs today.',
   },
+  /* Attendance ---------------------------------------------------------------- */
+  {
+    key: 'attendance.lateAfterMinutes',
+    group: 'attendance',
+    label: 'Late after',
+    help: 'A join this many minutes after the class starts is marked late rather than present. A program can set its own number.',
+    kind: 'number',
+    default: 10,
+    min: 0,
+    max: 120,
+    unit: 'min',
+    live: true,
+    effect: (v) => `A learner joining ${Number(v) + 1} minutes after the start is late; at ${Number(v)} minutes they are on time.`,
+  },
+  {
+    key: 'attendance.onlineAbsentAfterMinutes',
+    group: 'attendance',
+    label: 'Online no-show counts as absent after',
+    help: 'Only for online classes the platform has confirmed started. A learner who has not joined by then is marked absent by the system and their parents are told. When the platform has said nothing, nobody is marked absent: the register shows "awaiting attendance data" instead.',
+    kind: 'number',
+    default: 20,
+    min: 5,
+    max: 180,
+    unit: 'min',
+    live: true,
+  },
+  {
+    key: 'attendance.correctionDays',
+    group: 'attendance',
+    label: 'Teachers may correct a register for',
+    help: 'After this many days a correction needs a Branch Head or Head Office. Every correction keeps the old value, the new one, who and why.',
+    kind: 'number',
+    default: 7,
+    min: 0,
+    max: 90,
+    unit: 'days',
+    live: true,
+  },
+  {
+    key: 'attendance.parentAlerts',
+    group: 'attendance',
+    label: 'Tell parents at once when their child is absent or late',
+    help: 'One message per child, class and status, sent the moment a register is confirmed or the platform reports it. Off means attendance still records and shows in the parent view, but nothing is sent.',
+    kind: 'boolean',
+    default: true,
+    live: true,
+  },
+
   /* Messaging ----------------------------------------------------------------- */
   {
     key: 'messaging.quietFrom',

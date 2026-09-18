@@ -4,6 +4,8 @@ import { resolveIntegration } from '@/lib/integration-store';
 import { recordIntegrationEvent } from '@/lib/integration-events';
 import { verifyZoomSignature, validationResponse } from '@/lib/zoom';
 import { getTenantContext } from '@/lib/tenant';
+import { lateAfterMinutes, recordAttendance } from '@/lib/attendance';
+import { statusForJoin } from '@/lib/attendance-rules';
 
 export const dynamic = 'force-dynamic';
 
@@ -200,19 +202,23 @@ async function handle(
         Math.round((joinedAt.getTime() - session.startsAt.getTime()) / 60_000),
       );
 
-      await db.attendance.upsert({
-        where: { sessionId_userId: { sessionId: session.id, userId: user.id } },
-        create: {
-          sessionId: session.id,
-          userId: user.id,
-          status: minutesLate > 10 ? 'LATE' : 'PRESENT',
-          joinedAt,
-          wasInTime: minutesLate <= 10,
-        },
-        // A rejoin after a dropped connection must not overwrite the first
-        // arrival, or a bad line turns a punctual learner into a late one.
-        update: {},
-      });
+      // A rejoin after a dropped connection must not overwrite the first
+      // arrival, or a bad line turns a punctual learner into a late one; and
+      // a mark the teacher or the no-show check already made stands, with
+      // the join time noted against it.
+      const existing = await db.attendance.findUnique({ where: { sessionId_userId: { sessionId: session.id, userId: user.id } }, select: { id: true, status: true, joinedAt: true } });
+      if (existing) {
+        if (!existing.joinedAt) await db.attendance.update({ where: { id: existing.id }, data: { joinedAt } });
+        // Marked absent by the check time, then joined: that is a correction
+        // the platform makes, and the parent hears it.
+        if (existing.status === 'ABSENT') {
+          const grace = await lateAfterMinutes(organizationId, session.batchId ?? null);
+          await recordAttendance({ organizationId, sessionId: session.id, userId: user.id, status: statusForJoin(minutesLate, grace), source: 'PROVIDER', reason: 'Joined after the check time', joinedAt, wasInTime: minutesLate <= grace });
+        }
+      } else {
+        const grace = await lateAfterMinutes(organizationId, session.batchId ?? null);
+        await recordAttendance({ organizationId, sessionId: session.id, userId: user.id, status: statusForJoin(minutesLate, grace), source: 'PROVIDER', joinedAt, wasInTime: minutesLate <= grace });
+      }
       const { afterLearning } = await import('@/lib/badges-data');
       await afterLearning(organizationId, user.id);
       return;

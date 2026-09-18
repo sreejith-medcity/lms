@@ -1,10 +1,10 @@
 import { db } from '@/lib/db';
 import { bearerUser } from '@/lib/api/auth';
 import { fail, ok } from '@/lib/api/http';
+import { lateAfterMinutes, recordAttendance } from '@/lib/attendance';
+import { statusForJoin } from '@/lib/attendance-rules';
 
 export const dynamic = 'force-dynamic';
-
-const IN_TIME_GRACE_MINUTES = 10;
 
 /** POST → the join link, and attendance taken the way the web's Join button takes it. */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -22,11 +22,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const now = new Date();
   const minutesLate = Math.round((now.getTime() - session.startsAt.getTime()) / 60_000);
   if (ctx.user.kind === 'LEARNER') {
-    await db.attendance.upsert({
-      where: { sessionId_userId: { sessionId: session.id, userId: ctx.user.id } },
-      create: { sessionId: session.id, userId: ctx.user.id, status: minutesLate > IN_TIME_GRACE_MINUTES ? 'LATE' : 'PRESENT', joinedAt: now, wasInTime: minutesLate <= IN_TIME_GRACE_MINUTES },
-      update: { joinedAt: now },
-    });
+    const grace = await lateAfterMinutes(ctx.tenant.organizationId, session.batchId);
+    const already = await db.attendance.findUnique({ where: { sessionId_userId: { sessionId: session.id, userId: ctx.user.id } }, select: { id: true } });
+    if (already) await db.attendance.update({ where: { id: already.id }, data: { joinedAt: now } });
+    else await recordAttendance({ organizationId: ctx.tenant.organizationId, sessionId: session.id, userId: ctx.user.id, status: statusForJoin(minutesLate, grace), source: 'SELF', joinedAt: now, wasInTime: minutesLate <= grace });
     const { afterLearning } = await import('@/lib/badges-data');
     await afterLearning(ctx.tenant.organizationId, ctx.user.id);
   }

@@ -23,6 +23,9 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
       { key: 'session.absent', label: 'They missed a class', who: 'Whoever did not sign in', live: true },
       { key: 'session.cancelled', label: 'A class was called off', who: 'Everyone on the roll', live: true },
       { key: 'session.recording', label: 'A recording was published', who: 'The batch that sat it', live: false, waitingOn: 'the publish flow to emit it' },
+      { key: 'attendance.absent', label: 'Their child was absent', who: 'The linked parents, the moment the register is confirmed', live: true },
+      { key: 'attendance.late', label: 'Their child arrived late', who: 'The linked parents, the moment the register is confirmed', live: true },
+      { key: 'attendance.corrected', label: 'An attendance alert was corrected', who: 'The parents who received the earlier alert', live: true },
     ],
   },
   {

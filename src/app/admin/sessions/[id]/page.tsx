@@ -131,8 +131,12 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
           </Card>
         )}
         <p className="t-small faint">
-          Sign-ins are recorded automatically when a learner joins. Use these buttons only for the
-          cases the system cannot see.
+          Sign-ins are recorded automatically when a learner joins. Changing a recorded mark needs a
+          reason and sends the parent a correction. For the whole class on a phone, use{' '}
+          <Link href={`/admin/register/${session.id}`} className="underline">
+            the register
+          </Link>
+          .
         </p>
 
         {session.status !== 'CANCELLED' && roster.length > 0 && (

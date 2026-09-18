@@ -58,6 +58,18 @@ const DEFAULTS: Record<string, Default> = {
     subject: 'You missed {{title}}',
     body: 'Hello {{name}}, you were not marked present for {{title}} on {{date}}. The recording goes up when it is ready, and your trainer can go over it with you.',
   },
+  'attendance.absent': {
+    subject: '{{learner}} was absent: {{title}}',
+    body: 'Hello {{name}}, {{learner}} was absent from {{title}} on {{date}}. If this is unexpected, please speak to the branch.',
+  },
+  'attendance.late': {
+    subject: '{{learner}} arrived late: {{title}}',
+    body: 'Hello {{name}}, {{learner}} arrived late to {{title}} on {{date}}.',
+  },
+  'attendance.corrected': {
+    subject: 'Correction: {{learner}}, {{title}}',
+    body: 'Hello {{name}}, earlier we said {{learner}} was {{was}} for {{title}} on {{date}}. That has been corrected: {{learner}} was {{status}}.',
+  },
   'session.cancelled': {
     subject: '{{title}} on {{date}} is off',
     body: 'Hello {{name}}, {{title}} on {{date}} will not run. {{reason}}',

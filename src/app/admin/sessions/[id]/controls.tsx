@@ -43,6 +43,27 @@ export function AttendanceRow({
   const [pending, start] = useTransition();
   const [current, setCurrent] = useState(status);
   const [error, setError] = useState<string>();
+  const [note, setNote] = useState<string>();
+  const [asking, setAsking] = useState<Status | null>(null);
+  const [reason, setReason] = useState('');
+
+  function save(value: Status, why?: string) {
+    start(async () => {
+      const res = await markAttendance(sessionId, userId, value, why);
+      if (res.error === 'REASON_NEEDED') {
+        setAsking(value);
+        return;
+      }
+      if (res.error) setError(res.error);
+      else {
+        setError(undefined);
+        setNote(res.message);
+        setCurrent(value);
+        setAsking(null);
+        setReason('');
+      }
+    });
+  }
 
   return (
     <li className="flex flex-wrap items-center gap-3 px-5 py-3">
@@ -52,7 +73,27 @@ export function AttendanceRow({
           {email}
           {joinedAt &&
             ` · joined ${new Date(joinedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`}
+          {!current && ' · not recorded'}
         </p>
+        {asking && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              className="min-w-56 flex-1 rounded-[var(--radius-sm)] border px-2 py-1 text-sm"
+              placeholder={`Why change to ${asking.toLowerCase()}? Kept on the record.`}
+              value={reason}
+              maxLength={300}
+              autoFocus
+              onChange={(e) => setReason(e.target.value)}
+            />
+            <Button size="sm" disabled={pending || !reason.trim()} onClick={() => save(asking, reason)}>
+              Save correction
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAsking(null)}>
+              Cancel
+            </Button>
+          </div>
+        )}
+        {note && !error && <p className="t-micro mt-1 text-[var(--ok)]">{note}</p>}
       </div>
 
       {error && <span className="t-small text-[var(--bad)]">{error}</span>}
@@ -69,13 +110,7 @@ export function AttendanceRow({
             className={`rounded-[var(--radius-sm)] border px-2 py-1 text-xs transition disabled:opacity-50 ${
               current === o.value ? 'border-[var(--brand)] text-[var(--brand)]' : 'muted hover:bg-[var(--surface-2)]'
             }`}
-            onClick={() =>
-              start(async () => {
-                const res = await markAttendance(sessionId, userId, o.value);
-                if (res.error) setError(res.error);
-                else setCurrent(o.value);
-              })
-            }
+            onClick={() => (current && current !== o.value ? setAsking(o.value) : save(o.value))}
           >
             {o.label}
           </button>

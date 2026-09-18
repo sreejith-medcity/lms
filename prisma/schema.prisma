@@ -1435,6 +1435,10 @@ enum BatchRole {
 model LiveSession {
   id                String        @id @default(cuid())
   organizationId    String
+  /// When a teacher confirmed the register for this class, and who. A class
+  /// with no submitted register has learners "not recorded", never absent.
+  registerSubmittedAt   DateTime?
+  registerSubmittedById String?
   /// Null for a one-to-one class, which belongs to a learner rather than to
   /// a batch. Exactly one of batchId and learnerId is set.
   batchId           String?
@@ -1774,6 +1778,11 @@ model LearnerNote {
   @@map("learner_notes")
 }
 
+/// One learner's attendance at one class. No row means "not recorded",
+/// which is a real state and never an absence: an absence is something a
+/// teacher marked, a provider reported after the check time, or the learner
+/// failed to do by not joining an online class that was confirmed to have
+/// started. `source` says which, and `changes` keeps every edit.
 model Attendance {
   id             String           @id @default(cuid())
   sessionId      String
@@ -1784,13 +1793,74 @@ model Attendance {
   minutesPresent Int              @default(0)
   wasInTime      Boolean          @default(false)
   markedById     String?
+  source         AttendanceSource @default(SELF)
+  recordedAt     DateTime         @default(now())
+  note           String?
 
-  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session LiveSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  changes AttendanceChange[]
 
   @@unique([sessionId, userId])
   @@index([userId])
   @@map("attendances")
+}
+
+enum AttendanceSource {
+  /// The learner pressed Join in the portal or the app.
+  SELF
+  /// The class platform's own events (Zoom).
+  PROVIDER
+  /// A teacher's register.
+  REGISTER
+  /// A correction after the fact, with a reason.
+  CORRECTION
+}
+
+/// A correction to attendance: what it said, what it says now, who changed
+/// it, why, and from where. The alert a parent already received is
+/// answered by a correction notice when the status that caused it changes.
+model AttendanceChange {
+  id             String           @id @default(cuid())
+  organizationId String
+  attendanceId   String
+  sessionId      String
+  userId         String
+  fromStatus     AttendanceStatus?
+  toStatus       AttendanceStatus
+  reason         String
+  source         AttendanceSource
+  changedById    String?
+  changedAt      DateTime         @default(now())
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, sessionId])
+  @@index([organizationId, userId, changedAt])
+  @@map("attendance_changes")
+}
+
+/// A parent's inbox. Written whenever the academy tells a parent something
+/// about their child (absent, late, a correction, a published result, a
+/// notice, a fee reminder), keyed by the contact they sign in with, and
+/// deduplicated so one event is one line. Phase 22 draws the inbox; this
+/// is where its history starts.
+model ParentNotification {
+  id             String    @id @default(cuid())
+  organizationId String
+  contact        String
+  learnerId      String
+  kind           String
+  title          String
+  body           String
+  href           String?
+  dedupeKey      String
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@unique([organizationId, dedupeKey])
+  @@index([organizationId, contact, createdAt])
+  @@map("parent_notifications")
 }
 
 enum AttendanceStatus {
@@ -2362,6 +2432,12 @@ model Program {
   passPercent          Int?
   gradeScaleId         String?
   retestRule           RetestRule @default(LATEST)
+  /// Attendance timing for this program, overriding the academy's settings
+  /// when set: minutes after the start a join counts as late, and minutes
+  /// after which a learner who has not joined a confirmed online class is
+  /// absent.
+  lateAfterMinutes         Int?
+  onlineAbsentAfterMinutes Int?
   /// The overall rating rubric, once management approves one. Null means the
   /// parent sees "Not yet assessed" rather than a number nobody agreed.
   ratingRubric         Json?

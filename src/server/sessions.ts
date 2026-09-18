@@ -12,9 +12,10 @@ import { queueNotifications, describeQueue } from '@/lib/notify';
 import { happened } from '@/lib/events';
 import { provisionMeetings, releaseMeeting } from '@/lib/zoom-sessions';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
+import { lateAfterMinutes, recordAttendance } from '@/lib/attendance';
+import { statusForJoin } from '@/lib/attendance-rules';
 
 /** Sign-in is "in time" if it lands within this many minutes of the start. */
-const IN_TIME_GRACE_MINUTES = 10;
 
 async function guard(permission = 'scheduling.sessions', action: 'view' | 'edit' | 'delete' = 'edit') {
   const [tenant, user] = await Promise.all([requireTenant(), requireStaff(permission, action)]);
@@ -256,17 +257,12 @@ export async function joinSession(sessionId: string): Promise<ActionState & { ur
     const minutesLate = Math.round((now.getTime() - session.startsAt.getTime()) / 60_000);
 
     if (user.kind === 'LEARNER') {
-      await db.attendance.upsert({
-        where: { sessionId_userId: { sessionId, userId: user.id } },
-        create: {
-          sessionId,
-          userId: user.id,
-          status: minutesLate > IN_TIME_GRACE_MINUTES ? 'LATE' : 'PRESENT',
-          joinedAt: now,
-          wasInTime: minutesLate <= IN_TIME_GRACE_MINUTES,
-        },
-        update: { joinedAt: now },
-      });
+      const grace = await lateAfterMinutes(tenant.organizationId, session.batchId);
+      const already = await db.attendance.findUnique({ where: { sessionId_userId: { sessionId, userId: user.id } }, select: { id: true } });
+      // A rejoin keeps the first arrival: a dropped line is not a second
+      // lateness, and a learner marked by the register is not overwritten.
+      if (already) await db.attendance.update({ where: { id: already.id }, data: { joinedAt: now } });
+      else await recordAttendance({ organizationId: tenant.organizationId, sessionId, userId: user.id, status: statusForJoin(minutesLate, grace), source: 'SELF', joinedAt: now, wasInTime: minutesLate <= grace });
       const { afterLearning } = await import('@/lib/badges-data');
       await afterLearning(tenant.organizationId, user.id);
     }
@@ -278,35 +274,45 @@ export async function joinSession(sessionId: string): Promise<ActionState & { ur
   }
 }
 
-/** Staff override, for the phone-call cases attendance automation cannot see. */
+/**
+ * Staff marking from the class page. A first record is a register entry;
+ * changing an existing one is a correction and needs a reason, the way
+ * the register itself works, so the parent hears a correction rather than
+ * a second alert.
+ */
 export async function markAttendance(
   sessionId: string,
   userId: string,
   status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED',
+  reason?: string,
 ): Promise<ActionState> {
   try {
     const { tenant, user } = await guard('batches.batch_learners');
 
     const session = await db.liveSession.findFirst({
       where: { id: sessionId, organizationId: tenant.organizationId },
-      select: { id: true, startsAt: true },
+      select: { id: true, startsAt: true, status: true, isHoliday: true },
     });
     if (!session) return { error: 'Class not found.' };
+    if (session.status === 'CANCELLED' || session.isHoliday) return { error: 'That class was called off; nobody is marked for it.' };
 
-    await db.attendance.upsert({
-      where: { sessionId_userId: { sessionId, userId } },
-      create: {
-        sessionId,
-        userId,
-        status,
-        markedById: user.id,
-        wasInTime: status === 'PRESENT',
-      },
-      update: { status, markedById: user.id, wasInTime: status === 'PRESENT' },
+    const existing = await db.attendance.findUnique({ where: { sessionId_userId: { sessionId, userId } }, select: { status: true } });
+    if (existing && existing.status !== status && !reason?.trim()) return { error: 'REASON_NEEDED' };
+
+    const r = await recordAttendance({
+      organizationId: tenant.organizationId,
+      sessionId,
+      userId,
+      status,
+      source: existing ? 'CORRECTION' : 'REGISTER',
+      actorId: user.id,
+      reason: reason?.trim() || null,
+      wasInTime: status === 'PRESENT',
     });
 
     revalidatePath(`/admin/sessions/${sessionId}`);
-    return { ok: true };
+    revalidatePath(`/admin/register/${sessionId}`);
+    return { ok: true, message: r.alerted === 'correction' ? 'Corrected; the parents were sent a correction.' : r.alerted === 'alert' ? 'Recorded; the parents were told.' : undefined };
   } catch (err) {
     return fail(err);
   }
