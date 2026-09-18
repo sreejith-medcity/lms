@@ -65,17 +65,20 @@ export async function runEdmingleAuto(organizationId: string, budgetMs = 25_000)
     }
     const moved = report.wouldCreate + report.wouldUpdate;
     const limited = report.problems.some((p) => /rate-limiting/.test(p));
+    // Being rate-limited is a wait, not a failure: Edmingle said "later"
+    // and the next tick tries again. Only a real problem marks the row red.
+    const realProblems = report.problems.filter((p) => !/rate-limiting/.test(p));
     if (moved > 0 || limited || report.problems.length > 0) {
       await recordIntegrationEvent({
         organizationId,
         provider: 'edmingle',
         direction: 'IN',
         action: `auto ${step.key}`,
-        ok: !limited,
+        ok: realProblems.length === 0,
         records: moved,
-        detail: `${moved} across, ${report.alreadyDone} already, ${report.remaining} left${report.problems.length ? `; ${report.problems.length} notes: ${report.problems[0].slice(0, 160)}` : ''}`,
+        detail: `${limited ? "waiting on Edmingle's rate limit; " : ''}${moved} across, ${report.alreadyDone} already, ${report.remaining} left${realProblems.length ? `; ${realProblems.length} notes: ${realProblems[0].slice(0, 160)}` : ''}`,
       });
-      lines.push(`${step.key} ${moved} across, ${report.remaining} left`);
+      lines.push(`${step.key} ${moved} across, ${report.remaining} left${limited ? ', waiting' : ''}`);
     }
     // Rate-limited: give Edmingle the rest of the window.
     if (limited) break;
