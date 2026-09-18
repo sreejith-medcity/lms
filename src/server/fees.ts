@@ -9,9 +9,8 @@ import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { queueNotifications } from '@/lib/notify';
 import { formatMoney } from '@/lib/money';
-import { priceOrder } from '@/lib/order-lines';
-import { paymentsAvailable, prepareOrder } from '@/lib/payments';
 import { allocatePayment, balanceOf, daysOverdue, nextReceiptNumber, receiptPrefix } from '@/lib/dues';
+import { beginInstalmentOrder, checkoutFailure } from '@/lib/fee-checkout';
 import type { ActionState } from '@/server/courses';
 import { attributionJson, requestAttribution } from '@/lib/attribution-server';
 
@@ -297,129 +296,8 @@ export async function startInstalmentCheckout(instalmentId: string): Promise<Ins
     const tenant = await requireTenant();
     const user = await getSessionUser();
     if (!user) return { ok: false, error: 'Please sign in to continue.' };
-    if (!(await paymentsAvailable(tenant.organizationId))) {
-      return { ok: false, error: 'Online payment is not switched on yet. Please pay at the academy.' };
-    }
-
-    const instalment = await db.instalment.findFirst({
-      where: {
-        id: instalmentId,
-        paidAt: null,
-        enrollment: { organizationId: tenant.organizationId, userId: user.id },
-      },
-      select: {
-        id: true,
-        sequence: true,
-        amountPaise: true,
-        paidPaise: true,
-        enrollment: {
-          select: {
-            id: true,
-            branchId: true,
-            productId: true,
-            pricingPlanId: true,
-            product: { select: { title: true } },
-            instalments: {
-              where: { paidAt: null },
-              orderBy: { dueDate: 'asc' },
-              select: { id: true, amountPaise: true, paidPaise: true },
-              take: 1,
-            },
-            _count: { select: { instalments: true } },
-          },
-        },
-      },
-    });
-    if (!instalment) return { ok: false, error: 'That instalment is not open.' };
-
-    const oldest = instalment.enrollment.instalments.find((i) => balanceOf(i) > 0);
-    if (oldest && oldest.id !== instalment.id) {
-      return { ok: false, error: 'Please pay the earlier instalment first.' };
-    }
-
-    const balance = balanceOf(instalment);
-    if (balance <= 0) return { ok: false, error: 'That instalment is already paid.' };
-
-    // An order already waiting for this instalment is reused rather than
-    // doubled: a learner who closed the payment window and came back should
-    // land on the same one.
-    const pending = await db.order.findFirst({
-      where: {
-        organizationId: tenant.organizationId,
-        userId: user.id,
-        status: 'PENDING',
-        gatewayOrderId: { not: null },
-        items: { some: { instalmentId: instalment.id } },
-      },
-      select: { id: true, totalPaise: true },
-    });
-    if (pending && pending.totalPaise > 0) return { ok: true, orderId: pending.id };
-
-    const taxConfig = await db.taxConfig.findFirst({ where: { organizationId: tenant.organizationId } });
-
-    const priced = priceOrder({
-      lines: [
-        {
-          productId: instalment.enrollment.productId,
-          pricingPlanId: instalment.enrollment.pricingPlanId,
-          title: `${instalment.enrollment.product.title} (instalment ${instalment.sequence} of ${instalment.enrollment._count.instalments})`,
-          pricePaise: balance,
-          isPrimary: true,
-        },
-      ],
-      discountPaise: 0,
-      tax: {
-        cgstPercent: taxConfig?.cgstPercent ?? 9,
-        sgstPercent: taxConfig?.sgstPercent ?? 9,
-        igstPercent: taxConfig?.igstPercent ?? 18,
-        interState: false,
-        pricesAreExclusive: taxConfig?.pricesAreExclusive ?? true,
-        enabled: taxConfig?.enabled ?? true,
-      },
-    });
-
-    const count = await db.order.count({ where: { organizationId: tenant.organizationId } });
-    const orderNo = `ORD-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
-
-    const order = await db.order.create({
-      data: {
-        organizationId: tenant.organizationId,
-        branchId: instalment.enrollment.branchId,
-        userId: user.id,
-        orderNo,
-        status: 'PENDING',
-        attribution: attributionJson(await requestAttribution()),
-        currency: tenant.currency,
-        subtotalPaise: priced.subtotalPaise,
-        discountPaise: 0,
-        taxPaise: priced.taxPaise,
-        walletPaise: 0,
-        totalPaise: priced.beforePointsPaise,
-        items: {
-          create: priced.lines.map((l) => ({
-            productId: l.productId,
-            pricingPlanId: l.pricingPlanId,
-            instalmentId: instalment.id,
-            titleSnapshot: l.title,
-            pricePaise: l.pricePaise,
-            discountPaise: l.discountPaise,
-            taxPaise: l.taxPaise,
-            totalPaise: l.totalPaise,
-          })),
-        },
-      },
-      select: { id: true, orderNo: true, currency: true, totalPaise: true },
-    });
-
-    await prepareOrder(tenant.organizationId, order, { instalmentId: instalment.id });
-
-    return { ok: true, orderId: order.id };
+    return await beginInstalmentOrder({ organizationId: tenant.organizationId, currency: tenant.currency, userId: user.id, attribution: attributionJson(await requestAttribution()) }, instalmentId);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[fees] checkout', message);
-    if (message.startsWith('RAZORPAY:')) {
-      return { ok: false, error: 'The payment gateway refused to start this payment. Please try again.' };
-    }
-    return { ok: false, error: 'We could not start the payment just now. Please try again.' };
+    return checkoutFailure(err, 'fees');
   }
 }

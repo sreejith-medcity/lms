@@ -124,7 +124,12 @@ export default async function ChildPage({ params }: { params: Promise<{ childId:
         </Card>
 
         <Card>
-          <h2 className="t-heading">Fees</h2>
+          <h2 className="t-heading">
+            Fees{' '}
+            <Link href={`/parent/${child.id}/fees`} className="t-small font-normal underline">
+              fees and pay →
+            </Link>
+          </h2>
           {feesOpen.length === 0 && d.charges.filter((c) => c.status === 'PENDING').length === 0 ? (
             <p className="t-small faint mt-2">Nothing is owed at the moment.</p>
           ) : (

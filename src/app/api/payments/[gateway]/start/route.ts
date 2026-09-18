@@ -6,6 +6,7 @@ import { getTenantContext } from '@/lib/tenant';
 import { publicOrigin } from '@/lib/http-headers';
 import { CART_COOKIE } from '@/lib/cart-cookie';
 import { contactOf, mayViewOrder } from '@/lib/guest-order';
+import { parentOfOrder } from '@/lib/parent-order';
 import { startWith } from '@/lib/payments';
 import type { GatewayId } from '@/lib/payments/gateway';
 
@@ -52,11 +53,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ gat
   ]);
   if (!order) return new NextResponse('Order not found', { status: 404 });
   const cartCookie = (await cookies()).get(CART_COOKIE)?.value ?? null;
-  if (!mayViewOrder({ orderUserId: order.userId, sessionUserId: user?.id ?? null, orderBillingAddress: order.billingAddress, cartCookie })) {
+  const parent = user ? null : await parentOfOrder(tenant.organizationId, order.userId);
+  if (!parent && !mayViewOrder({ orderUserId: order.userId, sessionUserId: user?.id ?? null, orderBillingAddress: order.billingAddress, cartCookie })) {
     return new NextResponse('Not allowed', { status: 401 });
   }
   const origin = publicOrigin(request);
-  if (order.status === 'PAID') return NextResponse.redirect(`${origin}/checkout/${order.id}`, 303);
+  const checkoutUrl = `${origin}/checkout/${order.id}${parent ? `?as=parent&child=${parent.childId}` : ''}`;
+  if (order.status === 'PAID') return NextResponse.redirect(checkoutUrl, 303);
 
   const contact = contactOf(order.billingAddress);
   try {
@@ -76,6 +79,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ gat
     return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
   } catch (err) {
     console.error('[payments/start]', err instanceof Error ? err.message : err);
-    return NextResponse.redirect(`${origin}/checkout/${order.id}?failed=start`, 303);
+    return NextResponse.redirect(`${checkoutUrl}${parent ? '&' : '?'}failed=start`, 303);
   }
 }

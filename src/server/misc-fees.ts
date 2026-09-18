@@ -8,9 +8,8 @@ import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import { queueNotifications } from '@/lib/notify';
 import { formatMoney } from '@/lib/money';
-import { priceOrder } from '@/lib/order-lines';
-import { paymentsAvailable, prepareOrder } from '@/lib/payments';
 import { nextReceiptNumber, receiptPrefix } from '@/lib/dues';
+import { beginMiscFeeOrder, checkoutFailure } from '@/lib/fee-checkout';
 import { closeProblem, feeProblem, feeTypeProblem } from '@/lib/misc-fees';
 import { attributionJson, requestAttribution } from '@/lib/attribution-server';
 import type { ActionState } from '@/server/courses';
@@ -299,79 +298,8 @@ export async function startMiscFeeCheckout(feeId: string): Promise<InstalmentChe
     const tenant = await requireTenant();
     const user = await getSessionUser();
     if (!user) return { ok: false, error: 'Please sign in to continue.' };
-    if (!(await paymentsAvailable(tenant.organizationId))) {
-      return { ok: false, error: 'Online payment is not switched on yet. Please pay at the academy.' };
-    }
-
-    const fee = await db.miscFee.findFirst({
-      where: { id: feeId, organizationId: tenant.organizationId, userId: user.id, status: 'PENDING' },
-      select: {
-        id: true,
-        label: true,
-        amountPaise: true,
-        taxable: true,
-        enrollment: { select: { branchId: true, productId: true, pricingPlanId: true, product: { select: { title: true } } } },
-      },
-    });
-    if (!fee) return { ok: false, error: 'That charge is not open.' };
-
-    const pending = await db.order.findFirst({
-      where: { organizationId: tenant.organizationId, userId: user.id, status: 'PENDING', gatewayOrderId: { not: null }, items: { some: { miscFeeId: fee.id } } },
-      select: { id: true, totalPaise: true },
-    });
-    if (pending && pending.totalPaise > 0) return { ok: true, orderId: pending.id };
-
-    const taxConfig = await db.taxConfig.findFirst({ where: { organizationId: tenant.organizationId } });
-    const priced = priceOrder({
-      lines: [{ productId: fee.enrollment.productId, pricingPlanId: fee.enrollment.pricingPlanId, title: `${fee.label} (${fee.enrollment.product.title})`, pricePaise: fee.amountPaise, isPrimary: true }],
-      discountPaise: 0,
-      tax: {
-        cgstPercent: taxConfig?.cgstPercent ?? 9,
-        sgstPercent: taxConfig?.sgstPercent ?? 9,
-        igstPercent: taxConfig?.igstPercent ?? 18,
-        interState: false,
-        pricesAreExclusive: taxConfig?.pricesAreExclusive ?? true,
-        enabled: fee.taxable && (taxConfig?.enabled ?? true),
-      },
-    });
-
-    const count = await db.order.count({ where: { organizationId: tenant.organizationId } });
-    const orderNo = `ORD-${new Date().getFullYear()}-${String(count + 1).padStart(5, '0')}`;
-    const order = await db.order.create({
-      data: {
-        organizationId: tenant.organizationId,
-        branchId: fee.enrollment.branchId,
-        userId: user.id,
-        orderNo,
-        status: 'PENDING',
-        attribution: attributionJson(await requestAttribution()),
-        currency: tenant.currency,
-        subtotalPaise: priced.subtotalPaise,
-        discountPaise: 0,
-        taxPaise: priced.taxPaise,
-        walletPaise: 0,
-        totalPaise: priced.beforePointsPaise,
-        items: {
-          create: priced.lines.map((l) => ({
-            productId: l.productId,
-            pricingPlanId: l.pricingPlanId,
-            miscFeeId: fee.id,
-            titleSnapshot: l.title,
-            pricePaise: l.pricePaise,
-            discountPaise: l.discountPaise,
-            taxPaise: l.taxPaise,
-            totalPaise: l.totalPaise,
-          })),
-        },
-      },
-      select: { id: true, orderNo: true, currency: true, totalPaise: true },
-    });
-
-    await prepareOrder(tenant.organizationId, order, { miscFeeId: fee.id });
-    return { ok: true, orderId: order.id };
+    return await beginMiscFeeOrder({ organizationId: tenant.organizationId, currency: tenant.currency, userId: user.id, attribution: attributionJson(await requestAttribution()) }, feeId);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[misc-fees] checkout', message);
-    return { ok: false, error: 'We could not start the payment just now. Please try again.' };
+    return checkoutFailure(err, 'misc-fees');
   }
 }

@@ -7,6 +7,7 @@ import { fetchRazorpayPayment, verifyCheckoutSignature } from '@/lib/razorpay';
 import { fulfilPaidOrder, recordFailedPayment } from '@/lib/fulfilment';
 import { CART_COOKIE } from '@/lib/cart-cookie';
 import { mayViewOrder } from '@/lib/guest-order';
+import { parentOfOrder } from '@/lib/parent-order';
 import { issueSession } from '@/lib/sign-in';
 
 
@@ -51,10 +52,13 @@ export async function POST(request: Request) {
   });
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 });
 
-  // The learner it belongs to, or the browser that bought it as a guest.
+  // The learner it belongs to, the browser that bought it as a guest, or a
+  // parent linked to the learner paying on their behalf.
   const cartCookie = (await cookies()).get(CART_COOKIE)?.value ?? null;
-  const guest = !user;
+  const parent = user ? null : await parentOfOrder(tenant.organizationId, order.userId);
+  const guest = !user && !parent;
   if (
+    !parent &&
     !mayViewOrder({
       orderUserId: order.userId,
       sessionUserId: user?.id ?? null,

@@ -11,6 +11,7 @@ import { settingBool, settingNumber } from '@/lib/settings/store';
 import { estimatedGatewayFeePaise } from '@/lib/payment-amount';
 import { CART_COOKIE } from '@/lib/cart-cookie';
 import { contactOf, mayViewOrder } from '@/lib/guest-order';
+import { parentOfOrder } from '@/lib/parent-order';
 import { PayNow } from './pay-now';
 import { SetPassword } from './set-password';
 import { TrackEvent } from '@/components/track-event';
@@ -45,18 +46,25 @@ export default async function CheckoutPage({
   if (!order) notFound();
 
   /*
-   * Two people may open this page: the learner it belongs to, and the browser
-   * that bought it as a guest and has no account password yet. Anybody else
-   * is sent to sign in, which is also what a stale link gets.
+   * Three people may open this page: the learner it belongs to, the browser
+   * that bought it as a guest and has no account password yet, and a parent
+   * linked to the learner, paying a fee on their behalf. Anybody else is sent
+   * to sign in, which is also what a stale link gets. The parent is found by
+   * their own session, not the query string: the query string only says where
+   * to go back to.
    */
   const cartCookie = (await cookies()).get(CART_COOKIE)?.value ?? null;
-  const allowed = mayViewOrder({
-    orderUserId: order.userId,
-    sessionUserId: user?.id ?? null,
-    orderBillingAddress: order.billingAddress,
-    cartCookie,
-  });
+  const parent = user ? null : await parentOfOrder(tenant.organizationId, order.userId);
+  const allowed =
+    parent !== null ||
+    mayViewOrder({
+      orderUserId: order.userId,
+      sessionUserId: user?.id ?? null,
+      orderBillingAddress: order.billingAddress,
+      cartCookie,
+    });
   if (!allowed) redirect(`/login?next=${encodeURIComponent(`/checkout/${orderId}`)}`);
+  const backToFees = parent ? `/parent/${parent.childId}/fees` : null;
 
   const contact = contactOf(order.billingAddress);
   const buyer = {
@@ -65,8 +73,9 @@ export default async function CheckoutPage({
   };
   /* A buyer who has never set one is offered it here rather than emailed a
      link, because no email provider is connected yet and a purchase that
-     depends on one is a purchase nobody can finish. */
-  const needsPassword = !order.user.passwordHash;
+     depends on one is a purchase nobody can finish. A parent is never
+     offered the child's password. */
+  const needsPassword = !order.user.passwordHash && !parent;
 
   const org = await db.organization.findUnique({
     where: { id: tenant.organizationId },
@@ -76,6 +85,26 @@ export default async function CheckoutPage({
   const trackItems = order.items.map((i) => ({ id: i.productId, name: i.titleSnapshot, pricePaise: i.pricePaise }));
 
   // Already paid, from an earlier attempt or a webhook that landed first.
+  if (order.status === 'PAID' && parent) {
+    return (
+      <Shell title="Payment received">
+        <p className="muted">
+          Payment received for {order.user.name || 'your child'} against order {order.orderNo}
+          {order.invoice ? `, invoice ${order.invoice.invoiceNo}` : ''}. The receipt appears on the fees page once it is issued.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            href={backToFees ?? '/parent'}
+            className="inline-flex h-11 items-center rounded-[var(--radius-sm)] px-5 text-sm font-medium text-[var(--brand-ink)]"
+            style={{ background: 'var(--brand)' }}
+          >
+            Back to fees
+          </Link>
+        </div>
+      </Shell>
+    );
+  }
+
   if (order.status === 'PAID') {
     const productId = order.items[0]?.productId;
     return (
@@ -173,9 +202,19 @@ export default async function CheckoutPage({
     : 0;
 
   return (
-    <Shell title="Complete your enrolment">
+    <Shell title={parent ? `Pay for ${order.user.name || 'your child'}` : 'Complete your enrolment'}>
       <div className="rounded-[var(--radius)] border bg-[var(--surface)] p-6">
-        <p className="t-small faint">Order {order.orderNo}</p>
+        <p className="t-small faint">
+          Order {order.orderNo}
+          {backToFees && (
+            <>
+              {' · '}
+              <Link href={backToFees} className="underline">
+                back to fees
+              </Link>
+            </>
+          )}
+        </p>
 
         <ul className="mt-4 space-y-2">
           {order.items.map((i) => (
@@ -275,6 +314,7 @@ export default async function CheckoutPage({
               learnerName={buyer.name}
               learnerEmail={buyer.email}
               productId={order.items[0]?.productId ?? null}
+              returnTo={backToFees}
             />
           ) : (
             primary && (

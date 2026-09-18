@@ -40,6 +40,7 @@ export function PayNow({
   orderNo,
   taxPaise,
   items,
+  returnTo = null,
 }: {
   orderId: string;
   orderNo: string;
@@ -55,6 +56,8 @@ export function PayNow({
   learnerName: string;
   learnerEmail: string | null;
   productId: string | null;
+  /** Where to land after a confirmed payment; a parent goes back to the child's fees, a learner into the player. */
+  returnTo?: string | null;
 }) {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>('idle');
@@ -77,7 +80,7 @@ export function PayNow({
       amount: amountPaise,
       currency,
       name: organizationName,
-      description: 'Course enrolment',
+      description: returnTo ? 'Course fee' : 'Course enrolment',
       theme: { color: brandColor },
       prefill: { name: learnerName, email: learnerEmail ?? undefined },
       retry: { enabled: false },
@@ -128,7 +131,7 @@ export function PayNow({
             router.refresh();
             return;
           }
-          router.replace(productId ? `/learn/${productId}` : '/learn');
+          router.replace(returnTo ?? (productId ? `/learn/${productId}` : '/learn'));
         } catch {
           // The money may well have gone through; the webhook settles it. Say
           // that plainly rather than implying the payment failed.
@@ -154,6 +157,7 @@ export function PayNow({
     orderNo,
     organizationName,
     productId,
+    returnTo,
     router,
     taxPaise,
     items,
