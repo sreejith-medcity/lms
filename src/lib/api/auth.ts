@@ -31,7 +31,7 @@ export async function bearerUser(request: Request): Promise<{ tenant: TenantCont
   const header = request.headers.get('authorization') ?? (await headers()).get('authorization');
   if (!header?.startsWith('Bearer ')) return null;
   const claims = readAccessToken(header.slice(7).trim());
-  if (!claims || claims.org !== tenant.organizationId) return null;
+  if (!claims || claims.org !== tenant.organizationId || claims.kind === 'PARENT') return null;
   const user = await db.user.findFirst({
     where: { id: claims.sub, organizationId: tenant.organizationId, deletedAt: null, status: { notIn: ['SUSPENDED', 'ARCHIVED'] } },
     select: { id: true, name: true, email: true, phone: true, kind: true, organizationId: true, locale: true, avatarUrl: true, timezone: true },

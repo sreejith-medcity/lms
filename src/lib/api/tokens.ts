@@ -15,9 +15,10 @@ function secret(): string {
 }
 
 export interface AccessClaims {
+  /** The user id; for a parent, the contact they signed in with. */
   sub: string;
   org: string;
-  kind: 'LEARNER' | 'STAFF';
+  kind: 'LEARNER' | 'STAFF' | 'PARENT';
   exp: number;
 }
 

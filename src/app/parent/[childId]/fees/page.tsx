@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { childOf, requireParentSession } from '@/lib/parent-session';
 import { balanceOf, summariseAccount } from '@/lib/dues';
@@ -7,7 +6,7 @@ import { feeStatusLabel } from '@/lib/misc-fees';
 import { failedOrders, inFlightFor, instalmentState, payOffer, processingOrders } from '@/lib/parent-fees';
 import { formatMoney } from '@/lib/money';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
-import { paymentsAvailable } from '@/lib/payments';
+import { parentFeesData } from '@/lib/parent-fees-data';
 import { Badge, Card, Cell, Row, Table } from '@/components/ui';
 import { ParentPay } from './pay';
 
@@ -36,33 +35,7 @@ export default async function ParentFees({ params }: { params: Promise<{ childId
   const day = (d: Date) => formatDayLabel(dayKey(d, tz), tz);
   const money = (p: number) => formatMoney(p, tenant.currency);
 
-  const [enrolments, charges, orders, payments, tax, online] = await Promise.all([
-    db.enrollment.findMany({
-      where: { organizationId: tenant.organizationId, userId: child.id, instalments: { some: {} } },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, status: true, product: { select: { title: true } }, batch: { select: { name: true } }, instalments: { orderBy: { sequence: 'asc' }, select: { id: true, sequence: true, amountPaise: true, paidPaise: true, dueDate: true, paidAt: true } } },
-    }),
-    db.miscFee.findMany({
-      where: { organizationId: tenant.organizationId, userId: child.id, status: { in: ['PENDING', 'PAID', 'WAIVED'] } },
-      orderBy: [{ status: 'asc' }, { dueDate: 'asc' }],
-      select: { id: true, label: true, amountPaise: true, dueDate: true, status: true, paidAt: true, waivedReason: true, enrollment: { select: { product: { select: { title: true } } } } },
-    }),
-    // Orders still in flight tell the parent a payment is processing, or
-    // that the last attempt failed or was cancelled, before another is offered.
-    db.order.findMany({
-      where: { organizationId: tenant.organizationId, userId: child.id, status: { in: ['PENDING', 'FAILED', 'CANCELLED'] }, placedAt: { gte: new Date(now.getTime() - 7 * 864e5) }, items: { some: { OR: [{ instalmentId: { not: null } }, { miscFeeId: { not: null } }] } } },
-      orderBy: { placedAt: 'desc' },
-      select: { id: true, orderNo: true, status: true, totalPaise: true, placedAt: true, gatewayOrderId: true, items: { select: { instalmentId: true, miscFeeId: true, titleSnapshot: true } } },
-    }),
-    db.payment.findMany({
-      where: { organizationId: tenant.organizationId, userId: child.id, status: { in: ['CAPTURED', 'REFUNDED', 'PARTIALLY_REFUNDED'] } },
-      orderBy: { createdAt: 'desc' },
-      take: 40,
-      select: { id: true, receiptNo: true, amountPaise: true, capturedAt: true, createdAt: true, method: true, gateway: true, gatewayRef: true, status: true, raw: true, refunds: { select: { amountPaise: true, createdAt: true } } },
-    }),
-    db.taxConfig.findFirst({ where: { organizationId: tenant.organizationId }, select: { enabled: true, pricesAreExclusive: true } }),
-    paymentsAvailable(tenant.organizationId).catch(() => false),
-  ]);
+  const { enrolments, charges, orders, payments, tax, online } = await parentFeesData(tenant.organizationId, child.id, now);
 
   const processing = processingOrders(orders);
   const failed = failedOrders(orders);

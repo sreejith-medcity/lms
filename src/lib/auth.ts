@@ -53,11 +53,31 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   if (session.user.deletedAt) return null;
   if (session.user.status === 'SUSPENDED' || session.user.status === 'ARCHIVED') return null;
 
+  return sessionUserFrom(session.user);
+});
+
+/** The rows a session user is built from: the account, its branches and its roles with permissions. */
+export interface SessionUserRows {
+  id: string;
+  name: string;
+  email: string | null;
+  kind: string;
+  organizationId: string;
+  branchMemberships: { branchId: string }[];
+  roleAssignments: { roleId: string; role: { restrictBatchAccess: boolean; restrictBranchAccess: boolean; permissions: { canView: boolean; canEdit: boolean; canDelete: boolean; permission: { key: string } }[] } }[];
+}
+
+/**
+ * The permission set and scope flags folded across every role the
+ * person holds. Shared by the cookie session and the app's bearer
+ * token, so both doors decide "may this person" the same way.
+ */
+export function sessionUserFrom(user: SessionUserRows): SessionUser {
   const permissions: PermissionSet = {};
   let restrictBatchAccess = false;
   let restrictBranchAccess = false;
 
-  for (const assignment of session.user.roleAssignments) {
+  for (const assignment of user.roleAssignments) {
     if (assignment.role.restrictBatchAccess) restrictBatchAccess = true;
     if (assignment.role.restrictBranchAccess) restrictBranchAccess = true;
     for (const rp of assignment.role.permissions) {
@@ -72,13 +92,13 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   }
 
   return {
-    id: session.user.id,
-    name: session.user.name,
-    email: session.user.email,
-    kind: session.user.kind as 'LEARNER' | 'STAFF',
-    organizationId: session.user.organizationId,
-    branchIds: session.user.branchMemberships.map((m) => m.branchId),
-    roleIds: session.user.roleAssignments.map((r) => r.roleId),
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    kind: user.kind as 'LEARNER' | 'STAFF',
+    organizationId: user.organizationId,
+    branchIds: user.branchMemberships.map((m) => m.branchId),
+    roleIds: user.roleAssignments.map((r) => r.roleId),
     permissions,
     restrictBatchAccess,
     // Both flags set means the narrower one wins: a teacher who is also a
@@ -86,7 +106,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     // a role that says "own batches only" is not widened by a second role.
     restrictBranchAccess: restrictBranchAccess && !restrictBatchAccess,
   };
-});
+}
 
 export async function requireStaff(permissionKey?: string, action: 'view' | 'edit' | 'delete' = 'view') {
   const user = await getSessionUser();

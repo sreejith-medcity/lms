@@ -1,23 +1,14 @@
-import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
-import { childrenOf, requireParentSession } from '@/lib/parent-session';
+import { requireParentSession } from '@/lib/parent-session';
+import { parentInboxRows } from '@/lib/parent-inbox-data';
 import { pushConfigured } from '@/lib/messaging/push';
 import { settingBool } from '@/lib/settings/store';
 import { formatDateTime } from '@/lib/clock';
-import { noticeCategory } from '@/lib/notices';
 import { Card } from '@/components/ui';
 import { ParentInbox, ParentPushToggle, type InboxRow } from './inbox';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Notices', robots: { index: false, follow: false } };
-
-const KIND_CATEGORY: Record<string, string> = {
-  'attendance.absent': 'Attendance',
-  'attendance.late': 'Attendance',
-  'attendance.corrected': 'Attendance',
-  'result.published': 'Result',
-  'fee.reminder': 'Fees',
-};
 
 /**
  * Everything the academy has told this parent, across their children. A
@@ -28,41 +19,8 @@ const KIND_CATEGORY: Record<string, string> = {
 export default async function ParentNotices() {
   const tenant = await requireTenant();
   const session = await requireParentSession();
-  const children = await childrenOf(tenant.organizationId, session.contact);
-  const childName = new Map(children.map((c) => [c.id, c.name]));
-
-  const [rows, pushOn] = await Promise.all([
-    db.parentNotification.findMany({
-      where: { organizationId: tenant.organizationId, contact: session.contact },
-      orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
-      take: 100,
-      select: { id: true, kind: true, title: true, body: true, href: true, readAt: true, createdAt: true, learnerId: true, learnerIds: true, noticeId: true },
-    }),
-    settingBool(tenant.organizationId, 'notices.push'),
-  ]);
-
-  const noticeIds = rows.map((r) => r.noticeId).filter((x): x is string => Boolean(x));
-  const notices = noticeIds.length ? await db.notice.findMany({ where: { organizationId: tenant.organizationId, id: { in: noticeIds } }, select: { id: true, kind: true, status: true } }) : [];
-  const noticeById = new Map(notices.map((n) => [n.id, n]));
-
-  const list: InboxRow[] = rows.map((r) => {
-    const ids = r.learnerIds.length ? r.learnerIds : [r.learnerId];
-    const linked = ids.filter((id) => childName.has(id));
-    const notice = r.noticeId ? noticeById.get(r.noticeId) : null;
-    return {
-      id: r.id,
-      title: r.title,
-      body: r.body,
-      // A child no longer linked opens nothing.
-      href: linked.length === 0 ? null : r.href,
-      category: notice ? noticeCategory(notice.kind) : (KIND_CATEGORY[r.kind] ?? 'Notice'),
-      children: linked.length === 0 ? 'a child no longer on your account' : linked.map((id) => childName.get(id)).join(', '),
-      when: formatDateTime(r.createdAt, tenant.timezone),
-      read: r.readAt !== null,
-      withdrawn: notice?.status === 'WITHDRAWN',
-    };
-  });
-  const unread = list.filter((r) => !r.read).length;
+  const [{ rows, unread }, pushOn] = await Promise.all([parentInboxRows(tenant.organizationId, session.contact), settingBool(tenant.organizationId, 'notices.push')]);
+  const list: InboxRow[] = rows.map((r) => ({ id: r.id, title: r.title, body: r.body, href: r.href, category: r.category, children: r.children, when: formatDateTime(r.createdAt, tenant.timezone), read: r.read, withdrawn: r.withdrawn }));
 
   return (
     <div className="mx-auto max-w-4xl px-5 py-7">
