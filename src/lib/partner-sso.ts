@@ -28,6 +28,8 @@ export interface HandoffClaims {
   grants?: string[];
   /** How many mock tests the learner's courses include; absent means the partner's own default. */
   mockTestAttempts?: number;
+  /** The same, per level ("B1": 5), with "*" for courses whose level is not known. */
+  mockTestsByLevel?: Record<string, number>;
   /** Issued and expiry, seconds since the epoch. */
   iat: number;
   exp: number;

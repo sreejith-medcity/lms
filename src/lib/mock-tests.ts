@@ -40,3 +40,30 @@ export function mockTestLine(a: MockTestAllowance): string | null {
   if (left === 0) return `${Math.min(a.used, a.limit)} of ${a.limit} used, none left`;
   return `${a.used} of ${a.limit} used`;
 }
+
+/**
+ * The same allowance, per level, for a partner that sells papers by
+ * level. A course names its level in its own field, else in its title
+ * ("German Language - B1"); one that names none goes under "*", which
+ * the partner spreads across the levels the learner is on. Null when
+ * no course sets an allowance.
+ */
+export function mockTestsByLevel(courses: { mockTestAttempts: number | null; level: string | null; title: string }[]): Record<string, number> | null {
+  const out: Record<string, number> = {};
+  let any = false;
+  for (const c of courses) {
+    if (c.mockTestAttempts === null || c.mockTestAttempts < 0) continue;
+    any = true;
+    const key = levelOf(c.level, c.title) ?? '*';
+    out[key] = (out[key] ?? 0) + Math.floor(c.mockTestAttempts);
+  }
+  return any ? out : null;
+}
+
+const CEFR = /\b([ABC][12])\b/i;
+
+/** "B1" from the course's level field or its title; null when neither names one. */
+export function levelOf(level: string | null, title: string): string | null {
+  const hit = (level ?? '').match(CEFR) ?? title.match(CEFR);
+  return hit ? hit[1].toUpperCase() : null;
+}
