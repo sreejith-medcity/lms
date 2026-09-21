@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
-import { runSmoke, formatReport, CHECKS } from '../src/lib/smoke';
+import { runSmoke, formatReport, CHECKS, SLOW_MS, slowOnes } from '../src/lib/smoke';
 
 /**
  * The runner, against a real HTTP server rather than a mock.
@@ -155,4 +155,20 @@ test('every check carries a reason, so none can be deleted to force a green run'
     assert.ok(check.why.length > 15, `${check.path} needs a real reason`);
     assert.ok(check.expect.length > 0, `${check.path} expects nothing`);
   }
+});
+
+test('the report prints how long each page took and names the slow ones', async () => {
+  const slowFetch: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith('/courses')) await new Promise((r) => setTimeout(r, 30));
+    return new Response('', { status: url.includes('does-not-exist') ? 404 : 200 });
+  };
+  const report = await runSmoke('https://example.test', { fetchImpl: slowFetch });
+  const text = formatReport(report);
+  assert.match(text, /Time to first byte: median \d+ ms, slowest \d+ ms\./);
+  assert.match(text, / ms\s+\/courses/);
+  // Nothing here is over the threshold, so nothing is called slow.
+  assert.doesNotMatch(text, /took over/);
+  assert.equal(slowOnes(report).length, 0);
+  assert.equal(slowOnes({ ...report, results: report.results.map((r) => (r.path === '/courses' ? { ...r, ms: SLOW_MS + 1 } : r)) }).map((r) => r.path).join(','), '/courses');
 });

@@ -159,14 +159,29 @@ export async function runSmoke(base: string, options: SmokeOptions = {}): Promis
   };
 }
 
-/** One line per check, and the reason attached to anything that failed. */
+/**
+ * A page that answers 200 in four seconds is not fine, it is a page a
+ * visitor on a phone has already left. The time to first byte is printed
+ * beside every check, and anything over this is called out, so a deploy
+ * that made the catalogue slow is noticed on the same run that would
+ * notice it broken.
+ */
+export const SLOW_MS = 2_500;
+
+/** The slow-but-answering checks, worst first. */
+export function slowOnes(report: SmokeReport): Result[] {
+  return report.results.filter((r) => !r.skipped && r.ok && r.ms > SLOW_MS).sort((a, b) => b.ms - a.ms);
+}
+
+/** One line per check with its time, and the reason attached to anything that failed. */
 export function formatReport(report: SmokeReport): string {
   const lines = [`Smoke test against ${report.base}`, ''];
 
   for (const result of report.results) {
     const mark = result.skipped ? '-' : result.ok ? 'ok' : 'FAIL';
     const status = result.skipped ? 'skipped' : (result.status ?? 'no answer');
-    lines.push(`  ${mark.padEnd(4)} ${String(status).padEnd(9)} ${result.path}`);
+    const took = result.skipped ? '' : `${String(result.ms).padStart(5)} ms${result.ok && result.ms > SLOW_MS ? ' slow' : ''}`;
+    lines.push(`  ${mark.padEnd(4)} ${String(status).padEnd(9)} ${took.padEnd(14)} ${result.path}`);
     if (!result.ok) {
       const why = CHECKS.find((c) => c.path === result.path)?.why ?? '';
       lines.push(`       ${result.detail}`);
@@ -178,6 +193,15 @@ export function formatReport(report: SmokeReport): string {
   lines.push(
     `${report.passed} passed, ${report.failed} failed${report.skipped ? `, ${report.skipped} skipped` : ''}.`,
   );
+
+  const timed = report.results.filter((r) => !r.skipped && r.status !== null);
+  if (timed.length > 0) {
+    const sorted = timed.map((r) => r.ms).sort((a, b) => a - b);
+    const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+    lines.push(`Time to first byte: median ${at(0.5)} ms, slowest ${sorted[sorted.length - 1]} ms.`);
+    const slow = slowOnes(report);
+    if (slow.length) lines.push(`${slow.length} answered but took over ${SLOW_MS} ms: ${slow.map((r) => `${r.path} (${r.ms} ms)`).join(', ')}.`);
+  }
 
   // Every single request failing to connect is almost never a broken site. It
   // is a machine that cannot reach the host: a proxy, a VPN, a firewall, or a
