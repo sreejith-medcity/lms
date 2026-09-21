@@ -5,6 +5,7 @@ import { getTenantContext } from '@/lib/tenant';
 import { getParentSession } from '@/lib/parent-session';
 import { BrandLockup } from '@/components/brand-lockup';
 import { inApp } from '@/lib/in-app';
+import { SkipLink } from '@/components/skip-link';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -21,10 +22,11 @@ export default async function ParentLayout({ children }: { children: React.React
   const session = await getParentSession();
   const unread = session ? await db.parentNotification.count({ where: { organizationId: tenant.organizationId, contact: session.contact, readAt: null } }) : 0;
 
-  if (await inApp()) return <main className="min-h-screen bg-[var(--canvas)]">{children}</main>;
+  if (await inApp()) return <main id="main" className="min-h-screen bg-[var(--canvas)]">{children}</main>;
 
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
+      <SkipLink />
       <header className="sticky top-0 z-10 bg-[var(--surface)] shadow-[0_1px_0_var(--line),0_2px_8px_rgb(50_32_70/0.06)]">
         <div className="mx-auto flex h-14 max-w-4xl items-center gap-4 px-5">
           <Link href="/parent" className="flex shrink-0 items-center gap-2">
@@ -57,7 +59,7 @@ export default async function ParentLayout({ children }: { children: React.React
           )}
         </div>
       </header>
-      <main>{children}</main>
+      <main id="main">{children}</main>
     </div>
   );
 }

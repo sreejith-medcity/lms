@@ -232,10 +232,10 @@ export function ProgressRing({ value, size = 40 }: { value: number; size?: numbe
   );
 }
 
-export function ProgressBar({ value }: { value: number }) {
+export function ProgressBar({ value, label = 'Progress' }: { value: number; label?: string }) {
   const clamped = Math.max(0, Math.min(100, value));
   return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
+    <div className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(clamped)}>
       <div
         className="h-full rounded-full bg-[var(--brand)]"
         style={{ width: `${clamped}%`, transition: 'width 500ms cubic-bezier(0.2,0.8,0.2,1)' }}
@@ -277,7 +277,7 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
         <thead>
           <tr className="border-b bg-[var(--surface-2)]">
             {head.map((h, i) => (
-              <th key={i} className="t-micro faint px-4 py-2.5 text-left font-semibold">
+              <th key={i} scope="col" className="t-micro faint px-4 py-2.5 text-left font-semibold">
                 {h}
               </th>
             ))}

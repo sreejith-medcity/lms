@@ -13,6 +13,7 @@ import { getLocale, offeredForTenant } from '@/lib/i18n/server';
 import { dictionaryFor, translatorFor } from '@/lib/i18n';
 import { I18nProvider } from '@/components/i18n-provider';
 import { LanguageSwitch } from '@/components/language-switch';
+import { SkipLink } from '@/components/skip-link';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +57,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
   if (await inApp()) {
     return (
       <I18nProvider locale={locale} dict={dictionaryFor(locale)}>
-        <main className="rise min-h-screen min-w-0 bg-[var(--canvas)]">{children}</main>
+        <main id="main" className="rise min-h-screen min-w-0 bg-[var(--canvas)]">{children}</main>
       </I18nProvider>
     );
   }
@@ -64,6 +65,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
   return (
     <I18nProvider locale={locale} dict={dictionaryFor(locale)}>
       <div className="min-h-screen bg-[var(--canvas)]">
+        <SkipLink label={t('Skip to content')} />
         <ImpersonationBanner learnerName={user.name} />
         <div className="flex min-h-screen">
           <LearnerSidebar items={nav} isStaff={user.kind === 'STAFF'} brand={{ full: brandFull, mark: brandMark }} account={{ avatar, name: user.name }} />
@@ -79,7 +81,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
                 <div className="ml-auto flex shrink-0 items-center gap-3">
                   <LanguageSwitch current={locale} offered={offered} compact />
                   <Bell unread={unread} />
-                  <Link href="/learn/account" className="flex items-center" title={t('Account')}>
+                  <Link href="/learn/account" className="flex items-center" title={t('Account')} aria-label={t('Account')}>
                     {avatar}
                   </Link>
                 </div>
@@ -88,7 +90,7 @@ export default async function LearnLayout({ children }: { children: React.ReactN
 
             {/* No container here: the player wants the full width for its curriculum rail.
                 Pages that want a reading measure add their own. */}
-            <main className="rise min-w-0 flex-1">{children}</main>
+            <main id="main" className="rise min-w-0 flex-1">{children}</main>
           </div>
         </div>
       </div>

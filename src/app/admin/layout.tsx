@@ -9,6 +9,7 @@ import { BRANCH_VIEW_COOKIE, canSwitchBranch } from '@/lib/scope';
 import { BranchSwitcher } from '@/components/branch-switcher';
 import { getTenantContext } from '@/lib/tenant';
 import { inApp } from '@/lib/in-app';
+import { SkipLink } from '@/components/skip-link';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   // Inside the phone app the page sits under the app's own bar: no
   // sidebar, no header, no second sign-out.
-  if (await inApp()) return <main className="rise min-h-screen bg-[var(--canvas)] p-4">{children}</main>;
+  if (await inApp()) return <main id="main" className="rise min-h-screen bg-[var(--canvas)] p-4">{children}</main>;
 
   const initials = user.name
     .split(' ')
@@ -47,6 +48,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen bg-[var(--canvas)]">
+      <SkipLink />
       <Sidebar features={tenant.features} orgName={tenant.name} logoUrl={tenant.logoUrl} />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -82,7 +84,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </header>
 
-        <main className="rise flex-1 p-5 lg:p-7">{children}</main>
+        <main id="main" className="rise flex-1 p-5 lg:p-7">{children}</main>
       </div>
     </div>
   );
