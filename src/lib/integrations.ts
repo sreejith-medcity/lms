@@ -558,9 +558,13 @@ export const INTEGRATIONS: IntegrationDef[] = [
     priority: 1,
     requires:
       'A Google Cloud project with the OAuth consent screen published, and the callback URL of this deployment added as an authorized redirect.',
-    purpose: 'One tap instead of a password, which removes the largest support burden an institute has.',
+    purpose: 'One tap instead of a password, which removes the largest support burden an institute has. The phone app signs in with Google too, through the same account matching.',
     status: 'wired',
-    fields: [TEXT('clientId', 'Client ID'), KEY('clientSecret', 'Client secret')],
+    fields: [
+      TEXT('clientId', 'Client ID'),
+      KEY('clientSecret', 'Client secret'),
+      TEXT('appClientIds', 'App client IDs', undefined, 'Optional: the Android and iOS client ids from the same Google project, comma separated, so the phone app may sign in with Google. The web client id above is accepted either way.'),
+    ],
   },
   {
     id: 'microsoft_sso',

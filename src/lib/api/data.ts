@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { resolveIntegration } from '@/lib/integration-store';
 import { curriculumGate } from '@/lib/curriculum-access';
 import { MATERIAL_LABELS, percent } from '@/lib/progress';
 import { balanceOf, summariseAccount } from '@/lib/dues';
@@ -22,12 +23,15 @@ import type { ApiUser } from './auth';
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
 export async function tenantPublic(tenant: TenantContext) {
-  const [org, languages, otp, selfSignup] = await Promise.all([
+  const [org, languages, otp, selfSignup, google] = await Promise.all([
     db.organization.findUnique({ where: { id: tenant.organizationId }, select: { name: true, logoUrl: true, faviconUrl: true, brandColor: true, supportEmail: true, contactNumber: true, website: true } }),
     settingText(tenant.organizationId, 'learning.languages'),
     settingBool(tenant.organizationId, 'auth.otpLogin'),
     settingBool(tenant.organizationId, 'auth.selfSignup'),
+    resolveIntegration(tenant.organizationId, 'google_sso'),
   ]);
+  // The app may offer Google only when the phone's own client ids are on the card.
+  const googleApp = Boolean(google?.complete && (google.values.appClientIds ?? '').trim());
   return {
     name: org?.name ?? tenant.name,
     slug: tenant.slug,
@@ -40,7 +44,7 @@ export async function tenantPublic(tenant: TenantContext) {
     phone: org?.contactNumber ?? null,
     website: org?.website ?? null,
     languages: offeredLocales(languages),
-    signIn: { password: true, code: otp, selfSignup },
+    signIn: { password: true, code: otp, selfSignup, google: googleApp, googleWebClientId: googleApp ? google!.values.clientId : null },
     status: tenant.status,
   };
 }
