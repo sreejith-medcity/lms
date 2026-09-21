@@ -172,6 +172,49 @@ export async function confirmEmailChange(_prev: ActionState, formData: FormData)
   }
 }
 
+/**
+ * The contact the learner did not sign up with, confirmed with a code.
+ *
+ * Asked for on the account page while the academy wants it and it is
+ * still unconfirmed. A code is sent on sign-up already; this re-sends,
+ * since the first one is easy to miss between the welcome and the tour.
+ */
+export async function requestContactCode(kind: 'phone' | 'email'): Promise<ActionState> {
+  try {
+    const { tenant, user } = await me();
+    const row = await db.user.findUnique({ where: { id: user.id }, select: { email: true, phone: true, emailVerifiedAt: true, phoneVerifiedAt: true } });
+    const target = kind === 'phone' ? row?.phone : row?.email;
+    if (!target) return { error: kind === 'phone' ? 'There is no mobile on your account to confirm.' : 'There is no email on your account to confirm.' };
+    if (kind === 'phone' ? row?.phoneVerifiedAt : row?.emailVerifiedAt) return { ok: true, message: 'Already confirmed.' };
+    const sent = await sendOtp({ organizationId: tenant.organizationId, target, purpose: 'secondary_validation', userId: user.id });
+    if (!sent.ok) return { error: sent.error ?? 'The code could not be sent just now.' };
+    return { ok: true, message: `A six-digit code was sent to ${sent.sentTo ?? target}.` };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function confirmContact(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await me();
+    const kind = String(formData.get('kind') ?? '') === 'phone' ? 'phone' : 'email';
+    const code = String(formData.get('code') ?? '').trim();
+    if (!code) return { error: 'Enter the code.' };
+    const row = await db.user.findUnique({ where: { id: user.id }, select: { email: true, phone: true } });
+    const target = kind === 'phone' ? row?.phone : row?.email;
+    if (!target) return { error: 'There is nothing to confirm.' };
+    const check = await checkOtp({ target, purpose: 'secondary_validation', code });
+    if (!check.ok) return { error: check.error ?? 'That code is wrong or has expired.' };
+    if (check.userId && check.userId !== user.id) return { error: 'That code was not sent for this account.' };
+    await db.user.update({ where: { id: user.id }, data: kind === 'phone' ? { phoneVerifiedAt: new Date() } : { emailVerifiedAt: new Date() } });
+    await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: kind === 'phone' ? 'account.phone_confirmed' : 'account.email_confirmed', entity: 'User', entityId: user.id });
+    revalidatePath('/learn/account');
+    return { ok: true, message: kind === 'phone' ? 'Your mobile is confirmed.' : 'Your email is confirmed.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 const AVATAR_MAX = 3 * 1024 * 1024;
 
 export async function uploadAvatar(_prev: ActionState, formData: FormData): Promise<ActionState> {

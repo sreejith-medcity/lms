@@ -2,10 +2,10 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
-import { settingBool } from '@/lib/settings/store';
+import { settingBool, settingText } from '@/lib/settings/store';
 import { fieldFile, fieldsFor } from '@/lib/custom-fields';
 import { Card, Field, ProgressBar } from '@/components/ui';
-import { AvatarForm, ConsentForm, DetailsForm, DocumentField } from './forms';
+import { AvatarForm, ConsentForm, ContactConfirmCard, DetailsForm, DocumentField } from './forms';
 
 import { getLocale, offeredForTenant } from '@/lib/i18n/server';
 import { translatorFor } from '@/lib/i18n';
@@ -27,7 +27,7 @@ export default async function AccountPage() {
   const user = await getSessionUser();
   if (!user) return null;
 
-  const [account, custom, canName, canEmail, canPhone] = await Promise.all([
+  const [account, custom, canName, canEmail, canPhone, primaryField, verifySecondary] = await Promise.all([
     db.user.findUnique({
       where: { id: user.id },
       select: {
@@ -40,6 +40,8 @@ export default async function AccountPage() {
         registrationNo: true,
         createdAt: true,
         emailOptOut: true,
+        emailVerifiedAt: true,
+        phoneVerifiedAt: true,
         smsOptOut: true,
         whatsappOptOut: true,
         learnerProfile: {
@@ -62,8 +64,16 @@ export default async function AccountPage() {
     settingBool(tenant.organizationId, 'profile.canEditName'),
     settingBool(tenant.organizationId, 'profile.canEditEmail'),
     settingBool(tenant.organizationId, 'profile.canEditPhone'),
+    settingText(tenant.organizationId, 'auth.primaryField'),
+    settingBool(tenant.organizationId, 'auth.verifySecondary'),
   ]);
   if (!account) return null;
+
+  // The contact they did not sign up with, while the academy wants it confirmed.
+  const secondKind = primaryField === 'PHONE' ? 'email' : 'phone';
+  const secondContact = secondKind === 'email' ? account.email : account.phone;
+  const secondConfirmed = secondKind === 'email' ? Boolean(account.emailVerifiedAt) : Boolean(account.phoneVerifiedAt);
+  const askToConfirm = verifySecondary && Boolean(secondContact) && !secondConfirmed;
 
   const completion = account.learnerProfile?.profileCompletion ?? 0;
   const [locale, offered] = await Promise.all([getLocale(), offeredForTenant()]);
@@ -122,6 +132,7 @@ export default async function AccountPage() {
         </div>
 
         <div className="space-y-4">
+          {askToConfirm && secondContact && <ContactConfirmCard kind={secondKind} contact={secondContact} />}
           <Card>
             <p className="font-semibold">Your details</p>
             <p className="t-small faint mt-0.5">

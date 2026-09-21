@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useRef, useState, useTransition } from 'react';
-import { confirmEmailChange, removeAvatar, saveDetails, uploadAvatar, uploadDocument } from '@/server/account';
+import { confirmContact, confirmEmailChange, removeAvatar, requestContactCode, saveDetails, uploadAvatar, uploadDocument } from '@/server/account';
 import { saveConsent } from '@/server/consent';
 import type { ActionState } from '@/server/courses';
 import { Button, Checkbox, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
@@ -245,5 +245,45 @@ export function ConsentForm({ email, sms, whatsapp }: { email: boolean; sms: boo
         {pending ? 'Saving...' : 'Save'}
       </Button>
     </form>
+  );
+}
+
+/**
+ * The contact the learner did not sign up with, confirmed with a code:
+ * shown while the academy wants it and it is still unconfirmed.
+ */
+export function ContactConfirmCard({ kind, contact }: { kind: 'phone' | 'email'; contact: string }) {
+  const [state, action, pending] = useActionState(confirmContact, initial);
+  const [sent, setSent] = useState<ActionState>({});
+  const [sending, startSending] = useTransition();
+  const what = kind === 'phone' ? 'mobile' : 'email';
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-[var(--brand-line)] bg-[var(--brand-soft)] p-4">
+      <p className="text-sm font-medium">Confirm your {what}</p>
+      <p className="t-small faint mt-0.5">
+        Reminders and receipts go to {contact}. Enter the six-digit code sent there, or ask for a fresh one.
+      </p>
+      <form action={action} className="mt-3 flex flex-wrap items-end gap-2">
+        <input type="hidden" name="kind" value={kind} />
+        <Field label="Code">
+          <Input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={8} className="w-36" />
+        </Field>
+        <Button type="submit" size="sm" disabled={pending || state.ok}>
+          {pending ? 'Checking...' : state.ok ? 'Confirmed' : 'Confirm'}
+        </Button>
+        <button
+          type="button"
+          className="t-small faint hover:underline"
+          disabled={sending}
+          onClick={() => startSending(async () => setSent(await requestContactCode(kind)))}
+        >
+          {sending ? 'Sending...' : 'Send a new code'}
+        </button>
+      </form>
+      <div className="mt-2">
+        <FormError message={state.error ?? sent.error} />
+        <FormSuccess message={state.ok ? state.message : sent.ok ? sent.message : undefined} />
+      </div>
+    </div>
   );
 }

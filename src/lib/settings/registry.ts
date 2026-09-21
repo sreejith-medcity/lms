@@ -338,6 +338,16 @@ export const SETTINGS: SettingDef[] = [
           : 'Mobile stays optional.',
   },
   {
+    key: 'auth.verifySecondary',
+    group: 'auth',
+    label: 'Confirm the second contact with a code',
+    help: 'After signing up, a learner is asked to confirm the contact they did not sign up with (the mobile when email is primary) with a six-digit code, so reminders and receipts have a working destination. Off, the second contact is still checked for shape and for being unused here.',
+    kind: 'boolean',
+    default: false,
+    live: true,
+    effect: (v) => (v ? 'Needs an SMS or email provider under Messaging; without one the card on the account page says the code could not be sent.' : 'The second contact is taken as typed.'),
+  },
+  {
     key: 'auth.selfSignup',
     group: 'auth',
     label: 'Anybody may create an account',

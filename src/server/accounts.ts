@@ -17,6 +17,8 @@ import { creditOnSignup } from '@/lib/wallet';
 import { settingBool, settingText } from '@/lib/settings/store';
 import { saveFieldValues, signupFields } from '@/lib/custom-fields';
 import { happened, notifyLearner } from '@/lib/events';
+import { signupPhone } from '@/lib/phone';
+import { sendOtp } from '@/lib/otp-delivery';
 
 const SESSION_DAYS = 30;
 
@@ -72,7 +74,16 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     });
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-    const { name, email, phone, password } = parsed.data;
+    const { name, email, password } = parsed.data;
+    // A mobile is kept the one way the rest of the product reads it: ten
+    // digits for India, dial code and digits otherwise. Anything else on the
+    // form is a typo, and a typo here means the reminders go nowhere.
+    let phone = parsed.data.phone?.trim() || '';
+    if (phone) {
+      const normalised = signupPhone(phone);
+      if (!normalised) return { error: 'Enter a mobile number as ten digits, or with its country code (+971...).' };
+      phone = normalised;
+    }
 
     // Sign-up is cheap to script and creates rows, so it is limited harder than
     // sign-in: three accounts per address per hour.
@@ -100,6 +111,14 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
             ? 'An account with that mobile number already exists. Try signing in.'
             : 'An account with that email already exists. Try signing in.',
       };
+    }
+    // The second contact has to be free too: the table keeps one account per
+    // mobile and per email, and finding that out from a failed insert would
+    // read as "something went wrong" rather than as the reason.
+    const secondary = primary === 'PHONE' ? (email ? { email } : null) : phone ? { phone } : null;
+    if (secondary) {
+      const taken = await db.user.findFirst({ where: { organizationId: org.id, deletedAt: null, ...secondary }, select: { id: true } });
+      if (taken) return { error: 'email' in secondary ? 'That email address is already on another account here. Sign in, or leave it out.' : 'That mobile number is already on another account here. Sign in, or leave it out.' };
     }
 
     // Registration numbers continue the institute's own sequence rather than
@@ -147,6 +166,13 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
     });
 
     await startSession(user.id, h.get('user-agent'), h.get('x-forwarded-for'));
+
+    // The contact they did not sign up with gets a code straight away when
+    // the academy wants it confirmed; the account page takes the code.
+    const second = primary === 'PHONE' ? email : phone;
+    if (second && (await settingBool(org.id, 'auth.verifySecondary'))) {
+      await sendOtp({ organizationId: org.id, target: second, purpose: 'secondary_validation', userId: user.id }).catch(() => undefined);
+    }
 
     await happened({
       organizationId: org.id,
