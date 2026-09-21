@@ -1,0 +1,51 @@
+name: smoke
+
+# After every push to main, wait for Hostinger to build and serve that commit,
+# then fetch the pages that must answer. The check workflow says a push was
+# wrong before it is built; this one says the build that came out of it is
+# broken, which is the failure that has actually happened.
+#
+# Secrets, both optional:
+#   SMOKE_BASE_URL  the site to check (defaults to demo.medcitylms.in)
+#   SMOKE_SESSION   a staff session cookie, so the admin pages are checked too
+#                   rather than skipped; without it the anonymous pages alone.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          DATABASE_URL_UNPOOLED: postgresql://user:pass@localhost:5432/db
+
+      - name: Wait for the build to be the one answering
+        env:
+          BASE: ${{ secrets.SMOKE_BASE_URL || 'https://demo.medcitylms.in' }}
+        run: |
+          echo "Waiting for $GITHUB_SHA on $BASE"
+          for i in $(seq 1 60); do
+            sha=$(curl -s --max-time 20 "$BASE/api/version" | sed -n 's/.*"sha":"\([0-9a-f]*\)".*/\1/p')
+            echo "attempt $i: serving ${sha:-nothing}"
+            if [ "$sha" = "$GITHUB_SHA" ]; then exit 0; fi
+            sleep 30
+          done
+          echo "The site never served $GITHUB_SHA; checking whatever is up."
+
+      - name: Fetch the pages that must answer
+        env:
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL || 'https://demo.medcitylms.in' }}
+          SMOKE_SESSION: ${{ secrets.SMOKE_SESSION }}
+        run: npm run smoke
