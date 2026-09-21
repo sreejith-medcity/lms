@@ -7,6 +7,7 @@ import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { learnerNav } from '@/lib/learner-nav';
 import { BrandLockup } from '@/components/brand-lockup';
 import { LearnerMenu, LearnerSidebar } from './learner-sidebar';
+import { inApp } from '@/lib/in-app';
 import { Bell } from './bell';
 import { getLocale, offeredForTenant } from '@/lib/i18n/server';
 import { dictionaryFor, translatorFor } from '@/lib/i18n';
@@ -51,6 +52,14 @@ export default async function LearnLayout({ children }: { children: React.ReactN
       {tenant.name.trim().slice(0, 1).toUpperCase()}
     </span>
   );
+
+  if (await inApp()) {
+    return (
+      <I18nProvider locale={locale} dict={dictionaryFor(locale)}>
+        <main className="rise min-h-screen min-w-0 bg-[var(--canvas)]">{children}</main>
+      </I18nProvider>
+    );
+  }
 
   return (
     <I18nProvider locale={locale} dict={dictionaryFor(locale)}>

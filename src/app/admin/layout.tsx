@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import { BRANCH_VIEW_COOKIE, canSwitchBranch } from '@/lib/scope';
 import { BranchSwitcher } from '@/components/branch-switcher';
 import { getTenantContext } from '@/lib/tenant';
+import { inApp } from '@/lib/in-app';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await getSessionUser();
   if (!user) redirect('/login');
   if (user.kind !== 'STAFF') redirect('/learn');
+
+  // Inside the phone app the page sits under the app's own bar: no
+  // sidebar, no header, no second sign-out.
+  if (await inApp()) return <main className="rise min-h-screen bg-[var(--canvas)] p-4">{children}</main>;
 
   const initials = user.name
     .split(' ')

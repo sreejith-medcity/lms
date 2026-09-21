@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { getParentSession } from '@/lib/parent-session';
 import { BrandLockup } from '@/components/brand-lockup';
+import { inApp } from '@/lib/in-app';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -19,6 +20,8 @@ export default async function ParentLayout({ children }: { children: React.React
   if (!tenant) redirect('/');
   const session = await getParentSession();
   const unread = session ? await db.parentNotification.count({ where: { organizationId: tenant.organizationId, contact: session.contact, readAt: null } }) : 0;
+
+  if (await inApp()) return <main className="min-h-screen bg-[var(--canvas)]">{children}</main>;
 
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
