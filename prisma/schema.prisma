@@ -1875,6 +1875,22 @@ model ParentNotification {
 
 /// A parent's browser that asked to be pushed. Keyed on the contact, because a
 /// parent is a contact, not a User.
+/// A parent's phone, for push through Firebase: keyed on the contact they
+/// sign in with, as the browser subscriptions are, since a parent is not a
+/// User. Registered by the app on sign-in, forgotten on sign-out.
+model ParentDeviceToken {
+  id             String   @id @default(cuid())
+  organizationId String
+  contact        String
+  platform       String
+  token          String   @unique
+  lastSeenAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, contact])
+  @@map("parent_device_tokens")
+}
+
 model ParentPushSubscription {
   id             String    @id @default(cuid())
   organizationId String

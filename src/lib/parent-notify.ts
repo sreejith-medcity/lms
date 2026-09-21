@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { queueNotifications } from '@/lib/notify';
 import { pushConfigured, pushToParent } from '@/lib/messaging/push';
+import { fcmConfigured, fcmToParent } from '@/lib/messaging/fcm';
 import { settingBool } from '@/lib/settings/store';
 
 /**
@@ -72,10 +73,12 @@ export async function notifyParents(input: {
   const live = input.alerts.filter((a) => freshKeys.has(a.dedupeKey));
 
   let pushed = 0;
-  if (pushConfigured() && (await settingBool(organizationId, 'notices.push'))) {
+  if (await settingBool(organizationId, 'notices.push')) {
+    const [web, app] = [pushConfigured(), await fcmConfigured(organizationId)];
     for (const a of live) {
-      const r = await pushToParent(organizationId, a.contact, { title: a.title, body: input.pushBody ?? 'Open the parent view to read it.', url: a.href, tag: a.dedupeKey }).catch(() => ({ sent: 0 }));
-      pushed += r.sent;
+      const payload = { title: a.title, body: input.pushBody ?? 'Open the parent view to read it.', url: a.href, tag: a.dedupeKey };
+      if (web) pushed += (await pushToParent(organizationId, a.contact, payload).catch(() => ({ sent: 0 }))).sent;
+      if (app) pushed += (await fcmToParent(organizationId, a.contact, payload).catch(() => ({ sent: 0 }))).sent;
     }
   }
 

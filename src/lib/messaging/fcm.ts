@@ -84,10 +84,22 @@ async function accessToken(cfg: FcmConfig): Promise<string> {
  * right screen when it is tapped.
  */
 export async function fcmToUser(organizationId: string, userId: string, payload: PushPayload): Promise<{ sent: number; gone: number; failed: string[] }> {
+  const devices = await db.deviceToken.findMany({ where: { organizationId, userId }, select: { id: true, token: true } });
+  return sendToDevices(organizationId, devices, payload, 'user');
+}
+
+/** The same, for a parent: their phones are keyed on the contact they sign in with. */
+export async function fcmToParent(organizationId: string, contact: string, payload: PushPayload): Promise<{ sent: number; gone: number; failed: string[] }> {
+  const devices = await db.parentDeviceToken.findMany({ where: { organizationId, contact }, select: { id: true, token: true } });
+  return sendToDevices(organizationId, devices, payload, 'parent');
+}
+
+async function sendToDevices(organizationId: string, devices: { id: string; token: string }[], payload: PushPayload, table: 'user' | 'parent'): Promise<{ sent: number; gone: number; failed: string[] }> {
   const cfg = await config(organizationId);
   if (!cfg) return { sent: 0, gone: 0, failed: ['Firebase is not connected.'] };
-  const devices = await db.deviceToken.findMany({ where: { organizationId, userId }, select: { id: true, token: true, platform: true } });
   if (devices.length === 0) return { sent: 0, gone: 0, failed: [] };
+  const touch = (id: string) => (table === 'user' ? db.deviceToken.update({ where: { id }, data: { lastSeenAt: new Date() } }) : db.parentDeviceToken.update({ where: { id }, data: { lastSeenAt: new Date() } }));
+  const drop = (id: string) => (table === 'user' ? db.deviceToken.delete({ where: { id } }) : db.parentDeviceToken.delete({ where: { id } }));
   let bearer: string;
   try {
     bearer = await accessToken(cfg);
@@ -114,13 +126,13 @@ export async function fcmToUser(organizationId: string, userId: string, payload:
       });
       if (res.ok) {
         sent += 1;
-        await db.deviceToken.update({ where: { id: d.id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
+        await touch(d.id).catch(() => undefined);
         continue;
       }
       const text = await res.text();
       if (res.status === 404 || /UNREGISTERED|NOT_FOUND|registration-token-not-registered/i.test(text)) {
         gone += 1;
-        await db.deviceToken.delete({ where: { id: d.id } }).catch(() => undefined);
+        await drop(d.id).catch(() => undefined);
       } else {
         failed.push(`FCM ${res.status}: ${text.replace(/\s+/g, ' ').slice(0, 120)}`);
       }
