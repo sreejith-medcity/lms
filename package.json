@@ -17,7 +17,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:pilot": "tsx prisma/pilot.ts",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:db": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/resolve.mjs --test tests/db/*.db.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

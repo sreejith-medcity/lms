@@ -107,3 +107,22 @@ harness that truncates between tests. The first four worth writing are the money
 ones: that fulfilment is idempotent under a replayed webhook, that an amount
 mismatch grants nothing, that a refund expires access without deleting progress,
 and that a promo code capped at fifty cannot be claimed fifty-one times.
+
+## The tests that need a database
+
+```
+TEST_DATABASE_URL=postgresql://lms:lms@localhost:5432/lms_test npm run test:db
+```
+
+`tests/db/` holds the ones a mock could not make honest: fulfilment enrolling
+once however many times the gateway repeats itself, an amount that does not
+reconcile leaving a written refusal and an unattached payment, a refund
+ending access without touching history, and a capped promo code honoured
+once when two people claim it in the same instant. Each test builds its own
+tenant and deletes it after, and the whole suite skips with a note when
+`TEST_DATABASE_URL` is not set, so `npm test` on a laptop with no Postgres
+stays green.
+
+CI runs them in a second job against a throwaway Postgres started beside it
+(`pgvector/pgvector:pg16`, because the schema names the extension), with the
+schema pushed first. Never point `TEST_DATABASE_URL` at a real database.

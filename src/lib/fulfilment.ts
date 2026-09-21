@@ -871,3 +871,47 @@ async function tellTheWorld(input: {
     }
   }
 }
+
+/**
+ * A refund the gateway reports, applied here.
+ *
+ * The payment is marked, the refund row written once (keyed on the
+ * gateway's own refund id, so the webhook arriving twice writes once),
+ * and on a full refund the order is marked and access ends: the
+ * enrolments bought on it expire. Their progress and attendance are
+ * history and stay where they are.
+ */
+export async function applyGatewayRefund(input: {
+  /** The academy the payment was taken for, when the caller knows it; the payment id is unique across the gateway either way. */
+  organizationId: string | null;
+  gateway: string;
+  gatewayPaymentId: string;
+  refundId: string;
+  amountPaise: number;
+}): Promise<{ applied: boolean; full: boolean; expired: number }> {
+  const existing = await db.payment.findFirst({
+    where: { gateway: input.gateway, gatewayRef: input.gatewayPaymentId, ...(input.organizationId ? { organizationId: input.organizationId } : {}) },
+    select: { id: true, amountPaise: true, orderId: true, organizationId: true },
+  });
+  if (!existing) return { applied: false, full: false, expired: 0 };
+
+  const full = input.amountPaise >= existing.amountPaise;
+  await db.refund.upsert({
+    where: { id: input.refundId },
+    create: { id: input.refundId, paymentId: existing.id, amountPaise: input.amountPaise, gatewayRef: input.refundId, status: 'PROCESSED' },
+    update: { status: 'PROCESSED' },
+  });
+  await db.payment.update({ where: { id: existing.id }, data: { status: full ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
+
+  let expired = 0;
+  if (full && existing.orderId) {
+    await db.order.update({ where: { id: existing.orderId }, data: { status: 'REFUNDED' } });
+    const items = await db.orderItem.findMany({ where: { orderId: existing.orderId }, select: { id: true } });
+    const r = await db.enrollment.updateMany({
+      where: { organizationId: existing.organizationId, orderItemId: { in: items.map((i) => i.id) }, status: 'ENROLLED' },
+      data: { status: 'EXPIRED', expiresAt: new Date() },
+    });
+    expired = r.count;
+  }
+  return { applied: true, full, expired };
+}

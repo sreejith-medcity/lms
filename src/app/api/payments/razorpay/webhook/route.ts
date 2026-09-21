@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { fulfilPaidOrder, recordFailedPayment } from '@/lib/fulfilment';
+import { applyGatewayRefund, fulfilPaidOrder, recordFailedPayment } from '@/lib/fulfilment';
 import { razorpayConfig, verifyWebhookSignature } from '@/lib/razorpay';
 
 export const dynamic = 'force-dynamic';
@@ -150,56 +150,11 @@ async function handle(
     // the whole gateway, so this is belt as well as braces, but a refund that
     // expires an enrolment is not somewhere to rely on another company's id
     // space staying unique.
-    const existing = await db.payment.findFirst({
-      where: {
-        gateway: 'RAZORPAY',
-        gatewayRef: refund.payment_id,
-        ...(organizationId ? { organizationId } : {}),
-      },
-      select: { id: true, amountPaise: true, orderId: true },
-    });
-    if (!existing) return false;
-
-    const full = refund.amount >= existing.amountPaise;
-
-    await db.refund.upsert({
-      where: { id: refund.id },
-      create: {
-        id: refund.id,
-        paymentId: existing.id,
-        amountPaise: refund.amount,
-        gatewayRef: refund.id,
-        status: 'PROCESSED',
-      },
-      update: { status: 'PROCESSED' },
-    });
-
-    await db.payment.update({
-      where: { id: existing.id },
-      data: { status: full ? 'REFUNDED' : 'PARTIALLY_REFUNDED' },
-    });
-
-    if (full && existing.orderId) {
-      await db.order.update({ where: { id: existing.orderId }, data: { status: 'REFUNDED' } });
-
-      // Access ends. The enrolment, its progress and its attendance are history
-      // and stay exactly where they are.
-      // tenant-safe: the order item ids come from the payment found above,
-      // which was itself scoped to the academy named on the order.
-      await db.enrollment.updateMany({
-        where: { orderItemId: { in: await orderItemIds(existing.orderId) }, status: 'ENROLLED' },
-        data: { status: 'EXPIRED', expiresAt: new Date() },
-      });
-    }
-    return true;
+    const r = await applyGatewayRefund({ organizationId, gateway: 'RAZORPAY', gatewayPaymentId: refund.payment_id, refundId: refund.id, amountPaise: refund.amount });
+    return r.applied;
   }
 
   return false;
-}
-
-async function orderItemIds(orderId: string): Promise<string[]> {
-  const items = await db.orderItem.findMany({ where: { orderId }, select: { id: true } });
-  return items.map((i) => i.id);
 }
 
 interface RazorpayEntity {

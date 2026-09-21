@@ -32,3 +32,41 @@ jobs:
       - run: npm run typecheck
 
       - run: npm run test
+
+  # The tests that need a real database: fulfilment, refunds, the promo cap.
+  # A throwaway Postgres with pgvector (the schema names the extension) is
+  # started beside the job, the schema pushed into it, and the suite run
+  # against it. Nothing here touches any real database.
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: lms
+          POSTGRES_PASSWORD: lms
+          POSTGRES_DB: lms_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U lms"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://lms:lms@localhost:5432/lms_test
+      DATABASE_URL_UNPOOLED: postgresql://lms:lms@localhost:5432/lms_test
+      TEST_DATABASE_URL: postgresql://lms:lms@localhost:5432/lms_test
+      AUTH_SECRET: ci-only-secret-never-used-anywhere-else
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx prisma db push --skip-generate
+
+      - run: npm run test:db
