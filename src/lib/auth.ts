@@ -118,6 +118,19 @@ export async function requireStaff(permissionKey?: string, action: 'view' | 'edi
   return user;
 }
 
+/**
+ * A staff page that several permissions open: the batch page is read by
+ * whoever manages batches, teaches them or follows their progress. The
+ * first key found decides nothing more than entry; what the page then
+ * shows is gated by each permission on its own.
+ */
+export async function requireStaffAny(permissionKeys: string[], action: 'view' | 'edit' | 'delete' = 'view') {
+  const user = await getSessionUser();
+  if (!user || user.kind !== 'STAFF') throw new Error('UNAUTHORIZED');
+  if (!permissionKeys.some((key) => user.permissions[key]?.[action])) throw new Error('FORBIDDEN');
+  return user;
+}
+
 export async function currentHost() {
   return (await headers()).get('host') ?? '';
 }

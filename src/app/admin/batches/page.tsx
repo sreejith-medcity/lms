@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
-import { requireStaff } from '@/lib/auth';
+import { requireStaffAny } from '@/lib/auth';
 import { batchWhere, branchWhere, scopeNote, staffScope } from '@/lib/scope';
 import { Badge, Card, Cell, EmptyState, PageHeader, ProgressRing, Row, Table } from '@/components/ui';
 import { NewBatchForm, BatchStatus } from './editors';
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function BatchesPage() {
   const tenant = await requireTenant();
-  const me = await requireStaff('batches.batch_management', 'view');
+  const me = await requireStaffAny(['batches.batch_management', 'batches.batch_learners', 'batches.batch_progress']);
   const canEdit = me.permissions['batches.batch_management']?.edit ?? false;
   const scope = await staffScope(me);
 

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
-import { requireStaff } from '@/lib/auth';
+import { requireStaffAny } from '@/lib/auth';
 import { batchWhere, canSeeBatch, staffScope } from '@/lib/scope';
 import { Badge } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
@@ -23,7 +23,7 @@ export const metadata = { robots: { index: false, follow: false } };
 export default async function BatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const tenant = await requireTenant();
-  const me = await requireStaff('batches.batch_management', 'view');
+  const me = await requireStaffAny(['batches.batch_management', 'batches.batch_learners', 'batches.batch_progress']);
   const canEdit = me.permissions['batches.batch_management']?.edit ?? false;
   const scope = await staffScope(me);
 
