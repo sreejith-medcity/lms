@@ -91,6 +91,9 @@ export default async function AccountPage() {
           </p>
         </div>
         <span className="flex flex-wrap gap-4">
+          <Link href="/learn/card" className="t-small font-medium underline">
+            My card
+          </Link>
           <Link href="/learn/account/security" className="t-small font-medium underline">
             Sign-in and security
           </Link>

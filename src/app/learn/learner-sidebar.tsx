@@ -28,7 +28,7 @@ export interface SidebarItem {
 const STORE = 'learner.nav.folded';
 
 /** Sections of the portal that are not "My learning", so that link only lights up for the courses themselves. */
-const SECTIONS = new Set(['community', 'wallet', 'book', 'purchases', 'fees', 'practice', 'account', 'assignments', 'calendar', 'notifications', 'revise', 'wishlist', 'help', 'badges', 'attempt', 'assessment', 'affiliate', 'invoices', 'receipts', 'shared']);
+const SECTIONS = new Set(['community', 'wallet', 'book', 'purchases', 'fees', 'practice', 'account', 'assignments', 'calendar', 'notifications', 'revise', 'wishlist', 'help', 'badges', 'attempt', 'assessment', 'affiliate', 'invoices', 'receipts', 'shared', 'card']);
 
 function isActive(pathname: string, href: string): boolean {
   if (href === '/') return false;
@@ -89,6 +89,7 @@ const ICONS: Record<string, ReactNode> = {
   help: <><circle cx="12" cy="12" r="8.5" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7" /><circle cx="12" cy="17" r="0.7" fill="currentColor" /></>,
   badges: <><circle cx="12" cy="9" r="5" /><path d="m8.5 13.5-2 7 5.5-2.5 5.5 2.5-2-7" /></>,
   account: <><circle cx="12" cy="8.5" r="3.5" /><path d="M4.5 20a7.5 7.5 0 0 1 15 0" /></>,
+  card: <><rect x="3" y="5" width="18" height="14" rx="2" /><rect x="6" y="8" width="5" height="5" rx="1" /><path d="M14 9h4" /><path d="M14 12h4" /><path d="M6 16h12" /></>,
   explore: <><circle cx="12" cy="12" r="8.5" /><path d="m15 9-2 5-5 2 2-5 5-2Z" /></>,
   admin: <><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></>,
 };

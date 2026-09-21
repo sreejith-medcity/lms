@@ -67,6 +67,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Trainer payouts', href: '/admin/payouts' },
       { label: 'Enrol a learner', href: '/admin/enrol' },
       { label: 'Attendance', href: '/admin/attendance' },
+      { label: 'Counter', href: '/admin/counter' },
       { label: 'Feedback', href: '/admin/feedback' },
     ],
   },
