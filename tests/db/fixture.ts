@@ -61,6 +61,7 @@ export async function makeAcademy(): Promise<Academy> {
       await db.enrollment.deleteMany({ where: { organizationId: org.id } });
       await db.order.deleteMany({ where: { organizationId: org.id } });
       await db.gatewayEvent.deleteMany({ where: { organizationId: org.id } });
+      await db.promoCode.deleteMany({ where: { organizationId: org.id } });
       await db.tenant.delete({ where: { id: tenant.id } });
     },
   };

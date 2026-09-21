@@ -281,7 +281,7 @@ export interface EdmingleSession {
   gmt_start_time?: number | null;
   gmt_end_time?: number | null;
   class_date?: number | null;
-  /** 0 scheduled, 1 held, 3 and 5 seen on cancelled or missed sessions. */
+  /** 0 scheduled or never signed in, 1 held, 5 held with the register complete, 3 cancelled. */
   status?: number | null;
   taken_at?: number | null;
   taken_by?: number | null;

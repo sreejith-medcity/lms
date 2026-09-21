@@ -130,7 +130,9 @@ async function sendToDevices(organizationId: string, devices: { id: string; toke
         continue;
       }
       const text = await res.text();
-      if (res.status === 404 || /UNREGISTERED|NOT_FOUND|registration-token-not-registered/i.test(text)) {
+      // Only a token Firebase says is gone is dropped. A bare 404 is also
+      // what a mistyped project id gets, and that must not empty the table.
+      if (/UNREGISTERED|registration-token-not-registered/i.test(text)) {
         gone += 1;
         await drop(d.id).catch(() => undefined);
       } else {

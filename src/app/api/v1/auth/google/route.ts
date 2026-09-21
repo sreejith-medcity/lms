@@ -42,8 +42,8 @@ export async function POST(request: Request) {
   let info: TokenInfo;
   try {
     const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`, { signal: AbortSignal.timeout(10_000), cache: 'no-store' });
-    info = (await res.json()) as TokenInfo;
     if (!res.ok) return fail('refused', 'Google did not accept that sign-in. Try again.', 401);
+    info = (await res.json()) as TokenInfo;
   } catch {
     return fail('google_down', 'Google could not be reached. Try again in a moment.', 502);
   }

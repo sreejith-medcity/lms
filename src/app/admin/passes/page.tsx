@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
-import { batchWhere, staffScope } from '@/lib/scope';
+import { batchWhere, learnerWhere, staffScope } from '@/lib/scope';
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
 import { CancelPass, PlanForm, PlanToggle, SaleForm, type BatchOption, type PlanRow } from './forms';
@@ -33,7 +33,7 @@ export default async function PassesPage({ searchParams }: { searchParams: Promi
       select: { id: true, name: true, status: true, course: { select: { productId: true } } },
     }),
     db.prepaidPass.findMany({
-      where: { organizationId: tenant.organizationId },
+      where: { organizationId: tenant.organizationId, user: learnerWhere(scope) },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 200,
       select: { id: true, classesTotal: true, classesUsed: true, expiresAt: true, status: true, createdAt: true, enrollmentId: true, plan: { select: { name: true } }, user: { select: { id: true, name: true, registrationNo: true } } },

@@ -12,7 +12,7 @@ import { formatMoney } from '@/lib/money';
 import { nextReceiptNumber, receiptPrefix } from '@/lib/dues';
 import { closePass } from '@/lib/passes';
 import { readMemberCode } from '@/lib/member-card';
-import { canSeeLearner, staffScope } from '@/lib/scope';
+import { canSeeBatch, canSeeLearner, staffScope } from '@/lib/scope';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -149,6 +149,7 @@ export async function sellPass(_prev: SaleState, formData: FormData): Promise<Sa
     if (plan.productId && plan.productId !== batch.course.productId) return { error: `${plan.name} is for another course; pick one of its batches.` };
     const scope = await staffScope(user);
     if (!(await canSeeLearner(scope, tenant.organizationId, learner.id))) return { error: 'That learner is outside your branch.' };
+    if (!canSeeBatch(scope, batch)) return { error: 'That batch is outside your branch.' };
 
     const paise = Math.round(d.amountRupees * 100);
     const now = new Date();
@@ -165,8 +166,9 @@ export async function sellPass(_prev: SaleState, formData: FormData): Promise<Sa
         passId = await db.$transaction(async (tx) => {
           // The place on the batch: the one they have, or a new one that ends with the pass.
           const existing = await tx.enrollment.findFirst({ where: { organizationId: tenant.organizationId, userId: learner.id, productId: batch.course.productId, batchId: batch.id }, select: { id: true, status: true } });
+          const revive = existing?.status === 'EXPIRED' || existing?.status === 'CANCELLED';
           const enrolmentId = existing
-            ? (await tx.enrollment.update({ where: { id: existing.id }, data: { status: existing.status === 'EXPIRED' || existing.status === 'CANCELLED' ? 'ENROLLED' : existing.status, expiresAt, lastActivityAt: now }, select: { id: true } })).id
+            ? (await tx.enrollment.update({ where: { id: existing.id }, data: revive ? { status: 'ENROLLED', expiresAt, lastActivityAt: now } : { lastActivityAt: now }, select: { id: true } })).id
             : (
                 await tx.enrollment.create({
                   data: { organizationId: tenant.organizationId, branchId, userId: learner.id, productId: batch.course.productId, batchId: batch.id, status: 'ENROLLED', source: 'ADMIN_SINGLE', startsAt: now, expiresAt },
@@ -201,6 +203,8 @@ export async function sellPass(_prev: SaleState, formData: FormData): Promise<Sa
         break;
       } catch (err) {
         if (!isDuplicate(err) || attempt === 2) throw err;
+        const target = String((err as { meta?: { target?: unknown } }).meta?.target ?? '');
+        if (target.includes('gatewayRef')) return { error: 'That reference is already on a receipt here. Check the number, or leave it blank.' };
       }
     }
 

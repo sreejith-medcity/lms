@@ -243,6 +243,7 @@ export async function importSessions(organizationId: string, options: { dryRun: 
     const endsAt = epochDate(s.gmt_end_time) ?? (startsAt ? new Date(startsAt.getTime() + 60 * 60_000) : null);
     if (!startsAt || !endsAt) {
       problem(r, `Session ${s.id} (${s.class_name ?? ''}) has no time on it; skipped.`);
+      if (!options.dryRun) await mark('session', String(s.id), null, { skipped: 'no time' });
       continue;
     }
     const state = sessionState(s, now);
@@ -332,7 +333,18 @@ export async function importAttendance(organizationId: string, options: { dryRun
   const budget = options.budgetMs ?? BUDGET_MS;
   const left = () => budget - (Date.now() - started);
   const classes = await classesOfBatches(client, r, left);
-  const [doneClasses, sessionTarget, learnerTarget] = await Promise.all([migrated('class-attendance'), migrated('session'), migrated('learner')]);
+  const [doneClasses, sessionTarget, learnerTarget, batchTarget] = await Promise.all([migrated('class-attendance'), migrated('session'), migrated('learner'), migrated('batch')]);
+  // A class is marked read only once every session it could have is here:
+  // otherwise a press made before the sessions step finished would close
+  // the class with marks missing. One call tells whether that is so.
+  let sessionsSettled = true;
+  try {
+    const all = await edmingleSessions(client);
+    sessionsSettled = all.every((x) => sessionTarget.has(String(x.id)) || !batchTarget.get(String(x.master_batch_ids ?? '').split(',')[0].trim()));
+  } catch (err) {
+    problem(r, `Could not check the sessions step: ${message(err)}`);
+    sessionsSettled = false;
+  }
   const pending = classes.filter((c) => !doneClasses.has(String(c.classId)));
   r.looked = classes.length;
   r.alreadyDone = classes.length - pending.length;
@@ -371,8 +383,9 @@ export async function importAttendance(organizationId: string, options: { dryRun
         for (const cell of Object.values(learner.learner_attendance ?? {})) {
           const sessionId = sessionTarget.get(String(cell.attendance_id));
           if (!sessionId) {
+            // Settled with no row (no time, or no batch here): nothing to attach to.
             unknownSessions += 1;
-            complete = false;
+            if (!sessionsSettled) complete = false;
             continue;
           }
           if (cell.status !== 0 && cell.status !== 1) continue;
@@ -397,7 +410,7 @@ export async function importAttendance(organizationId: string, options: { dryRun
     }
   }
   if (unknownLearners) problem(r, `${unknownLearners} marks belong to learners not here (left Edmingle before the roll was read); skipped.`);
-  if (unknownSessions) problem(r, `${unknownSessions} marks belong to sessions not here yet: run the sessions step to the end, then press again.`);
+  if (unknownSessions) problem(r, sessionsSettled ? `${unknownSessions} marks belong to sessions that could not come across (their batch is not here); skipped.` : `${unknownSessions} marks belong to sessions not here yet: run the sessions step to the end, then press again.`);
   r.remaining = Math.max(0, pending.length - processed);
   if (r.remaining) sample(r, options.dryRun ? `${r.remaining} more classes on the real run (a rehearsal samples two).` : `${r.remaining} classes still to read: press again.`);
   return r;
@@ -666,10 +679,15 @@ export async function importCertificates(organizationId: string, options: { dryR
         select: { id: true },
       });
       templateId ??= await certificateTemplate(organizationId, templates[0].name);
-      const issued = await db.issuedCertificate.create({
-        data: { templateId, userId: who.userId, enrollmentId: who.enrollmentId, serialNo: `EDM-${edmingleId}`, pdfAssetId: asset.id },
-        select: { id: true },
-      });
+      const serialNo = `EDM-${edmingleId}`;
+      // A run cut off between the certificate row and its record would
+      // otherwise trip the unique serial for this learner for ever.
+      const issued =
+        (await db.issuedCertificate.findFirst({ where: { serialNo, userId: who.userId }, select: { id: true } })) ??
+        (await db.issuedCertificate.create({
+          data: { templateId, userId: who.userId, enrollmentId: who.enrollmentId, serialNo, pdfAssetId: asset.id },
+          select: { id: true },
+        }));
       await mark('certificate', edmingleId, issued.id, { assetId: asset.id, bytes: bytes.byteLength });
       if (r.samples.length < 8) sample(r, `${who.name}: certificate kept (${Math.round(bytes.byteLength / 1024)} KB)`);
     } catch (err) {

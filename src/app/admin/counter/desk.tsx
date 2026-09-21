@@ -38,7 +38,9 @@ export function CounterDesk({ canCheckIn, canSeeFees, timezone }: { canCheckIn: 
   const [camera, setCamera] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const video = useRef<HTMLVideoElement>(null);
-  const canScan = typeof window !== 'undefined' && detectorFor() !== null;
+  // Decided after the first paint, so the server's HTML and the browser's agree.
+  const [canScan, setCanScan] = useState(false);
+  useEffect(() => setCanScan(detectorFor() !== null), []);
 
   function look(raw: string) {
     const text = raw.trim();

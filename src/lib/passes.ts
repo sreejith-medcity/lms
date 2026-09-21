@@ -90,9 +90,16 @@ export async function closePass(organizationId: string, passId: string, status: 
   const pass = await db.prepaidPass.findFirst({ where: { id: passId, organizationId }, select: { enrollmentId: true, status: true } });
   if (!pass || pass.status !== 'ACTIVE') return;
   await db.prepaidPass.update({ where: { id: passId }, data: { status } });
-  if (pass.enrollmentId) {
-    await db.enrollment.updateMany({ where: { organizationId, id: pass.enrollmentId, status: { in: ['ENROLLED', 'REGISTERED'] } }, data: { status: 'EXPIRED', expiresAt: new Date() } });
-  }
+  if (!pass.enrollmentId) return;
+  // The place ends only when this pass was what bought it: not when the
+  // learner paid the course fee outright and the pass was a top-up, and
+  // not while another live pass still covers the same place.
+  const [enrolment, others] = await Promise.all([
+    db.enrollment.findFirst({ where: { organizationId, id: pass.enrollmentId }, select: { orderItemId: true, pricingPlanId: true } }),
+    db.prepaidPass.count({ where: { organizationId, enrollmentId: pass.enrollmentId, status: 'ACTIVE', id: { not: passId } } }),
+  ]);
+  if (!enrolment || enrolment.orderItemId || enrolment.pricingPlanId || others > 0) return;
+  await db.enrollment.updateMany({ where: { organizationId, id: pass.enrollmentId, status: { in: ['ENROLLED', 'REGISTERED'] } }, data: { status: 'EXPIRED', expiresAt: new Date() } });
 }
 
 /** The night job: every pass past its validity closes. */

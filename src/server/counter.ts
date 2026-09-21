@@ -95,8 +95,7 @@ export async function lookupMember(raw: string): Promise<LookupState> {
           status: { in: ['SCHEDULED', 'LIVE', 'COMPLETED'] },
           isHoliday: false,
           startsAt: { gte: from, lte: to },
-          OR: [{ batchId: { in: batchIds } }, { learnerId: learner.id }],
-          ...sessionWhere(scope),
+          AND: [{ OR: [{ batchId: { in: batchIds } }, { learnerId: learner.id }] }, sessionWhere(scope)],
         },
         orderBy: { startsAt: 'asc' },
         select: { id: true, title: true, startsAt: true, endsAt: true, batch: { select: { name: true } }, attendances: { where: { userId: learner.id }, select: { status: true } } },
@@ -140,7 +139,7 @@ export async function counterCheckIn(sessionId: string, userId: string): Promise
     const scope = await staffScope(me);
     const session = await db.liveSession.findFirst({
       where: { id: sessionId, organizationId: tenant.organizationId, ...sessionWhere(scope) },
-      select: { id: true, status: true, isHoliday: true, startsAt: true, endsAt: true, learnerId: true, batch: { select: { enrollments: { where: { userId }, select: { id: true } } } } },
+      select: { id: true, status: true, isHoliday: true, startsAt: true, endsAt: true, learnerId: true, batch: { select: { enrollments: { where: { userId, status: { in: ['ENROLLED', 'REGISTERED', 'ON_LEAVE'] } }, select: { id: true } } } } },
     });
     if (!session) return { error: 'Class not found.' };
     if (session.status === 'CANCELLED' || session.isHoliday) return { error: 'That class was called off.' };
