@@ -30,7 +30,12 @@ export async function POST(request: Request) {
   const child = await db.parentLink.findFirst({ where: { organizationId: tenant.organizationId, contact, status: 'ACTIVE', learner: { deletedAt: null } }, select: { id: true } });
   if (!child) return ok({ sentTo: maskContact(contact), message: 'If that contact is on a learner\'s record, a code is on its way.' });
 
-  const result = await sendOtp({ organizationId: tenant.organizationId, target: contact, purpose: 'parent', eventKey: 'account.otp' });
+  const onScreen = await settingBool(tenant.organizationId, 'auth.parentCodeOnScreen');
+  const result = await sendOtp({ organizationId: tenant.organizationId, target: contact, purpose: 'parent', eventKey: 'account.otp', showWhenUndeliverable: onScreen });
   if (!result.ok) return fail('cannot_send', result.error ?? 'Could not send a code just now.', 400);
+  if (result.shownCode) {
+    // The pilot switch: no provider could carry the code, so it is shown.
+    return ok({ sentTo: result.sentTo ?? maskContact(contact), message: 'No message provider is connected yet, so the code is shown here for the pilot.', code: result.shownCode, shown: true });
+  }
   return ok({ sentTo: result.sentTo ?? maskContact(contact), message: 'Code sent.' });
 }

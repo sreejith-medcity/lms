@@ -22,6 +22,8 @@ export interface ParentCodeState {
   sent?: boolean;
   sentTo?: string;
   contact?: string;
+  /** Pilot only: the code, when no provider could send it and the switch is on. */
+  shownCode?: string;
 }
 
 export async function requestParentCode(_prev: ParentCodeState, formData: FormData): Promise<ParentCodeState> {
@@ -47,9 +49,10 @@ export async function requestParentCode(_prev: ParentCodeState, formData: FormDa
   // No match is not something the screen gets to learn.
   if (!child) return { sent: true, contact, sentTo: maskContact(contact) };
 
-  const result = await sendOtp({ organizationId: tenant.organizationId, target: contact, purpose: 'parent', eventKey: 'account.otp' });
+  const onScreen = await settingBool(tenant.organizationId, 'auth.parentCodeOnScreen');
+  const result = await sendOtp({ organizationId: tenant.organizationId, target: contact, purpose: 'parent', eventKey: 'account.otp', showWhenUndeliverable: onScreen });
   if (!result.ok) return { error: result.error ?? 'Could not send a code just now.' };
-  return { sent: true, contact, sentTo: result.sentTo ?? maskContact(contact) };
+  return { sent: true, contact, sentTo: result.sentTo ?? maskContact(contact), shownCode: result.shownCode };
 }
 
 export async function signInParent(_prev: ParentCodeState, formData: FormData): Promise<ParentCodeState> {

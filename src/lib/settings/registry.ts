@@ -356,6 +356,15 @@ export const SETTINGS: SettingDef[] = [
     live: true,
   },
   {
+    key: 'auth.parentCodeOnScreen',
+    group: 'auth',
+    label: 'Pilot: show a parent\'s sign-in code on the screen when it cannot be sent',
+    help: 'For the pilot only, while no SMS, WhatsApp or email provider is connected. When a code cannot be delivered, it is shown on the sign-in screen and in the app instead, which means anyone who knows a parent\'s number can sign in as them. Switch off before parents use the sign-in for real; once a provider is connected the code is sent and never shown.',
+    kind: 'boolean',
+    default: false,
+    live: true,
+  },
+  {
     key: 'auth.parentsPerChild',
     group: 'auth',
     label: 'Parents linked to one child, at most',

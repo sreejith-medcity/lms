@@ -18,12 +18,20 @@ export function ParentLoginForm() {
     return (
       <form action={useAction} className="mt-7 space-y-4">
         <input type="hidden" name="contact" value={contact} />
-        <p className="t-small muted">
-          If a learner here has you on record, a six digit code is on its way to {asked.sentTo ?? 'you'}. It is good for ten minutes.
-        </p>
+        {asked.shownCode ? (
+          <div className="rounded-[var(--radius)] border border-[var(--brand-line)] bg-[var(--brand-soft)] p-4">
+            <p className="t-micro faint uppercase tracking-wide">Pilot: no message provider is connected yet</p>
+            <p className="t-title mt-1 tabular-nums">{asked.shownCode}</p>
+            <p className="t-small muted mt-1">Your code, shown here instead of sent. It is good for ten minutes.</p>
+          </div>
+        ) : (
+          <p className="t-small muted">
+            If a learner here has you on record, a six digit code is on its way to {asked.sentTo ?? 'you'}. It is good for ten minutes.
+          </p>
+        )}
         <FormError message={used.error} />
         <Field label="Your code">
-          <Input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required autoFocus />
+          <Input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} required autoFocus defaultValue={asked.shownCode ?? ''} />
         </Field>
         <Button type="submit" disabled={using} size="lg" className="w-full">
           {using ? 'Checking...' : 'See my child'}

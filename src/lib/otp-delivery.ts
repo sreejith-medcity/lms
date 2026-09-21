@@ -21,6 +21,12 @@ export interface DeliveryResult {
   sentTo?: string;
   retryAfter?: number;
   error?: string;
+  /**
+   * The code itself, only when the caller allowed showing it and no
+   * provider could carry it. A pilot convenience behind a setting that
+   * is off by default; never set otherwise.
+   */
+  shownCode?: string;
 }
 
 function mask(target: string): string {
@@ -38,6 +44,8 @@ export async function sendOtp(input: {
   userId?: string | null;
   /** Set when the code is a second factor rather than the sign-in itself. */
   eventKey?: string;
+  /** Pilot only: hand the code back when no provider can send it. */
+  showWhenUndeliverable?: boolean;
 }): Promise<DeliveryResult> {
   const isEmail = input.target.includes('@');
   const channel = isEmail ? 'email' : 'sms';
@@ -90,6 +98,7 @@ export async function sendOtp(input: {
   const result = await drain(input.organizationId, 5);
 
   if (result.sent === 0) {
+    if (input.showWhenUndeliverable) return { ok: true, sentTo: mask(input.target), shownCode: issued.issued.code };
     return {
       ok: false,
       error:
