@@ -897,11 +897,10 @@ export const INTEGRATIONS: IntegrationDef[] = [
     category: 'support',
     priority: 3,
     requires:
-      'A Firebase project and a service account with the Firebase Cloud Messaging API enabled. Only worth doing once there is a phone app.',
-    purpose: 'Push notifications to the phone app, once there is one.',
-    status: 'planned',
-    landsIn: 'Phase 8',
-    fields: [TEXT('projectId', 'Project ID'), KEY('serviceAccountJson', 'Service account JSON')],
+      'A Firebase project with Cloud Messaging on, and a service account key: Firebase console, Project settings, Service accounts, Generate new private key. Paste the whole JSON file. The same project gives the app its google-services.json (Android) and GoogleService-Info.plist (iPhone).',
+    purpose: 'Push notifications to the phone app. Every notification the matrix sends by push reaches each phone the person has signed in on, beside the browser push.',
+    status: 'wired',
+    fields: [TEXT('projectId', 'Project ID', undefined, 'Optional: left blank, the project id inside the JSON is used.'), KEY('serviceAccountJson', 'Service account JSON')],
   },
 
   /* Advertising ------------------------------------------------------------ */

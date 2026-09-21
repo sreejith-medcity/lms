@@ -99,7 +99,7 @@ export async function drain(organizationId: string, limit = 100): Promise<DrainR
       if (outcome === 'sent') result.sent += 1;
       else if (outcome === 'deferred') {
         result.deferred += 1;
-        const note = 'Web push keys are not set, so push notifications wait.';
+        const note = 'Neither web push keys nor Firebase are set up, so push notifications wait.';
         if (!result.blocked.includes(note)) result.blocked.push(note);
       } else result.failed += 1;
       continue;
@@ -402,9 +402,14 @@ async function deliverInside(
     return 'sent';
   }
 
+  // Two roads to a phone: the browser's push service for the web and the
+  // installed app, and Firebase for the phone app. Either one being set up
+  // is enough to send; a person is reached on every device they hold.
   const { pushConfigured, pushToUser } = await import('./push');
-  if (!pushConfigured()) {
-    await db.notificationLog.update({ where: { id: row.id }, data: { status: 'QUEUED', nextAttemptAt: new Date(Date.now() + 6 * 60 * 60_000), error: 'Web push keys are not set.' } });
+  const { fcmConfigured, fcmToUser } = await import('./fcm');
+  const [web, app] = [pushConfigured(), await fcmConfigured(organizationId)];
+  if (!web && !app) {
+    await db.notificationLog.update({ where: { id: row.id }, data: { status: 'QUEUED', nextAttemptAt: new Date(Date.now() + 6 * 60 * 60_000), error: 'Web push keys are not set and Firebase is not connected.' } });
     return 'deferred';
   }
   if (!row.userId) {
@@ -412,17 +417,21 @@ async function deliverInside(
     return 'failed';
   }
   const url = context.url && context.url.startsWith('/') ? context.url : '/learn/notifications';
-  const out = await pushToUser(organizationId, row.userId, { title: rendered.subject || 'Medcity', body: rendered.body.slice(0, 240), url, tag: row.eventKey });
+  const payload = { title: rendered.subject || 'Medcity', body: rendered.body.slice(0, 240), url, tag: row.eventKey };
+  const outWeb = web ? await pushToUser(organizationId, row.userId, payload) : { sent: 0, gone: 0, failed: [] as string[] };
+  const outApp = app ? await fcmToUser(organizationId, row.userId, payload) : { sent: 0, gone: 0, failed: [] as string[] };
+  const sent = outWeb.sent + outApp.sent;
+  const failed = [...outWeb.failed, ...outApp.failed];
   await db.notificationLog.update({
     where: { id: row.id },
     data: {
-      status: out.sent > 0 || out.failed.length === 0 ? 'SENT' : 'FAILED',
+      status: sent > 0 || failed.length === 0 ? 'SENT' : 'FAILED',
       sentAt: new Date(),
-      provider: 'web-push',
-      providerRef: out.sent ? `${out.sent} device${out.sent === 1 ? '' : 's'}` : null,
-      error: out.failed[0] ?? null,
+      provider: outApp.sent && outWeb.sent ? 'web-push+fcm' : outApp.sent ? 'fcm' : 'web-push',
+      providerRef: sent ? `${sent} device${sent === 1 ? '' : 's'}` : null,
+      error: failed[0] ?? null,
       context: kept as Prisma.InputJsonValue,
     },
   });
-  return out.sent > 0 || out.failed.length === 0 ? 'sent' : 'failed';
+  return sent > 0 || failed.length === 0 ? 'sent' : 'failed';
 }

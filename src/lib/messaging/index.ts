@@ -125,10 +125,20 @@ export async function channelReadiness(
     };
   }
   const { pushConfigured } = await import('./push');
+  const { fcmConfigured } = await import('./fcm');
+  const web = pushConfigured();
+  const app = await fcmConfigured(organizationId);
   out.PUSH = {
-    ready: pushConfigured(),
-    provider: pushConfigured() ? 'web-push' : null,
-    reason: pushConfigured() ? null : 'Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT in the environment (npx web-push generate-vapid-keys makes a pair).',
+    ready: web || app,
+    provider: web && app ? 'web-push, fcm' : web ? 'web-push' : app ? 'fcm' : null,
+    reason:
+      web || app
+        ? web
+          ? app
+            ? null
+            : 'Browsers and the installed web app are reached; the phone app needs Firebase Cloud Messaging on the Integrations page.'
+          : 'The phone app is reached; browsers need VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT in the environment.'
+        : 'Set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT in the environment for browsers (npx web-push generate-vapid-keys makes a pair), and connect Firebase Cloud Messaging under Integrations for the phone app.',
   };
   out.IN_APP = { ready: true, provider: 'in-app', reason: null };
   return out;
