@@ -203,7 +203,10 @@ async function main() {
     const roll = byBatch.get(batchId) ?? [];
     for (let d = -14; d <= 0; d += 1) {
       const dow = new Date(at(d, 12)).getUTCDay();
-      if (dow === 0) continue; // no Sunday class
+      // No Sunday class in the history; today and yesterday are always
+      // seeded, so a tester on any day has a class to register and one
+      // register still waiting. Re-run on the day of testing.
+      if (dow === 0 && d < -1) continue;
       const startsAt = at(d, hour);
       const title = `Class ${15 + d}`;
       let session = await db.liveSession.findFirst({ where: { organizationId: orgId, batchId, startsAt }, select: { id: true } });
