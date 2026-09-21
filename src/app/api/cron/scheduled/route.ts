@@ -6,6 +6,7 @@ import { dispatchWebhooks } from '@/lib/webhooks';
 import { sweepScheduledTriggers } from '@/lib/workflows';
 import { runDueReportSchedules } from '@/lib/report-schedules-run';
 import { runPlatformBilling } from '@/lib/platform/billing';
+import { lapsePasses } from '@/lib/passes';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
   const meetings: Record<string, unknown> = {};
   const sweeps: Record<string, unknown> = {};
   const reports: Record<string, unknown> = {};
+  const passes: Record<string, unknown> = {};
   for (const organization of organizations) {
     if (Date.now() - started > 40_000) {
       meetings[organization.name] = 'skipped, out of time this run';
@@ -42,6 +44,8 @@ export async function GET(request: Request) {
     // The reports somebody asked to have emailed at an hour: run the ones
     // whose hour has come and hand the file to the email queue.
     reports[organization.name] = await runDueReportSchedules(organization.id);
+    // Prepaid passes past their validity close, and the place they bought ends.
+    passes[organization.name] = await lapsePasses(organization.id).catch((err: unknown) => (err instanceof Error ? err.message : String(err)));
   }
 
   const webhooks = await dispatchWebhooks(50);
@@ -50,5 +54,5 @@ export async function GET(request: Request) {
   // Cheap when nothing is due, and safe to run every time this does.
   const billing = await runPlatformBilling().catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }));
 
-  return NextResponse.json({ ok: true, ms: Date.now() - started, meetings, sweeps, reports, webhooks, billing });
+  return NextResponse.json({ ok: true, ms: Date.now() - started, meetings, sweeps, reports, passes, webhooks, billing });
 }

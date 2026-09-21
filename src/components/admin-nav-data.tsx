@@ -101,6 +101,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Abandoned carts', href: '/admin/carts' },
       { label: 'Invoices', href: '/admin/invoices' },
       { label: 'Fees and dues', href: '/admin/fees' },
+      { label: 'Prepaid passes', href: '/admin/passes' },
       { label: 'Cheques', href: '/admin/cheques' },
       { label: 'Settlements', href: '/admin/settlements' },
       { label: 'Refunds', href: '/admin/refunds' },

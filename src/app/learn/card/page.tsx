@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { memberCode } from '@/lib/member-card';
+import { passesFor } from '@/lib/passes';
 import { Avatar } from '@/components/avatar';
 import { Card } from '@/components/ui';
 import { PrintButton } from '@/components/print-button';
@@ -25,6 +26,7 @@ export default async function CardPage() {
   const code = memberCode(user.id);
   const qr = await QRCode.toDataURL(code, { errorCorrectionLevel: 'M', margin: 1, width: 320, color: { dark: '#322046', light: '#ffffff' } });
   const branch = me.branchMemberships[0]?.branch.name;
+  const passes = (await passesFor(tenant.organizationId, user.id)).filter((p) => p.status === 'ACTIVE');
   const suspended = me.status === 'SUSPENDED' || me.status === 'ARCHIVED';
 
   return (
@@ -70,6 +72,26 @@ export default async function CardPage() {
             <p className="t-small faint mt-3 text-center">Say the number if the counter has no scanner.</p>
           )}
         </Card>
+        {passes.length > 0 && (
+          <div className="mt-4">
+            <Card>
+              <p className="t-eyebrow faint">Your passes</p>
+              <ul className="mt-2 space-y-2">
+                {passes.map((p) => (
+                  <li key={p.id} className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span>
+                      <span className="font-medium">{p.plan}</span>
+                      {p.batch && <span className="t-small faint"> · {p.batch}</span>}
+                    </span>
+                    <span className="t-small tabular-nums">
+                      {p.left} of {p.classesTotal} left{p.expiresAt ? `, until ${p.expiresAt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );

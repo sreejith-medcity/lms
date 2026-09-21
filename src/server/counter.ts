@@ -8,6 +8,7 @@ import { readMemberCode } from '@/lib/member-card';
 import { recordAttendance } from '@/lib/attendance';
 import { recordAudit } from '@/lib/audit';
 import { dayKey } from '@/lib/clock';
+import { passesFor, type PassSummary } from '@/lib/passes';
 import type { ActionState } from '@/server/courses';
 
 /**
@@ -33,6 +34,7 @@ export interface CounterCard {
   duePaise: number | null;
   overdueCount: number;
   today: { sessionId: string; title: string; batch: string | null; startsAt: string; endsAt: string; mark: string | null }[];
+  passes: { plan: string; left: number; total: number; expiresAt: string | null; batch: string | null }[];
 }
 
 export interface LookupState extends ActionState {
@@ -80,7 +82,7 @@ export async function lookupMember(raw: string): Promise<LookupState> {
     const to = new Date(now.getTime() + 14 * 60 * 60_000);
     const batchIds = learner.enrollments.map((e) => e.batch?.id).filter((x): x is string => Boolean(x));
 
-    const [dues, sessions] = await Promise.all([
+    const [dues, sessions, passes] = await Promise.all([
       canSeeFees
         ? db.instalment.findMany({
             where: { enrollment: { organizationId: tenant.organizationId, userId: learner.id }, paidAt: null },
@@ -99,6 +101,7 @@ export async function lookupMember(raw: string): Promise<LookupState> {
         orderBy: { startsAt: 'asc' },
         select: { id: true, title: true, startsAt: true, endsAt: true, batch: { select: { name: true } }, attendances: { where: { userId: learner.id }, select: { status: true } } },
       }),
+      passesFor(tenant.organizationId, learner.id),
     ]);
 
     const card: CounterCard = {
@@ -117,6 +120,7 @@ export async function lookupMember(raw: string): Promise<LookupState> {
       today: sessions
         .filter((s) => dayKey(s.startsAt, tenant.timezone) === today)
         .map((s) => ({ sessionId: s.id, title: s.title, batch: s.batch?.name ?? null, startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString(), mark: s.attendances[0]?.status ?? null })),
+      passes: passes.filter((p: PassSummary) => p.status === 'ACTIVE').map((p) => ({ plan: p.plan, left: p.left, total: p.classesTotal, expiresAt: p.expiresAt?.toISOString() ?? null, batch: p.batch })),
     };
     return { ok: true, card };
   } catch (err) {

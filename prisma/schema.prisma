@@ -259,6 +259,7 @@ model User {
   markSheetEntries     MarkSheetEntry[]
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
+  passes               PrepaidPass[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -3363,6 +3364,76 @@ model LoyaltyConfig {
   referralPurchaseCredit Int     @default(0)
 
   @@map("loyalty_configs")
+}
+
+/// A prepaid pass: so many classes bought at the counter, drawn down each
+/// time the learner is marked present, gone when they are used up or when
+/// the validity runs out. The shape Medcity already sells from a register;
+/// here it is a plan (what is sold) and a pass (one sold to one person).
+model PassPlan {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  classes        Int
+  /// Days from the sale until the pass lapses; null means it never does.
+  validityDays   Int?
+  pricePaise     Int
+  /// The course whose batches the pass admits to. Null means any batch the
+  /// office puts the learner on when selling it.
+  productId      String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  passes PrepaidPass[]
+
+  @@index([organizationId, isActive])
+  @@map("pass_plans")
+}
+
+model PrepaidPass {
+  id             String     @id @default(cuid())
+  organizationId String
+  userId         String
+  planId         String
+  /// The place on a batch the pass bought; expired with the pass.
+  enrollmentId   String?
+  classesTotal   Int
+  classesUsed    Int        @default(0)
+  expiresAt      DateTime?
+  status         PassStatus @default(ACTIVE)
+  paymentId      String?
+  note           String?
+  issuedById     String?
+  createdAt      DateTime   @default(now())
+
+  plan PassPlan  @relation(fields: [planId], references: [id])
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uses PassUse[]
+
+  @@index([organizationId, userId, status])
+  @@index([enrollmentId])
+  @@map("prepaid_passes")
+}
+
+enum PassStatus {
+  ACTIVE
+  USED_UP
+  EXPIRED
+  CANCELLED
+}
+
+/// One class taken off a pass. Unique per session, so a register saved
+/// twice, or a correction, never charges the same class twice.
+model PassUse {
+  id        String   @id @default(cuid())
+  passId    String
+  sessionId String
+  usedAt    DateTime @default(now())
+
+  pass PrepaidPass @relation(fields: [passId], references: [id], onDelete: Cascade)
+
+  @@unique([passId, sessionId])
+  @@map("pass_uses")
 }
 
 model ReferralCode {

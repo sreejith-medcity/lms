@@ -161,6 +161,11 @@ export function CounterDesk({ canCheckIn, canSeeFees, timezone }: { canCheckIn: 
                       Fees and receipts
                     </Link>
                   )}
+                  {canSeeFees && (
+                    <Link href={`/admin/passes?learner=${card.registrationNo ?? ''}`} className="t-small font-medium underline">
+                      Sell a pass
+                    </Link>
+                  )}
                 </p>
               </div>
               {canSeeFees && card.duePaise !== null && (
@@ -221,6 +226,24 @@ export function CounterDesk({ canCheckIn, canSeeFees, timezone }: { canCheckIn: 
                 </ul>
               )}
             </div>
+
+            {card.passes.length > 0 && (
+              <div className="mt-5">
+                <p className="t-eyebrow faint">Passes</p>
+                <ul className="mt-2 space-y-1">
+                  {card.passes.map((p, i) => (
+                    <li key={i} className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{p.plan}</span>
+                      <Badge tone={p.left > 2 ? 'ok' : p.left > 0 ? 'warn' : 'bad'}>
+                        {p.left} of {p.total} left
+                      </Badge>
+                      {p.batch && <span className="t-small faint">{p.batch}</span>}
+                      {p.expiresAt && <span className="t-small faint">until {new Date(p.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="mt-5">
               <p className="t-eyebrow faint">Batches</p>

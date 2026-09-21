@@ -1,5 +1,6 @@
 import type { $Enums } from '@prisma/client';
 import { db } from '@/lib/db';
+import { drawDownPass } from '@/lib/passes';
 import { notifyParents } from '@/lib/parent-notify';
 import { happened } from '@/lib/events';
 import { settingBool, settingNumber } from '@/lib/settings/store';
@@ -92,6 +93,10 @@ export async function recordAttendance(input: RecordInput): Promise<RecordResult
 
   const owed = previous === input.status ? 'none' : correctionNotice(previous, input.status);
   if (owed !== 'none') await alertParents({ organizationId: input.organizationId, sessionId: input.sessionId, userId: input.userId, status: input.status, previous, kind: owed });
+
+  // A class attended on a prepaid pass is one class off the pass. Once per
+  // session, whatever the mark is later corrected to.
+  if (input.status === 'PRESENT' || input.status === 'LATE') await drawDownPass(input.organizationId, input.userId, input.sessionId);
 
   return { attendanceId: row.id, previous, changed, alerted: owed };
 }
