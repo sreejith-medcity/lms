@@ -16,6 +16,7 @@ import { checkEdmingle, edmingleFor } from '@/lib/edmingle';
 import { attachVideos, importCatalogue, importFiles, type EdmingleReport } from '@/lib/migrate-edmingle';
 import { importBatches, importEnrollments, importLearners, importPrices } from '@/lib/migrate-edmingle-people';
 import { importQuestions } from '@/lib/migrate-edmingle-questions';
+import { importAttendance, importCertificates, importProgress, importSessions, importStaff } from '@/lib/migrate-edmingle-archive';
 import { setEdmingleAuto as writeEdmingleAuto } from '@/lib/migrate-edmingle-auto';
 import { migrateLocalAssetsToBucket, type MigrationReport as StorageReport } from '@/lib/storage-migrate';
 
@@ -117,7 +118,7 @@ export async function runStep(step: Step, apply: boolean): Promise<StepState> {
 
 /* Edmingle --------------------------------------------------------------------- */
 
-export type EdmingleStep = 'catalogue' | 'files' | 'videos' | 'prices' | 'learners' | 'batches' | 'enrolments' | 'questions';
+export type EdmingleStep = 'catalogue' | 'files' | 'videos' | 'prices' | 'learners' | 'batches' | 'enrolments' | 'questions' | 'staff' | 'sessions' | 'attendance' | 'progress' | 'certificates';
 
 export interface EdmingleStepState extends ActionState {
   report?: EdmingleReport;
@@ -149,6 +150,11 @@ export async function runEdmingleStep(step: EdmingleStep, apply: boolean): Promi
       batches: () => importBatches(tenant.organizationId, options),
       enrolments: () => importEnrollments(tenant.organizationId, options),
       questions: () => importQuestions(tenant.organizationId, options),
+      staff: () => importStaff(tenant.organizationId, options),
+      sessions: () => importSessions(tenant.organizationId, options),
+      attendance: () => importAttendance(tenant.organizationId, options),
+      progress: () => importProgress(tenant.organizationId, options),
+      certificates: () => importCertificates(tenant.organizationId, options),
     };
     const report = await runners[step]();
 
@@ -167,6 +173,11 @@ export async function runEdmingleStep(step: EdmingleStep, apply: boolean): Promi
       revalidatePath('/admin/learners');
       revalidatePath('/admin/batches');
       revalidatePath('/admin/question-bank');
+      revalidatePath('/admin/team');
+      revalidatePath('/admin/sessions');
+      revalidatePath('/admin/attendance');
+      revalidatePath('/admin/assessments');
+      revalidatePath('/admin/certificates');
     }
 
     const moved = report.wouldCreate + report.wouldUpdate;

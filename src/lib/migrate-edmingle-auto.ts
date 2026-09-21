@@ -3,6 +3,7 @@ import { recordIntegrationEvent } from '@/lib/integration-events';
 import { attachVideos, importCatalogue, importFiles, type EdmingleReport } from '@/lib/migrate-edmingle';
 import { importBatches, importEnrollments, importLearners, importPrices } from '@/lib/migrate-edmingle-people';
 import { importQuestions } from '@/lib/migrate-edmingle-questions';
+import { importAttendance, importCertificates, importProgress, importSessions, importStaff } from '@/lib/migrate-edmingle-archive';
 
 /**
  * The import running by itself.
@@ -12,6 +13,9 @@ import { importQuestions } from '@/lib/migrate-edmingle-questions';
  * switch on, every run of the five-minute cron does a little of the next
  * step that has work, in the order the steps depend on each other, and
  * writes a line to the Edmingle card's history saying what it did. The
+ * documents go last on purpose: two thousand PDFs at fifteen a tick take
+ * a night, and the archive (who taught what, who attended, who passed)
+ * should not wait behind them. The
  * switch is a row in the migration records rather than a setting, because
  * it belongs to the migration and dies with it.
  */
@@ -39,6 +43,11 @@ const ORDER: { key: string; run: (organizationId: string, budgetMs: number) => P
   { key: 'batches', run: (o) => importBatches(o, { dryRun: false }) },
   { key: 'enrolments', run: (o, b) => importEnrollments(o, { dryRun: false, budgetMs: b }) },
   { key: 'questions', run: (o, b) => importQuestions(o, { dryRun: false, budgetMs: b }) },
+  { key: 'staff', run: (o) => importStaff(o, { dryRun: false }) },
+  { key: 'sessions', run: (o, b) => importSessions(o, { dryRun: false, budgetMs: b }) },
+  { key: 'attendance', run: (o, b) => importAttendance(o, { dryRun: false, budgetMs: b }) },
+  { key: 'progress', run: (o, b) => importProgress(o, { dryRun: false, budgetMs: b }) },
+  { key: 'certificates', run: (o, b) => importCertificates(o, { dryRun: false, budgetMs: b }) },
   { key: 'files', run: (o, b) => importFiles(o, { dryRun: false, budgetMs: b, max: 15 }) },
   { key: 'videos', run: (o) => attachVideos(o, { dryRun: false }) },
 ];

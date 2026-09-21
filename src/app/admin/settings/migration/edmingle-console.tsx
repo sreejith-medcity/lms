@@ -53,7 +53,7 @@ const STEPS: { key: EdmingleStep; title: string; blurb: string; caution?: string
     key: 'enrolments',
     title: 'Enrolments',
     blurb: 'Who sits in which batch, read from each batch roll, with their progress. Needs learners and batches done first; a learner not yet here is reported and picked up on the next press.',
-    caution: 'Attendance history, certificates and test results stay behind for now.',
+    caution: 'Attendance history, test results and certificates follow in the archive steps below.',
     counts: ['enrolment'],
   },
   {
@@ -69,6 +69,41 @@ const STEPS: { key: EdmingleStep; title: string; blurb: string; caution?: string
     blurb:
       'Videos sit on Vimeo under Edmingle’s account and cannot be pulled. Ask Edmingle for the originals (the list of file names is below), upload them to this library, then press this: each lesson still waiting is matched to the video with the same file name.',
     counts: ['videos waiting'],
+  },
+  {
+    key: 'staff',
+    title: 'Archive: tutors',
+    blurb:
+      'Everyone who signs in to Edmingle’s admin side becomes a staff account here with the Instructor role, and is put on the batches Edmingle had them teaching. Somebody already on the team is linked by email. Nobody gets a password.',
+    caution: 'Edmingle admins arrive as Instructors too: promote the ones who run the office under Team.',
+    counts: ['staff', 'batch-tutor'],
+  },
+  {
+    key: 'sessions',
+    title: 'Archive: sessions',
+    blurb:
+      'Every class on Edmingle’s calendar, past and future, under the batch it was held for: held ones as completed with the register marked as taken, cancelled ones as cancelled, coming ones as scheduled. Needs batches and tutors done first.',
+    counts: ['session'],
+  },
+  {
+    key: 'attendance',
+    title: 'Archive: attendance',
+    blurb: 'Each learner’s present or absent for each session, read class by class from Edmingle’s registers. Needs sessions and enrolments done first. A batch or two a press; the background run gets through them.',
+    counts: ['class-attendance'],
+  },
+  {
+    key: 'progress',
+    title: 'Archive: test results and lesson progress',
+    blurb:
+      'Every test a learner sat on Edmingle, with marks and pass or fail, kept as an archived test here (the marks come, the paper stays behind). Every lesson a learner opened is marked as done, so course progress carries over.',
+    counts: ['class-progress', 'quiz'],
+  },
+  {
+    key: 'certificates',
+    title: 'Archive: certificates',
+    blurb:
+      'For every learner who finished a course Edmingle certifies, the certificate PDF Edmingle issued is pulled into this library and recorded against their enrolment, so it can be downloaded and verified here after Edmingle is gone.',
+    counts: ['certificate'],
   },
 ];
 
@@ -217,7 +252,8 @@ export function EdmingleConsole({ connected, canApply, done, auto, bucket }: { c
                   {count.get('qbank') ?? 0} banks, {count.get('question') ?? 0} questions across
                 </Badge>
               )}
-              {['prices', 'learners', 'batches', 'enrolments'].includes(step.key) && across > 0 && <Badge tone="ok">{across} across</Badge>}
+              {['prices', 'learners', 'batches', 'enrolments', 'staff', 'sessions', 'certificates'].includes(step.key) && across > 0 && <Badge tone="ok">{across} across</Badge>}
+              {['attendance', 'progress'].includes(step.key) && across > 0 && <Badge tone="ok">{count.get(step.counts[0]) ?? 0} classes read</Badge>}
               {waiting > 0 && <Badge tone="warn">{waiting} waiting</Badge>}
             </p>
             <p className="t-small muted mt-1">{step.blurb}</p>
