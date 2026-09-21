@@ -36,7 +36,7 @@ export const LEARNER_NAV_SETTING = 'learner.nav';
 /** My learning is not optional: a portal with no way back to the courses is a bug. */
 const REQUIRED: LearnerNavKey = 'learning';
 
-export const DEFAULT_LEARNER_NAV: LearnerNavKey[] = ['learning', 'calendar', 'assignments', 'revise', 'practice', 'purchases', 'explore'];
+export const DEFAULT_LEARNER_NAV: LearnerNavKey[] = ['learning', 'calendar', 'assignments', 'revise', 'practice', 'purchases', 'card', 'explore'];
 
 export interface LearnerNavItem {
   key: string;

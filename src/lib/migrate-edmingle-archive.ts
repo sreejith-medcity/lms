@@ -460,6 +460,10 @@ export async function importProgress(organizationId: string, options: { dryRun: 
     if (left() < 10_000) break;
     if (options.dryRun && processed >= 2) break;
     const enrolments = new Map((await db.enrollment.findMany({ where: { organizationId, batchId: c.batchId }, select: { id: true, userId: true } })).map((e) => [e.userId, e.id]));
+    // Edmingle's report carries no date per attempt, so the batch's own
+    // dates stand in: a result is dated to when the batch ended, or began.
+    const batch = await db.batch.findFirst({ where: { id: c.batchId, organizationId }, select: { startDate: true, endDate: true } });
+    const satAt = batch?.endDate ?? batch?.startDate ?? new Date();
     let complete = true;
     let marks = 0;
     let lessons = 0;
@@ -505,8 +509,8 @@ export async function importProgress(organizationId: string, options: { dryRun: 
             enrollmentId: enrolments.get(userId) ?? null,
             attemptNo: 1,
             status: 'EVALUATED',
-            startedAt: new Date(0),
-            submittedAt: new Date(0),
+            startedAt: satAt,
+            submittedAt: satAt,
             scoreRaw: score,
             scorePercent: percent,
             passed: m.passed === null || m.passed === undefined || m.passed === '' ? null : String(m.passed) === '1',
