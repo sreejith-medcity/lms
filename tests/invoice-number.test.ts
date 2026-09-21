@@ -35,3 +35,12 @@ test('numbers sort in issue order, which is what the lookup relies on', () => {
   const issued = ['INV-2026-00001', 'INV-2026-00002', 'INV-2026-00010'];
   assert.deepEqual([...issued].sort(), issued);
 });
+
+test('a second academy carries its own series, so two academies never share a number', () => {
+  assert.equal(invoicePrefix(2026, ''), 'INV-2026-');
+  assert.equal(invoicePrefix(2026, 'acme'), 'INV-ACME-2026-');
+  assert.equal(invoicePrefix(2026, 'Blue Sky Academy'), 'INV-BLUESKYACADE-2026-');
+  assert.equal(nextInvoiceNumber('INV-ACME-2026-00041', invoicePrefix(2026, 'acme')), 'INV-ACME-2026-00042');
+  // The plain series and a tagged one never read each other's last number.
+  assert.equal(nextInvoiceNumber('INV-2026-00041', invoicePrefix(2026, 'acme')), 'INV-ACME-2026-00001');
+});

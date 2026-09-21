@@ -10,7 +10,7 @@ import { memberRef } from '@/lib/loyalty-provider';
 import { queueNotifications } from '@/lib/notify';
 import { invoicePrefix, nextInvoiceNumber } from '@/lib/invoice-number';
 import { checkPaidAmount, estimatedGatewayFeePaise } from '@/lib/payment-amount';
-import { settingBool, settingNumber } from '@/lib/settings/store';
+import { settingBool, settingNumber, settingText } from '@/lib/settings/store';
 import { scheduleFromPlan } from '@/lib/dues';
 import { conversionHints } from '@/lib/attribution-server';
 
@@ -316,7 +316,7 @@ export async function fulfilPaidOrder(input: {
    * highest number actually issued cannot drift that way.
    */
   async function nextInvoiceNo(): Promise<string> {
-    const prefix = invoicePrefix(new Date().getFullYear());
+    const prefix = invoicePrefix(new Date().getFullYear(), await settingText(input.organizationId, 'commerce.invoiceSeries'));
 
     const latest = await db.invoice.findFirst({
       where: { invoiceNo: { startsWith: prefix }, order: { organizationId: input.organizationId } },

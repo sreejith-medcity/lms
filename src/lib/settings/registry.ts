@@ -509,6 +509,15 @@ export const SETTINGS: SettingDef[] = [
     live: true,
   },
   {
+    key: 'commerce.invoiceSeries',
+    group: 'commerce',
+    label: 'Invoice series',
+    help: 'A short tag in every invoice number (INV-ACME-2026-00001). Invoice numbers are unique across this whole deployment, so every academy but the first needs one; a new academy is given its own on sign-up. Leave blank to keep a plain INV-2026-00001 series. Changing it starts a new series from 00001, which a GST return should be told about.',
+    kind: 'text',
+    default: '',
+    live: true,
+  },
+  {
     key: 'commerce.customerBearsGatewayFee',
     group: 'commerce',
     label: 'The learner pays the payment gateway fee',

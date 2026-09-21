@@ -135,6 +135,13 @@ export async function provisionTenant(input: ProvisionInput): Promise<Provisione
       select: { id: true },
     });
     await db.taxConfig.create({ data: { organizationId: org.id, branchId: branch.id, enabled: true, state: 'KERALA', cgstPercent: 9, sgstPercent: 9, igstPercent: 18, pricesAreExclusive: true } }).catch(() => undefined);
+    // Invoice numbers are unique across the deployment, so every academy
+    // after the first carries its own series in the number.
+    await db.orgSetting.upsert({
+      where: { organizationId_key: { organizationId: org.id, key: 'pref.commerce.invoiceSeries' } },
+      create: { organizationId: org.id, key: 'pref.commerce.invoiceSeries', value: input.slug.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 12) },
+      update: {},
+    });
   });
 
   await step(tenant.id, 'SEED_PERMISSIONS', async () => {
