@@ -170,9 +170,9 @@ export interface EdmingleBatchStudent {
   attendance_percent?: number;
 }
 
-/** One page of a batch's learners. */
+/** One page of a batch's learners. Edmingle refuses a sort on this call, so the roll comes in its own order. */
 export async function batchStudentsPage(client: EdmingleClient, classId: number, page: number): Promise<{ students: EdmingleBatchStudent[]; more: boolean }> {
-  const r = await client.get<{ students?: EdmingleBatchStudent[]; page_context?: PageContext }>(`masterbatch/${classId}/students`, { page, per_page: 100, sort_by: 'name', sort_order: 'A' });
+  const r = await client.get<{ students?: EdmingleBatchStudent[]; page_context?: PageContext }>(`masterbatch/${classId}/students`, { page, per_page: 100 });
   return { students: r.students ?? [], more: Boolean(r.page_context?.has_more_page) };
 }
 
