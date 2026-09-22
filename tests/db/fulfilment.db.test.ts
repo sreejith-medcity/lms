@@ -107,7 +107,7 @@ test('a promo code capped at one use is honoured once, even when two claim it at
     const claim = (who: string) =>
       db.$transaction(async (tx) => {
         const c = await claimPromo(tx, { organizationId: a.organizationId, rawCode: 'first1', userId: a.learnerId, productId: a.productId, subtotalPaise: 1_000_000 });
-        await tx.promoRedemption.create({ data: { promoCodeId: c.promoCodeId, userId: a.learnerId, amountPaise: c.discountPaise } });
+        await tx.promoRedemption.create({ data: { promoCodeId: c.promoCodeId as string, userId: a.learnerId, amountPaise: c.discountPaise } });
         return who;
       });
     const results = await Promise.allSettled([claim('one'), claim('two')]);

@@ -260,6 +260,9 @@ model User {
   flashcardReviews     FlashcardReview[]
   wishlist             Wishlist[]
   passes               PrepaidPass[]
+  stampCards           StampCard[]
+  vouchers             Voucher[]
+  achievements         AchievementAward[]
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
   @@unique([organizationId, registrationNo])
@@ -3041,6 +3044,7 @@ model Order {
   invoice  Invoice?
   affiliateSale AffiliateSale?
   promo    PromoCode?  @relation(fields: [promoCodeId], references: [id])
+  vouchers Voucher[]
 
   @@unique([organizationId, orderNo])
   @@index([userId])
@@ -3450,6 +3454,192 @@ model PassUse {
 
   @@unique([passId, sessionId])
   @@map("pass_uses")
+}
+
+/// A stamp card: so many stamps, then a reward. Attend eight classes and the
+/// ninth is free is the shape a coaching institute already understands, so
+/// it is kept legible: one stamp per class attended (or lesson finished, or
+/// purchase), a full card pays out and a fresh card starts.
+model StampScheme {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  /// Stamps that fill a card.
+  stampsNeeded   Int
+  earn           StampEarn    @default(CLASS_ATTENDED)
+  /// Only classes, lessons or purchases of this course earn; null means any.
+  productId      String?
+  reward         StampReward  @default(POINTS)
+  rewardPoints   Int          @default(0)
+  /// For a voucher reward: what the voucher is worth.
+  voucherKind    VoucherKind?
+  voucherValue   Int?
+  voucherDays    Int?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  cards StampCard[]
+
+  @@index([organizationId, isActive])
+  @@map("stamp_schemes")
+}
+
+enum StampEarn {
+  CLASS_ATTENDED
+  LESSON_FINISHED
+  PURCHASE
+}
+
+enum StampReward {
+  POINTS
+  VOUCHER
+}
+
+/// One learner's card on one scheme: the stamps on the current card, and
+/// how many cards they have filled before.
+model StampCard {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  schemeId       String
+  stamps         Int       @default(0)
+  cardsFilled    Int       @default(0)
+  lastStampAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  scheme StampScheme @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marks  Stamp[]
+
+  @@unique([schemeId, userId])
+  @@index([organizationId, userId])
+  @@map("stamp_cards")
+}
+
+/// One stamp, unique per thing it was earned for, so a register saved
+/// twice or a lesson reopened never stamps the same card twice.
+model Stamp {
+  id        String   @id @default(cuid())
+  cardId    String
+  sourceKey String
+  stampedAt DateTime @default(now())
+
+  card StampCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([cardId, sourceKey])
+  @@map("stamps")
+}
+
+/// A voucher is an instrument, not a rule: issued to one person (or printed
+/// in a batch and claimed by scanning), spent once at checkout, gone. A
+/// promo code is the rule anybody may use; keeping the two apart is what
+/// keeps refunds from being argued about.
+model Voucher {
+  id               String        @id @default(cuid())
+  organizationId   String
+  code             String
+  kind             VoucherKind
+  /// Percent off (0 to 100) for PERCENT, paise for FLAT.
+  value            Int
+  maxDiscountPaise Int?
+  /// Spendable on this course only; null means anything.
+  productId        String?
+  /// Who holds it. Null until a printed voucher is claimed.
+  userId           String?
+  batchLabel       String?
+  source           VoucherSource @default(ADMIN)
+  status           VoucherStatus @default(ISSUED)
+  expiresAt        DateTime?
+  claimedAt        DateTime?
+  redeemedAt       DateTime?
+  orderId          String?
+  note             String?
+  issuedById       String?
+  createdAt        DateTime      @default(now())
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, code])
+  @@index([organizationId, userId, status])
+  @@index([organizationId, batchLabel])
+  @@map("vouchers")
+}
+
+enum VoucherKind {
+  PERCENT
+  FLAT
+}
+
+enum VoucherSource {
+  ADMIN
+  BATCH
+  STAMP_CARD
+  ACHIEVEMENT
+}
+
+enum VoucherStatus {
+  ISSUED
+  REDEEMED
+  EXPIRED
+  CANCELLED
+}
+
+/// An achievement the office defines: a thing a learner did once, measured
+/// here, with an optional reward. Badges (in code) are the fixed ladder;
+/// achievements are the academy's own.
+model Achievement {
+  id             String          @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  rule           AchievementRule
+  /// The number the rule needs: days for a streak, percent for a score, classes for a run.
+  threshold      Int             @default(1)
+  /// Only on this course; null means any.
+  productId      String?
+  rewardPoints   Int             @default(0)
+  voucherKind    VoucherKind?
+  voucherValue   Int?
+  voucherDays    Int?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+
+  awards AchievementAward[]
+
+  @@index([organizationId, isActive])
+  @@map("achievements")
+}
+
+enum AchievementRule {
+  /// Every lesson of a module finished.
+  MODULE_FINISHED
+  /// A course finished.
+  COURSE_COMPLETED
+  /// Passed a test at the first attempt, at or above the threshold percent.
+  PASSED_FIRST_ATTEMPT
+  /// Present at every class of a batch in a calendar month with at least the threshold classes held.
+  FULL_MONTH_ATTENDANCE
+  /// A learning streak of the threshold days.
+  STREAK_DAYS
+}
+
+model AchievementAward {
+  id            String   @id @default(cuid())
+  achievementId String
+  userId        String
+  /// What earned it, so the same module or month is never awarded twice.
+  contextKey    String
+  context       String?
+  awardedAt     DateTime @default(now())
+  seenAt        DateTime?
+
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([achievementId, userId, contextKey])
+  @@index([userId, awardedAt])
+  @@map("achievement_awards")
 }
 
 model ReferralCode {

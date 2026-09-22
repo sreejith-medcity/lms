@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { discountFor, normaliseCode, refusalMessage, type PromoRefusal } from '@/lib/promo';
+import { looksLikeVoucher } from '@/lib/reward-rules';
 
 /**
  * Claiming a code, as opposed to quoting one.
@@ -17,15 +18,21 @@ import { discountFor, normaliseCode, refusalMessage, type PromoRefusal } from '@
 
 export type TxClient = Prisma.TransactionClient;
 
+/**
+ * One of the two: a promo code (a rule) or a voucher (an instrument issued
+ * to one person). The code box on the checkout takes either; the printed
+ * shape of a voucher code tells them apart.
+ */
 export interface Claim {
-  promoCodeId: string;
+  promoCodeId: string | null;
+  voucherId: string | null;
   code: string;
   discountPaise: number;
 }
 
 export class PromoRefused extends Error {
-  constructor(public reason: PromoRefusal, public minOrderPaise?: number | null) {
-    super(refusalMessage(reason, minOrderPaise));
+  constructor(public reason: PromoRefusal | 'VOUCHER', public minOrderPaise?: number | null, said?: string) {
+    super(reason === 'VOUCHER' ? (said ?? 'That voucher cannot be used here.') : refusalMessage(reason, minOrderPaise));
   }
 }
 
@@ -39,6 +46,17 @@ export async function claimPromo(
     subtotalPaise: number;
   },
 ): Promise<Claim> {
+  if (looksLikeVoucher(input.rawCode)) {
+    const { quoteVoucher, VoucherRefused } = await import('@/lib/rewards');
+    try {
+      const v = await quoteVoucher(tx, { organizationId: input.organizationId, rawCode: input.rawCode, userId: input.userId, productId: input.productId, subtotalPaise: input.subtotalPaise });
+      return { promoCodeId: null, voucherId: v.voucherId, code: v.code, discountPaise: v.discountPaise };
+    } catch (err) {
+      // No voucher with that code: it may be a promo code of the same shape.
+      if (err instanceof VoucherRefused && err.reason !== 'NOT_FOUND') throw new PromoRefused('VOUCHER', null, err.message);
+      if (!(err instanceof VoucherRefused)) throw err;
+    }
+  }
   const code = normaliseCode(input.rawCode);
 
   const promo = await tx.promoCode.findFirst({
@@ -88,5 +106,5 @@ export async function claimPromo(
   const discountPaise = discountFor(promo, input.subtotalPaise);
   if (discountPaise <= 0) throw new PromoRefused('UNDER_MINIMUM', promo.minOrderPaise);
 
-  return { promoCodeId: promo.id, code: promo.code, discountPaise };
+  return { promoCodeId: promo.id, voucherId: null, code: promo.code, discountPaise };
 }

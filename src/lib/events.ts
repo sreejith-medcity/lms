@@ -112,6 +112,36 @@ export async function happened(event: DomainEvent): Promise<void> {
       console.error(`[events] badges for ${event.key}`, err instanceof Error ? err.message : err);
     }
   }
+
+  // And the academy's own achievements, for the two of these they can be about.
+  if (event.userId && (event.key === 'course.completed' || event.key === 'assessment.marked')) {
+    try {
+      await achievementsFor(event);
+    } catch (err) {
+      console.error(`[events] achievements for ${event.key}`, err instanceof Error ? err.message : err);
+    }
+  }
+}
+
+async function achievementsFor(event: DomainEvent): Promise<void> {
+  const { achievementEvent } = await import('@/lib/rewards');
+  const userId = event.userId as string;
+  if (event.key === 'course.completed') {
+    const product = event.productId
+      ? await db.product.findFirst({ where: { id: event.productId, organizationId: event.organizationId }, select: { title: true } })
+      : null;
+    await achievementEvent({ organizationId: event.organizationId, userId, rule: 'COURSE_COMPLETED', contextKey: `product:${event.productId ?? event.subjectId}`, context: product?.title ?? 'a course', productId: event.productId ?? null });
+    return;
+  }
+  const data = event.data ?? {};
+  if (!data.passed) return;
+  const attempt = await db.attempt.findFirst({
+    where: { id: event.subjectId, userId },
+    select: { attemptNo: true, assessmentId: true, assessment: { select: { title: true } }, enrollment: { select: { productId: true } } },
+  });
+  if (!attempt || attempt.attemptNo !== 1) return;
+  const percent = typeof data.scorePercent === 'number' ? data.scorePercent : Number(data.scorePercent ?? 0);
+  await achievementEvent({ organizationId: event.organizationId, userId, rule: 'PASSED_FIRST_ATTEMPT', contextKey: `assessment:${attempt.assessmentId}`, context: attempt.assessment.title, value: Math.round(percent), productId: attempt.enrollment?.productId ?? null });
 }
 
 const BADGE_EVENTS = new Set(['course.completed', 'assessment.marked', 'assignment.handed_in', 'lesson_question.asked', 'review.submitted']);

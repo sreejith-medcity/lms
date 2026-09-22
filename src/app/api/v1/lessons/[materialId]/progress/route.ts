@@ -41,6 +41,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ mat
     await recomputeEnrollmentProgress(ent.enrollmentId).catch(() => null);
     const { afterLearning } = await import('@/lib/badges-data');
     await afterLearning(ctx.tenant.organizationId, ctx.user.id);
+    const { lessonFinished } = await import('@/lib/rewards');
+    await lessonFinished(ctx.tenant.organizationId, ctx.user.id, materialId);
   } else if (pct != null && pct >= 25) {
     const { recordLearningDay } = await import('@/lib/badges-data');
     await recordLearningDay(ctx.tenant.organizationId, ctx.user.id);

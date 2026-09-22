@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { looksLikeVoucher } from '@/lib/reward-rules';
 import { requireStaff, getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
@@ -224,6 +225,20 @@ export async function quotePromoCode(
 
     const code = normaliseCode(rawCode);
     if (!code) return { ok: false, error: 'Type a code first.' };
+
+    // A voucher, by the shape of its code: one person's, spent once.
+    if (looksLikeVoucher(rawCode)) {
+      if (!user) return { ok: false, error: 'Sign in to use a voucher.' };
+      const { quoteVoucher, VoucherRefused } = await import('@/lib/rewards');
+      try {
+        const v = await quoteVoucher(db, { organizationId: tenant.organizationId, rawCode, userId: user.id, productId, subtotalPaise });
+        return { ok: true, code: v.code, discountPaise: v.discountPaise, label: `Voucher ${v.code}` };
+      } catch (err) {
+        // No voucher with that code: it may be a promo code of the same shape.
+        if (err instanceof VoucherRefused && err.reason !== 'NOT_FOUND') return { ok: false, error: err.message };
+        if (!(err instanceof VoucherRefused)) throw err;
+      }
+    }
 
     const promo = await db.promoCode.findFirst({
       where: { organizationId: tenant.organizationId, code },

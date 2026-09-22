@@ -10,6 +10,7 @@ import { resolveSelectedAddons } from '@/lib/addons';
 import { paymentsAvailable, prepareOrder } from '@/lib/payments';
 import { attachAffiliateSale } from '@/lib/affiliates-data';
 import { claimPromo, PromoRefused } from '@/lib/promo-claim';
+import { redeemVoucher, VoucherRefused } from '@/lib/rewards';
 import { rememberIntent, readBasket, CART_COOKIE } from '@/lib/cart';
 import { promoTarget } from '@/lib/cart-rules';
 import { normaliseContact, type GuestContact } from '@/lib/guest-checkout';
@@ -275,7 +276,9 @@ export async function startCheckout(
         select: { id: true, orderNo: true, currency: true, totalPaise: true, userId: true, subtotalPaise: true, discountPaise: true },
       });
 
-      if (claim) {
+      if (claim?.voucherId) {
+        await redeemVoucher(tx, { organizationId: tenant.organizationId, voucherId: claim.voucherId, userId: user.id, orderId: created.id });
+      } else if (claim?.promoCodeId) {
         await tx.promoRedemption.create({
           data: {
             promoCodeId: claim.promoCodeId,
@@ -312,6 +315,8 @@ export async function startCheckout(
 
     return { ok: true, orderId: order.id };
   } catch (err) {
+    // The voucher went between the quote and the order: the order is rolled back, and the learner is told why.
+    if (err instanceof VoucherRefused) return { ok: false, error: err.message };
     const message = err instanceof Error ? err.message : String(err);
     console.error('[checkout]', message);
     if (message.startsWith('RAZORPAY:')) {
@@ -564,7 +569,9 @@ export async function startCartCheckout(input: {
         select: { id: true, orderNo: true, currency: true, totalPaise: true, userId: true, subtotalPaise: true, discountPaise: true },
       });
 
-      if (claim) {
+      if (claim?.voucherId) {
+        await redeemVoucher(tx, { organizationId: tenant.organizationId, voucherId: claim.voucherId, userId, orderId: created.id });
+      } else if (claim?.promoCodeId) {
         await tx.promoRedemption.create({
           data: {
             promoCodeId: claim.promoCodeId,
@@ -594,6 +601,7 @@ export async function startCartCheckout(input: {
 
     return { ok: true, orderId: order.id };
   } catch (err) {
+    if (err instanceof VoucherRefused) return { ok: false, error: err.message };
     const message = err instanceof Error ? err.message : String(err);
     console.error('[cart checkout]', message);
     if (message.startsWith('RAZORPAY:')) {

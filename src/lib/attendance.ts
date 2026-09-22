@@ -96,7 +96,12 @@ export async function recordAttendance(input: RecordInput): Promise<RecordResult
 
   // A class attended on a prepaid pass is one class off the pass. Once per
   // session, whatever the mark is later corrected to.
-  if (input.status === 'PRESENT' || input.status === 'LATE') await drawDownPass(input.organizationId, input.userId, input.sessionId);
+  if (input.status === 'PRESENT' || input.status === 'LATE') {
+    await drawDownPass(input.organizationId, input.userId, input.sessionId);
+    // A stamp on the learner's card, and the month's achievement if this was its last class.
+    const { classAttended } = await import('@/lib/rewards');
+    await classAttended(input.organizationId, input.userId, input.sessionId);
+  }
 
   return { attendanceId: row.id, previous, changed, alerted: owed };
 }

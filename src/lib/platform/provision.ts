@@ -45,7 +45,7 @@ const NOTIFICATION_EVENTS = [
   'payment.received', 'payment.failed', 'instalment.due', 'misc_fee.raised',
   'course.welcome', 'course.completed', 'certificate.issued', 'assessment.marked',
   'assignment.set', 'assignment.graded', 'report_card.issued', 'lesson_question.answered',
-  'help.replied', 'badge.earned', 'data_request.closed',
+  'help.replied', 'badge.earned', 'reward.earned', 'data_request.closed',
 ];
 
 const LEARNER_FIELDS: [string, string, string, boolean][] = [

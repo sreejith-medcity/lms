@@ -106,4 +106,15 @@ export async function recordLearningDay(organizationId: string, userId: string, 
 export async function afterLearning(organizationId: string, userId: string): Promise<void> {
   await recordLearningDay(organizationId, userId);
   await awardDueBadges(organizationId, userId);
+  // The academy's own streak achievements, measured on the same streak.
+  try {
+    const tenant = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+    const streak = currentStreak(await streakFor(organizationId, userId), dayKey(new Date(), tenant?.timezone ?? 'Asia/Kolkata'));
+    if (streak > 0) {
+      const { achievementEvent } = await import('@/lib/rewards');
+      await achievementEvent({ organizationId, userId, rule: 'STREAK_DAYS', contextKey: 'streak', context: `${streak} days in a row`, value: streak });
+    }
+  } catch (err) {
+    console.error('[badges] streak achievements', err instanceof Error ? err.message : err);
+  }
 }

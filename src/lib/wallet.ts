@@ -150,6 +150,9 @@ export const REASON_LABELS: Record<string, string> = {
   REFERRAL_PURCHASE: 'Someone you referred bought a course',
   ADMIN: 'Adjusted by the academy',
   REDEMPTION: 'Spent on an order',
+  BADGE: 'A badge earned',
+  STAMP_CARD: 'A stamp card filled',
+  ACHIEVEMENT: 'An achievement',
 };
 
 /* The moments points are earned ------------------------------------------- */

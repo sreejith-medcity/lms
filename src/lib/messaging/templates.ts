@@ -146,6 +146,10 @@ const DEFAULTS: Record<string, Default> = {
     subject: 'You earned a badge: {{badge}}',
     body: 'Well done, {{name}}. {{badge}}, {{tier}}: {{how}}. See all your badges at {{url}}.',
   },
+  'reward.earned': {
+    subject: '{{what}}',
+    body: 'Well done, {{name}}. {{what}}, and with it {{got}} from {{organization}}. See your rewards at {{url}}.',
+  },
   'help.replied': {
     subject: 'Re: {{subject}}',
     body: 'Hello {{name}}, {{staff}} at {{organization}} has {{outcome}} on your question "{{subject}}". Read it and write back at {{url}}.',

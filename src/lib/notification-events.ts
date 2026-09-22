@@ -53,6 +53,7 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
       { key: 'notice.published', label: 'A notice from the academy', who: 'The parents, and the learners when the notice says so, the moment it is published', live: true },
       { key: 'lesson_question.answered', label: 'Their question on a lesson was answered', who: 'The asker, and everyone who said they had it too', live: true },
       { key: 'badge.earned', label: 'They earned a badge', who: 'The learner', live: true },
+      { key: 'reward.earned', label: 'They earned a reward', who: 'The learner: a stamp card filled, an achievement, a voucher', live: true },
     ],
   },
   {

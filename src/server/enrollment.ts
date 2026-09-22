@@ -211,6 +211,8 @@ export async function setMaterialComplete(
     if (complete) {
       const { afterLearning } = await import('@/lib/badges-data');
       await afterLearning(tenant.organizationId, user.id);
+      const { lessonFinished } = await import('@/lib/rewards');
+      await lessonFinished(tenant.organizationId, user.id, materialId);
     }
 
     revalidatePath(`/learn/${productId}`);

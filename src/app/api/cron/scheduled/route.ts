@@ -7,6 +7,7 @@ import { sweepScheduledTriggers } from '@/lib/workflows';
 import { runDueReportSchedules } from '@/lib/report-schedules-run';
 import { runPlatformBilling } from '@/lib/platform/billing';
 import { lapsePasses } from '@/lib/passes';
+import { expireVouchers, releaseAbandonedVouchers, reviewLastMonthAttendance } from '@/lib/rewards';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -46,6 +47,9 @@ export async function GET(request: Request) {
     reports[organization.name] = await runDueReportSchedules(organization.id);
     // Prepaid passes past their validity close, and the place they bought ends.
     passes[organization.name] = await lapsePasses(organization.id).catch((err: unknown) => (err instanceof Error ? err.message : String(err)));
+    await expireVouchers(organization.id).catch((err: unknown) => console.error('[cron] vouchers', err instanceof Error ? err.message : err));
+    await releaseAbandonedVouchers(organization.id).catch((err: unknown) => console.error('[cron] vouchers', err instanceof Error ? err.message : err));
+    await reviewLastMonthAttendance(organization.id).catch((err: unknown) => console.error('[cron] month review', err instanceof Error ? err.message : err));
   }
 
   const webhooks = await dispatchWebhooks(50);

@@ -606,6 +606,12 @@ export async function fulfilPaidOrder(input: {
   await markCartConverted(input.organizationId, order.userId);
 
   // And whoever brought them here gets their cut, once.
+  {
+    // A stamp per course bought, on any card that counts purchases.
+    const { purchaseMade } = await import('@/lib/rewards');
+    await purchaseMade(input.organizationId, order.userId, order.id);
+  }
+
   await creditOnPurchase({
     organizationId: input.organizationId,
     userId: order.userId,
@@ -705,6 +711,10 @@ export async function recordFailedPayment(input: {
     // both go back when the order does.
     if (marked.count > 0) {
       await db.promoRedemption.deleteMany({ where: { orderId: input.orderId } });
+      {
+        const { releaseVoucher } = await import('@/lib/rewards');
+        await releaseVoucher(input.organizationId, input.orderId).catch(() => null);
+      }
 
       const spent = await db.walletTransaction.findFirst({
         where: { orderId: input.orderId, reason: 'REDEMPTION' },
