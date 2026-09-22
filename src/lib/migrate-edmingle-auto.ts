@@ -169,7 +169,9 @@ async function tick(organizationId: string, budgetMs: number): Promise<string> {
         action: `auto ${step.key}`,
         ok: realProblems.length === 0,
         records: moved,
-        detail: `${limited ? "waiting on Edmingle's rate limit; " : ''}${moved} across, ${report.alreadyDone} already, ${report.remaining} left${realProblems.length ? `; ${realProblems.length} notes: ${realProblems[0].slice(0, 160)}` : ''}`,
+        // A tick that moved nothing but has something to say (a wait on the
+        // asset library, a listing carrying on) says it, so the history reads.
+        detail: `${limited ? "waiting on Edmingle's rate limit; " : ''}${moved} across, ${report.alreadyDone} already, ${report.remaining} left${realProblems.length ? `; ${realProblems.length} notes: ${realProblems[0].slice(0, 160)}` : ''}${moved === 0 && !realProblems.length && report.samples[0] ? `; ${report.samples[0].slice(0, 200)}` : ''}`,
       });
       lines.push(`${step.key} ${moved} across, ${report.remaining} left${limited ? ', waiting' : ''}`);
     }

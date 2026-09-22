@@ -40,7 +40,8 @@ function paced(): Promise<void> {
 export interface EdmingleClient {
   baseUrl: string;
   orgId: string;
-  get<T>(path: string, params?: Record<string, string | number>): Promise<T>;
+  /** `retries` overrides the three waits on a 429: 0 makes a refusal cost one call, for endpoints whose limit a retry only tops up. */
+  get<T>(path: string, params?: Record<string, string | number>, opts?: { retries?: number }): Promise<T>;
 }
 
 export async function edmingleFor(organizationId: string): Promise<EdmingleClient | null> {
@@ -56,7 +57,8 @@ export async function edmingleFor(organizationId: string): Promise<EdmingleClien
   return {
     baseUrl,
     orgId,
-    async get<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
+    async get<T>(path: string, params: Record<string, string | number> = {}, opts: { retries?: number } = {}): Promise<T> {
+      const retries = opts.retries ?? RETRIES;
       const url = new URL(`${baseUrl}/nuSource/api/v1/${path.replace(/^\//, '')}`);
       for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
       for (let attempt = 0; ; attempt += 1) {
@@ -66,7 +68,7 @@ export async function edmingleFor(organizationId: string): Promise<EdmingleClien
           cache: 'no-store',
           signal: AbortSignal.timeout(30_000),
         });
-        if (res.status === 429 && attempt < RETRIES) {
+        if (res.status === 429 && attempt < retries) {
           const after = Number(res.headers.get('retry-after'));
           await sleep(Number.isFinite(after) && after > 0 ? Math.min(after, 30) * 1000 : 5000 * 2 ** attempt);
           continue;

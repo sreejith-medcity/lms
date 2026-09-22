@@ -303,8 +303,50 @@ let libraryCache: { at: number; assets: EdmingleAsset[] } | null = null;
 const LIBRARY_PAGE = 'asset-page';
 const LIBRARY_STALE_MS = 24 * 60 * 60_000;
 
+/**
+ * Edmingle limits the asset listing harder than anything else, and a
+ * refusal answered with a retry a few seconds later only keeps the limit
+ * topped up: a tick a minute, four calls a tick, and the endpoint never
+ * clears. So a refusal costs one call and is followed by a wait (ten
+ * minutes, doubling to an hour while it keeps refusing) written to the
+ * migration records, and every press or tick inside the wait says so and
+ * asks Edmingle nothing.
+ */
+const LIBRARY_WAIT = { sourceSystem: SOURCE, entity: 'asset-wait', sourceId: 'assetlibrary' };
+const WAIT_FIRST_MS = 10 * 60_000;
+const WAIT_MAX_MS = 60 * 60_000;
+
+export class LibraryWait extends Error {
+  constructor(public readonly until: Date) {
+    super(`Edmingle is rate-limiting the asset library: waiting until ${until.toISOString().slice(11, 16)} UTC before asking again, so the limit can clear.`);
+  }
+}
+
+async function libraryWait(): Promise<Date | null> {
+  const row = await db.migrationRecord.findUnique({ where: { sourceSystem_entity_sourceId: LIBRARY_WAIT }, select: { migratedAt: true } });
+  return row?.migratedAt && row.migratedAt > new Date() ? row.migratedAt : null;
+}
+
+async function noteRefusal(): Promise<Date> {
+  const row = await db.migrationRecord.findUnique({ where: { sourceSystem_entity_sourceId: LIBRARY_WAIT }, select: { payload: true } });
+  const strikes = Number((row?.payload as { strikes?: number } | null)?.strikes ?? 0) + 1;
+  const until = new Date(Date.now() + Math.min(WAIT_FIRST_MS * 2 ** (strikes - 1), WAIT_MAX_MS));
+  await db.migrationRecord.upsert({
+    where: { sourceSystem_entity_sourceId: LIBRARY_WAIT },
+    create: { ...LIBRARY_WAIT, status: 'SKIPPED', migratedAt: until, payload: { strikes } },
+    update: { migratedAt: until, payload: { strikes } },
+  });
+  return until;
+}
+
+async function clearRefusals(): Promise<void> {
+  await db.migrationRecord.deleteMany({ where: LIBRARY_WAIT });
+}
+
 async function library(client: EdmingleClient, left: () => number): Promise<{ assets: EdmingleAsset[]; complete: boolean; pages: number }> {
   if (libraryCache && Date.now() - libraryCache.at < 10 * 60_000) return { assets: libraryCache.assets, complete: true, pages: 0 };
+  const waitUntil = await libraryWait();
+  if (waitUntil) throw new LibraryWait(waitUntil);
 
   type Page = { assets: EdmingleAsset[]; hasMore: boolean };
   const rows = await db.migrationRecord.findMany({ where: { sourceSystem: SOURCE, entity: LIBRARY_PAGE }, select: { sourceId: true, payload: true, migratedAt: true } });
@@ -328,7 +370,14 @@ async function library(client: EdmingleClient, left: () => number): Promise<{ as
       continue;
     }
     if (left() < 6_000) break;
-    const r = await client.get<{ assets?: EdmingleAsset[]; page_context?: { has_more_page?: boolean } }>('assetlibrary/list', { page, per_page: 100 });
+    let r: { assets?: EdmingleAsset[]; page_context?: { has_more_page?: boolean } };
+    try {
+      r = await client.get('assetlibrary/list', { page, per_page: 100 }, { retries: 0 });
+    } catch (err) {
+      if (err instanceof Error && /rate-limiting/.test(err.message)) throw new LibraryWait(await noteRefusal());
+      throw err;
+    }
+    if (page === 1) await clearRefusals();
     const entry: Page = { assets: r.assets ?? [], hasMore: Boolean(r.assets?.length && r.page_context?.has_more_page) };
     await mark(LIBRARY_PAGE, String(page), null, entry as unknown as Prisma.InputJsonValue);
     pages.set(page, entry);
@@ -389,6 +438,12 @@ export async function importFiles(organizationId: string, options: { dryRun: boo
     }
     assets = read.assets;
   } catch (err) {
+    if (err instanceof LibraryWait) {
+      // Not a failure and not a retry: the step comes back after the wait.
+      r.remaining = waiting.length;
+      sample(r, err.message);
+      return r;
+    }
     problem(r, `Asset library not read: ${err instanceof Error ? err.message : String(err)}`);
     return r;
   }
