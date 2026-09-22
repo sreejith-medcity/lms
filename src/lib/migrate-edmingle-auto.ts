@@ -77,7 +77,12 @@ export async function runEdmingleAuto(organizationId: string, budgetMs = 25_000)
     // Being rate-limited is a wait, not a failure: Edmingle said "later"
     // and the next tick tries again. Only a real problem marks the row red.
     const realProblems = report.problems.filter((p) => !/rate-limiting/.test(p));
-    if (moved > 0 || limited || report.problems.length > 0) {
+    // A finished step repeats its standing notes on every tick (a module
+    // Edmingle lists but does not have, say); those were reported when the
+    // step did its work, and a row every five minutes would only bury the
+    // steps still moving. A note on something not yet across still shows.
+    const finished = moved === 0 && report.remaining === 0 && !limited && report.alreadyDone >= report.looked;
+    if (!finished && (moved > 0 || limited || report.remaining > 0 || report.problems.length > 0)) {
       await recordIntegrationEvent({
         organizationId,
         provider: 'edmingle',
