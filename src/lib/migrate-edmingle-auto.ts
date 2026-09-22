@@ -41,6 +41,37 @@ export async function setEdmingleAuto(organizationId: string, on: boolean): Prom
     update: { status: on ? 'MIGRATED' : 'SKIPPED', migratedAt: on ? new Date() : null },
   });
   await db.migrationRecord.deleteMany({ where: LEGACY_FLAG });
+  // Flipping the switch forgets which steps were finished, so a fresh
+  // switch-on looks at every step once more (Edmingle may have moved on).
+  await db.migrationRecord.deleteMany({ where: { ...DONE, sourceId: { startsWith: `${organizationId}:` } } });
+}
+
+/**
+ * A step that reported nothing to do is remembered as finished and skipped
+ * on later ticks. Without this every tick walked all thirteen steps, and
+ * the finished ones still called Edmingle to re-read their listings (the
+ * sessions step alone reads 3,700 rows) before the documents step got its
+ * turn, by which point the minute's allowance of calls was spent and the
+ * documents were told "later" on every tick, for ever. Pressing a step by
+ * hand on the Migration page still runs it whatever this says.
+ */
+const DONE = { sourceSystem: SOURCE, entity: 'auto-done' };
+
+async function finishedSteps(organizationId: string): Promise<Set<string>> {
+  const rows = await db.migrationRecord.findMany({
+    where: { ...DONE, sourceId: { startsWith: `${organizationId}:` }, status: 'MIGRATED' },
+    select: { sourceId: true },
+  });
+  return new Set(rows.map((r) => r.sourceId.slice(organizationId.length + 1)));
+}
+
+async function markFinished(organizationId: string, key: string): Promise<void> {
+  const where = { ...DONE, sourceId: `${organizationId}:${key}` };
+  await db.migrationRecord.upsert({
+    where: { sourceSystem_entity_sourceId: where },
+    create: { ...where, status: 'MIGRATED', migratedAt: new Date() },
+    update: { status: 'MIGRATED', migratedAt: new Date() },
+  });
 }
 
 const ORDER: { key: string; run: (organizationId: string, budgetMs: number) => Promise<EdmingleReport> }[] = [
@@ -105,7 +136,9 @@ async function releaseLease(organizationId: string): Promise<void> {
 async function tick(organizationId: string, budgetMs: number): Promise<string> {
   const started = Date.now();
   const lines: string[] = [];
+  const done = await finishedSteps(organizationId);
   for (const step of ORDER) {
+    if (done.has(step.key)) continue;
     const left = budgetMs - (Date.now() - started);
     if (left < 5_000) break;
     let report: EdmingleReport;
@@ -121,11 +154,13 @@ async function tick(organizationId: string, budgetMs: number): Promise<string> {
     // Being rate-limited is a wait, not a failure: Edmingle said "later"
     // and the next tick tries again. Only a real problem marks the row red.
     const realProblems = report.problems.filter((p) => !/rate-limiting/.test(p));
-    // A finished step repeats its standing notes on every tick (a module
-    // Edmingle lists but does not have, say); those were reported when the
-    // step did its work, and a row every five minutes would only bury the
-    // steps still moving. A note on something not yet across still shows.
-    const finished = moved === 0 && report.remaining === 0 && !limited && report.alreadyDone >= report.looked;
+    // A step with nothing moved and nothing left is finished, standing
+    // notes or not (a module Edmingle lists but does not have; one session
+    // whose batch never came across): those were reported when the step did
+    // its work, and a row every minute would only bury the steps still
+    // moving. It is remembered so the next tick does not read it again.
+    const finished = moved === 0 && report.remaining === 0 && !limited;
+    if (finished) await markFinished(organizationId, step.key);
     if (!finished && (moved > 0 || limited || report.remaining > 0 || report.problems.length > 0)) {
       await recordIntegrationEvent({
         organizationId,
