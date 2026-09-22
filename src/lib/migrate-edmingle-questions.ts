@@ -40,6 +40,7 @@ export async function importQuestions(organizationId: string, options: { dryRun:
   sample(r, `${banks.length} question banks in Edmingle, ${banks.reduce((n, b) => n + (b.total_questions ?? 0), 0)} questions.`);
 
   let processed = 0;
+  let throttled = false;
   const left = () => budget - (Date.now() - started);
   const pending = banks.filter((b) => !doneFull.has(String(b.question_list_id)));
   for (const b of pending) {
@@ -81,8 +82,12 @@ export async function importQuestions(organizationId: string, options: { dryRun:
       try {
         got = await bankQuestionsPage(client, b.question_list_id, page);
       } catch (err) {
-        problem(r, `${b.question_list_name} page ${page}: ${err instanceof Error ? err.message : String(err)}`);
+        const said = err instanceof Error ? err.message : String(err);
+        problem(r, `${b.question_list_name} page ${page}: ${said}`);
         complete = false;
+        // Once Edmingle is throttling, every further call is refused too;
+        // stop the press here rather than hammer the next bank.
+        if (/rate-limiting/.test(said)) throttled = true;
         break;
       }
       for (const q of got.questions) {
@@ -130,7 +135,7 @@ export async function importQuestions(organizationId: string, options: { dryRun:
     if (media) sample(r, `${b.question_list_name}: ${media} questions have audio or pictures to add by hand (tagged "media to add").`);
     if (complete || options.dryRun) processed += 1;
     if (!options.dryRun && complete && bankId) await mark('qbank-full', key, bankId);
-    if (left() < 4_000) break;
+    if (throttled || left() < 4_000) break;
   }
   r.remaining = Math.max(0, pending.length - processed);
   if (r.remaining) sample(r, options.dryRun ? `${r.remaining} more banks on the real run (a rehearsal samples two).` : `${r.remaining} banks still to read: press again, or switch on the background run.`);
