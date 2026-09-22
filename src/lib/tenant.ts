@@ -2,8 +2,6 @@ import { headers } from 'next/headers';
 import { cache } from 'react';
 import { db } from '@/lib/db';
 
-import { TENANT_HEADER } from '@/lib/http-headers';
-
 export { TENANT_HEADER, HOST_HEADER } from '@/lib/http-headers';
 
 export interface TenantContext {
@@ -45,7 +43,9 @@ export const getTenantContext = cache(async (): Promise<TenantContext | null> =>
 
 const loadTenant = cache(async (): Promise<TenantContext | null> => {
   const h = await headers();
-  const tenantId = h.get(TENANT_HEADER) ?? (await resolveTenantByHost(h.get('host') ?? ''));
+  // By the host alone. A header naming the tenant would be one a visitor
+  // could send, and middleware sets none, so nothing here reads one.
+  const tenantId = await resolveTenantByHost(h.get('host') ?? '');
   if (!tenantId) return null;
 
   const tenant = await db.tenant.findUnique({

@@ -17,8 +17,11 @@
 import { PrismaClient, type $Enums } from '@prisma/client';
 import { STANDARD_ROLES, roleGrants } from '../src/lib/standard-roles';
 import { hashPassword } from '../src/lib/password';
+import { withRowScope } from '../src/lib/db-rls';
 
-const db = new PrismaClient();
+// The seed works for every academy, so with row-level security on it says
+// so on every query; otherwise the policies would hide the rows it made.
+const db = withRowScope(new PrismaClient(), { enabled: () => process.env.DATABASE_RLS === '1', resolve: async () => 'platform' });
 const ORG = process.env.PILOT_ORG ?? 'medcity';
 const PASSWORD = process.env.PILOT_PASSWORD ?? 'Pilot#2026';
 const DAY = 864e5;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authorizeCron } from '@/lib/cron';
+import { runAsPlatform } from '@/lib/db-scope';
 import { drain } from '@/lib/messaging/drain';
 import { purgeExpiredOtps } from '@/lib/otp';
 import { queueUpcomingReminders } from '@/lib/messaging/reminders';
@@ -24,7 +25,12 @@ export const maxDuration = 60;
  * Safe to call twice. Rows are claimed before they are sent, so an overlapping
  * run finds nothing to do rather than sending everything again.
  */
-export async function GET(request: Request) {
+/** The jobs work for every academy in turn, which is the platform's business, not one host's. */
+export function GET(request: Request) {
+  return runAsPlatform(() => handle(request));
+}
+
+async function handle(request: Request) {
   const auth = authorizeCron(request);
   if (!auth.ok) return NextResponse.json({ error: auth.message }, { status: auth.status });
 

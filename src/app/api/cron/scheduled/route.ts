@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { authorizeCron } from '@/lib/cron';
+import { runAsPlatform } from '@/lib/db-scope';
 import { provisionMeetings } from '@/lib/zoom-sessions';
 import { dispatchWebhooks } from '@/lib/webhooks';
 import { sweepScheduledTriggers } from '@/lib/workflows';
@@ -22,7 +23,12 @@ export const maxDuration = 60;
  * should go every few minutes; this is not, and should not be competing for the
  * same minute.
  */
-export async function GET(request: Request) {
+/** The jobs work for every academy in turn, which is the platform's business, not one host's. */
+export function GET(request: Request) {
+  return runAsPlatform(() => handle(request));
+}
+
+async function handle(request: Request) {
   const auth = authorizeCron(request);
   if (!auth.ok) return NextResponse.json({ error: auth.message }, { status: auth.status });
 

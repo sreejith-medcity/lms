@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { HOST_HEADER } from '@/lib/http-headers';
+import { HOST_HEADER, TENANT_HEADER } from '@/lib/http-headers';
 
 /**
  * Tenant resolution happens here, on every request, from the hostname.
@@ -64,6 +64,11 @@ export function middleware(req: NextRequest) {
   const platformHost = (process.env.PLATFORM_HOST ?? `admin.${base}`).split(':')[0].toLowerCase();
 
   const requestHeaders = new Headers(req.headers);
+  // The headers this middleware speaks through are its own. A visitor who
+  // sends one of them must not be believed, so they are dropped before any
+  // are set: x-platform on an academy's host would otherwise be a claim to
+  // be the platform, and a tenant header a claim to be another academy.
+  for (const own of [HOST_HEADER, TENANT_HEADER, 'x-platform', 'x-tenant-slug', 'x-pathname']) requestHeaders.delete(own);
   requestHeaders.set(HOST_HEADER, hostname);
   requestHeaders.set('x-pathname', req.nextUrl.pathname);
 
