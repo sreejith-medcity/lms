@@ -22,10 +22,19 @@ let lastCallAt = 0;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function paced() {
-  const wait = lastCallAt + PACE_MS - Date.now();
-  if (wait > 0) await sleep(wait);
-  lastCallAt = Date.now();
+// Callers queue behind one another, so two files being pulled at once
+// still make their calls one pace apart rather than both firing when the
+// same gap has passed.
+let queue: Promise<void> = Promise.resolve();
+
+function paced(): Promise<void> {
+  const mine = queue.then(async () => {
+    const wait = lastCallAt + PACE_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastCallAt = Date.now();
+  });
+  queue = mine.catch(() => undefined);
+  return mine;
 }
 
 export interface EdmingleClient {

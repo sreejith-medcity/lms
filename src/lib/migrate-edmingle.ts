@@ -335,45 +335,115 @@ export async function importFiles(organizationId: string, options: { dryRun: boo
     return r;
   }
 
+  // One Edmingle file is often attached to several lessons (the same
+  // worksheet in three batches' modules). Once it has been pulled for one
+  // lesson, the others are attached to the same asset here: no second
+  // download, no second copy in the bucket, no call to Edmingle at all.
+  const pulled = new Map<number, string>();
+  for (const f of await db.migrationRecord.findMany({ where: { sourceSystem: SOURCE, entity: 'file', status: 'MIGRATED', targetId: { not: null } }, select: { targetId: true, payload: true } })) {
+    const p = f.payload as { assetId?: number; matched?: boolean } | null;
+    if (p?.assetId && !p.matched && f.targetId) pulled.set(Number(p.assetId), f.targetId);
+  }
+
   let moved = 0;
-  for (const w of waiting) {
-    if (moved >= max || Date.now() - started > budget) break;
-    const mat: EdmingleMaterial = { material_id: Number(w.sourceId), material_name: w.payload.name, file_name: w.payload.fileName, file_size: w.payload.sizeBytes };
-    const { asset, reason } = matchAsset(mat, assets);
-    if (!asset) {
-      problem(r, `${w.payload.name}: ${reason}`);
-      continue;
+  const outOfTime = () => Date.now() - started > budget;
+
+  const pullOne = async (w: (typeof waiting)[number], asset: EdmingleAsset) => {
+    const have = pulled.get(asset.asset_id);
+    if (have) {
+      const ours = await db.asset.findFirst({ where: { id: have, organizationId, deletedAt: null }, select: { id: true, fileName: true } });
+      if (ours) {
+        await db.material.update({ where: { id: w.materialId }, data: { assetId: ours.id } });
+        await mark('file', w.sourceId, ours.id, { assetId: asset.asset_id, fileName: ours.fileName, shared: true });
+        moved += 1;
+        sample(r, `${ours.fileName} (already here, attached)`);
+        return;
+      }
     }
-    r.wouldCreate += 1;
-    if (options.dryRun) {
-      sample(r, `${w.payload.fileName} (${asset.file_size_bytes ? Math.round(asset.file_size_bytes / 1024) + ' KB' : 'size unknown'})`);
-      moved += 1;
-      continue;
+    const target = await assetDownloadUrl(client, asset.asset_id);
+    if (!target.url) throw new Error('Edmingle gave no download link');
+    const fileName = (target.fileName || w.payload.fileName || `${asset.asset_id}.bin`).trim();
+    const type = inferType(fileName);
+    const res = await fetch(target.url, { signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) throw new Error(`download answered ${res.status}`);
+    const length = Number(res.headers.get('content-length') ?? asset.file_size_bytes ?? 0);
+    if (length > maxBytesFor(type)) throw new Error('larger than the ceiling for its type');
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength > maxBytesFor(type)) throw new Error('larger than the ceiling for its type');
+    const key = buildObjectKey(organizationId, fileName);
+    const mime = target.mimeType || asset.mime_type || res.headers.get('content-type')?.split(';')[0] || inferMimeType(fileName);
+    await putObject(key, bytes, mime);
+    const created = await db.asset.create({
+      data: { organizationId, name: w.payload.name.slice(0, 200), fileName, type, storageKey: key, mimeType: mime, sizeBytes: BigInt(bytes.byteLength), transcodeStatus: 'READY', durationSeconds: null },
+      select: { id: true },
+    });
+    await db.material.update({ where: { id: w.materialId }, data: { assetId: created.id } });
+    await mark('file', w.sourceId, created.id, { assetId: asset.asset_id, fileName, bytes: bytes.byteLength });
+    pulled.set(asset.asset_id, created.id);
+    moved += 1;
+    sample(r, `${fileName} (${Math.round(bytes.byteLength / 1024)} KB)`);
+  };
+
+  // A few files in flight at once: the call to Edmingle for the next link
+  // is paced by the client whatever happens, so the gain is the download
+  // and the upload to the bucket overlapping the wait, not more calls.
+  let cursor = 0;
+  const claimed = new Set<number>();
+  const deferred: typeof waiting = [];
+  const worker = async () => {
+    while (!options.dryRun && moved + claimed.size < max && !outOfTime()) {
+      const w = waiting[cursor++];
+      if (!w) return;
+      const mat: EdmingleMaterial = { material_id: Number(w.sourceId), material_name: w.payload.name, file_name: w.payload.fileName, file_size: w.payload.sizeBytes };
+      const { asset, reason } = matchAsset(mat, assets);
+      if (!asset) {
+        problem(r, `${w.payload.name}: ${reason}`);
+        continue;
+      }
+      // Two lessons sharing one file are pulled one after the other, not side by side, so the second finds the first's copy.
+      if (claimed.has(asset.asset_id)) {
+        deferred.push(w);
+        continue;
+      }
+      claimed.add(asset.asset_id);
+      r.wouldCreate += 1;
+      try {
+        await pullOne(w, asset);
+      } catch (err) {
+        problem(r, `${w.payload.name}: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        claimed.delete(asset.asset_id);
+      }
     }
-    try {
-      const target = await assetDownloadUrl(client, asset.asset_id);
-      if (!target.url) throw new Error('Edmingle gave no download link');
-      const fileName = (target.fileName || w.payload.fileName || `${asset.asset_id}.bin`).trim();
-      const type = inferType(fileName);
-      const res = await fetch(target.url, { signal: AbortSignal.timeout(60_000) });
-      if (!res.ok) throw new Error(`download answered ${res.status}`);
-      const length = Number(res.headers.get('content-length') ?? asset.file_size_bytes ?? 0);
-      if (length > maxBytesFor(type)) throw new Error('larger than the ceiling for its type');
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.byteLength > maxBytesFor(type)) throw new Error('larger than the ceiling for its type');
-      const key = buildObjectKey(organizationId, fileName);
-      const mime = target.mimeType || asset.mime_type || res.headers.get('content-type')?.split(';')[0] || inferMimeType(fileName);
-      await putObject(key, bytes, mime);
-      const created = await db.asset.create({
-        data: { organizationId, name: w.payload.name.slice(0, 200), fileName, type, storageKey: key, mimeType: mime, sizeBytes: BigInt(bytes.byteLength), transcodeStatus: 'READY', durationSeconds: null },
-        select: { id: true },
-      });
-      await db.material.update({ where: { id: w.materialId }, data: { assetId: created.id } });
-      await mark('file', w.sourceId, created.id, { assetId: asset.asset_id, fileName, bytes: bytes.byteLength });
+  };
+
+  if (options.dryRun) {
+    for (const w of waiting) {
+      if (moved >= max) break;
+      const mat: EdmingleMaterial = { material_id: Number(w.sourceId), material_name: w.payload.name, file_name: w.payload.fileName, file_size: w.payload.sizeBytes };
+      const { asset, reason } = matchAsset(mat, assets);
+      if (!asset) {
+        problem(r, `${w.payload.name}: ${reason}`);
+        continue;
+      }
+      r.wouldCreate += 1;
+      sample(r, pulled.has(asset.asset_id) ? `${w.payload.fileName} (already here, would be attached)` : `${w.payload.fileName} (${asset.file_size_bytes ? Math.round(asset.file_size_bytes / 1024) + ' KB' : 'size unknown'})`);
       moved += 1;
-      sample(r, `${fileName} (${Math.round(bytes.byteLength / 1024)} KB)`);
-    } catch (err) {
-      problem(r, `${w.payload.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  } else {
+    await Promise.all([worker(), worker(), worker()]);
+    // The lessons that shared a file with one in flight: their copy is here now.
+    for (const w of deferred) {
+      if (moved >= max || outOfTime()) break;
+      const mat: EdmingleMaterial = { material_id: Number(w.sourceId), material_name: w.payload.name, file_name: w.payload.fileName, file_size: w.payload.sizeBytes };
+      const { asset } = matchAsset(mat, assets);
+      if (!asset) continue;
+      r.wouldCreate += 1;
+      try {
+        await pullOne(w, asset);
+      } catch (err) {
+        problem(r, `${w.payload.name}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
   r.remaining = Math.max(0, waiting.length - moved - r.problems.length);
