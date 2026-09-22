@@ -40,9 +40,16 @@ export async function importQuestions(organizationId: string, options: { dryRun:
   sample(r, `${banks.length} question banks in Edmingle, ${banks.reduce((n, b) => n + (b.total_questions ?? 0), 0)} questions.`);
 
   let processed = 0;
+  const left = () => budget - (Date.now() - started);
   const pending = banks.filter((b) => !doneFull.has(String(b.question_list_id)));
   for (const b of pending) {
-    if (Date.now() - started > budget) break;
+    // A bank of many pages is read page by page across presses: a call to
+    // Edmingle can wait half a minute on its rate limit, so the clock is
+    // checked before every page, not only before every bank, or a press
+    // outlives the gateway and the page shows an error instead of a report.
+    if (left() < 8_000) break;
+    // A rehearsal reads two banks as a sample and leaves Edmingle's call allowance for the real run.
+    if (options.dryRun && processed >= 2) break;
     const key = String(b.question_list_id);
     let bankId = doneBanks.get(key) ?? null;
     if (!bankId) {
@@ -66,6 +73,10 @@ export async function importQuestions(organizationId: string, options: { dryRun:
     let complete = true;
     let media = 0;
     for (let page = 1; page <= 50; page += 1) {
+      if (left() < 4_000) {
+        complete = false;
+        break;
+      }
       let got;
       try {
         got = await bankQuestionsPage(client, b.question_list_id, page);
@@ -117,10 +128,11 @@ export async function importQuestions(organizationId: string, options: { dryRun:
       if (!got.more) break;
     }
     if (media) sample(r, `${b.question_list_name}: ${media} questions have audio or pictures to add by hand (tagged "media to add").`);
-    processed += 1;
+    if (complete || options.dryRun) processed += 1;
     if (!options.dryRun && complete && bankId) await mark('qbank-full', key, bankId);
+    if (left() < 4_000) break;
   }
   r.remaining = Math.max(0, pending.length - processed);
-  if (r.remaining) sample(r, `${r.remaining} banks still to read: press again.`);
+  if (r.remaining) sample(r, options.dryRun ? `${r.remaining} more banks on the real run (a rehearsal samples two).` : `${r.remaining} banks still to read: press again, or switch on the background run.`);
   return r;
 }
