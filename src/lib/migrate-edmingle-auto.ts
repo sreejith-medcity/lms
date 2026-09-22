@@ -22,19 +22,25 @@ import { importAttendance, importCertificates, importProgress, importSessions, i
  */
 
 const SOURCE = 'EDMINGLE';
-const FLAG = { sourceSystem: SOURCE, entity: 'auto', sourceId: 'edmingle' };
+/** One switch per academy; the row written before ff2369c had no academy on it and still counts, so a run in progress is not switched off by a deploy. */
+const flag = (organizationId: string) => ({ sourceSystem: SOURCE, entity: 'auto', sourceId: organizationId });
+const LEGACY_FLAG = { sourceSystem: SOURCE, entity: 'auto', sourceId: 'edmingle' };
 
-export async function edmingleAutoOn(): Promise<boolean> {
-  const row = await db.migrationRecord.findUnique({ where: { sourceSystem_entity_sourceId: FLAG }, select: { status: true } });
-  return row?.status === 'MIGRATED';
+export async function edmingleAutoOn(organizationId: string): Promise<boolean> {
+  const rows = await db.migrationRecord.findMany({ where: { sourceSystem: SOURCE, entity: 'auto', sourceId: { in: [organizationId, LEGACY_FLAG.sourceId] } }, select: { sourceId: true, status: true } });
+  const own = rows.find((r) => r.sourceId === organizationId);
+  if (own) return own.status === 'MIGRATED';
+  return rows.some((r) => r.status === 'MIGRATED');
 }
 
-export async function setEdmingleAuto(on: boolean): Promise<void> {
+export async function setEdmingleAuto(organizationId: string, on: boolean): Promise<void> {
+  const where = flag(organizationId);
   await db.migrationRecord.upsert({
-    where: { sourceSystem_entity_sourceId: FLAG },
-    create: { ...FLAG, status: on ? 'MIGRATED' : 'SKIPPED', migratedAt: on ? new Date() : null },
+    where: { sourceSystem_entity_sourceId: where },
+    create: { ...where, status: on ? 'MIGRATED' : 'SKIPPED', migratedAt: on ? new Date() : null },
     update: { status: on ? 'MIGRATED' : 'SKIPPED', migratedAt: on ? new Date() : null },
   });
+  await db.migrationRecord.deleteMany({ where: LEGACY_FLAG });
 }
 
 const ORDER: { key: string; run: (organizationId: string, budgetMs: number) => Promise<EdmingleReport> }[] = [
@@ -59,7 +65,7 @@ const ORDER: { key: string; run: (organizationId: string, budgetMs: number) => P
  * the cron's own log, or null when the switch is off.
  */
 export async function runEdmingleAuto(organizationId: string, budgetMs = 25_000): Promise<string | null> {
-  if (!(await edmingleAutoOn())) return null;
+  if (!(await edmingleAutoOn(organizationId))) return null;
   if (!(await takeLease(organizationId, budgetMs + 20_000))) return 'another run is still going';
   try {
     return await tick(organizationId, budgetMs);

@@ -195,14 +195,14 @@ export async function runEdmingleStep(step: EdmingleStep, apply: boolean): Promi
   }
 }
 
-/** The background switch: the five-minute cron does a little of the import each run while it is on. */
+/** The background switch: the cron does a little of the import each run while it is on. */
 export async function setEdmingleAuto(on: boolean): Promise<ActionState> {
   try {
     const { tenant, user } = await guard('delete');
-    await writeEdmingleAuto(on);
+    await writeEdmingleAuto(tenant.organizationId, on);
     await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: on ? 'migration.edmingle.auto_on' : 'migration.edmingle.auto_off', entity: 'MigrationRecord', entityId: 'edmingle' });
     revalidatePath('/admin/settings/migration');
-    return { ok: true, message: on ? 'The import will carry on by itself, a little every five minutes.' : 'The background run is off.' };
+    return { ok: true, message: on ? 'The import will carry on by itself, a little every run of the scheduled job.' : 'The background run is off.' };
   } catch (err) {
     return fail(err);
   }

@@ -28,7 +28,7 @@ export default async function MigrationPage() {
     migrationSummary(),
     resolveIntegration(tenant.organizationId, 'edmingle'),
     edmingleSummary(),
-    edmingleAutoOn(),
+    edmingleAutoOn(tenant.organizationId),
   ]);
   const bucket = s3Config() !== null;
 
