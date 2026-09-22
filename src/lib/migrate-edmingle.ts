@@ -2,7 +2,7 @@ import type { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { slugify, uniqueSlug } from '@/lib/slug';
 import { buildObjectKey, inferMimeType, inferType, maxBytesFor, putObject } from '@/lib/storage';
-import { assetDownloadUrl, assetLibrary, catalogue, curriculum, edmingleFor, type EdmingleClient } from '@/lib/edmingle';
+import { assetDownloadUrl, catalogue, curriculum, edmingleFor, type EdmingleClient } from '@/lib/edmingle';
 import { bundleSlug, inOrder, matchAsset, planMaterial, plainText, type EdmingleAsset, type EdmingleMaterial } from '@/lib/edmingle-rules';
 import type { StepReport } from '@/lib/migrate-woo';
 
@@ -287,11 +287,62 @@ async function thumbnail(organizationId: string, courseId: string, url: string, 
 
 let libraryCache: { at: number; assets: EdmingleAsset[] } | null = null;
 
-async function library(client: EdmingleClient): Promise<EdmingleAsset[]> {
-  if (libraryCache && Date.now() - libraryCache.at < 10 * 60_000) return libraryCache.assets;
-  const assets = await assetLibrary(client);
-  libraryCache = { at: Date.now(), assets };
-  return assets;
+/**
+ * The asset library, read page by page and kept in the migration records.
+ *
+ * Nearly four thousand assets is forty pages, a minute of paced calls,
+ * which is more than one press or one tick has, and Edmingle throttles a
+ * run of forty calls anyway. Kept only in memory, the listing started
+ * again on every tick and never finished, so the documents never started
+ * either. Each page is written down as it arrives (entity `asset-page`),
+ * a later press or tick carries on from the first page it does not have,
+ * and once every page is in the listing is served from memory for ten
+ * minutes. Pages older than a day are read again, in case files were
+ * added there since.
+ */
+const LIBRARY_PAGE = 'asset-page';
+const LIBRARY_STALE_MS = 24 * 60 * 60_000;
+
+async function library(client: EdmingleClient, left: () => number): Promise<{ assets: EdmingleAsset[]; complete: boolean; pages: number }> {
+  if (libraryCache && Date.now() - libraryCache.at < 10 * 60_000) return { assets: libraryCache.assets, complete: true, pages: 0 };
+
+  type Page = { assets: EdmingleAsset[]; hasMore: boolean };
+  const rows = await db.migrationRecord.findMany({ where: { sourceSystem: SOURCE, entity: LIBRARY_PAGE }, select: { sourceId: true, payload: true, migratedAt: true } });
+  const pages = new Map<number, Page>();
+  if (rows.some((row) => !row.migratedAt || Date.now() - row.migratedAt.getTime() > LIBRARY_STALE_MS)) {
+    await db.migrationRecord.deleteMany({ where: { sourceSystem: SOURCE, entity: LIBRARY_PAGE } });
+  } else {
+    for (const row of rows) pages.set(Number(row.sourceId), row.payload as unknown as Page);
+  }
+
+  let page = 1;
+  let complete = false;
+  for (;;) {
+    const have = pages.get(page);
+    if (have) {
+      if (!have.hasMore) {
+        complete = true;
+        break;
+      }
+      page += 1;
+      continue;
+    }
+    if (left() < 6_000) break;
+    const r = await client.get<{ assets?: EdmingleAsset[]; page_context?: { has_more_page?: boolean } }>('assetlibrary/list', { page, per_page: 100 });
+    const entry: Page = { assets: r.assets ?? [], hasMore: Boolean(r.assets?.length && r.page_context?.has_more_page) };
+    await mark(LIBRARY_PAGE, String(page), null, entry as unknown as Prisma.InputJsonValue);
+    pages.set(page, entry);
+    if (!entry.hasMore) {
+      complete = true;
+      break;
+    }
+    page += 1;
+  }
+
+  const assets: EdmingleAsset[] = [];
+  for (const n of [...pages.keys()].sort((a, b) => a - b)) assets.push(...pages.get(n)!.assets);
+  if (complete) libraryCache = { at: Date.now(), assets };
+  return { assets, complete, pages: pages.size };
 }
 
 /** Materials created by step 1 whose file has not crossed yet. */
@@ -329,7 +380,14 @@ export async function importFiles(organizationId: string, options: { dryRun: boo
   }
   let assets: EdmingleAsset[];
   try {
-    assets = await library(client);
+    const read = await library(client, () => budget - (Date.now() - started));
+    if (!read.complete) {
+      // The listing carries on next press or tick; nothing is pulled until it is whole.
+      r.remaining = waiting.length;
+      sample(r, `Reading Edmingle's asset library: ${read.pages} pages so far (${read.assets.length} files). It carries on from here next time.`);
+      return r;
+    }
+    assets = read.assets;
   } catch (err) {
     problem(r, `Asset library not read: ${err instanceof Error ? err.message : String(err)}`);
     return r;
