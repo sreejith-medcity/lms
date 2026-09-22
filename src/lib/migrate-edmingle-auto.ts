@@ -10,11 +10,12 @@ import { importAttendance, importCertificates, importProgress, importSessions, i
  *
  * Edmingle allows only a handful of calls a minute, so a library of this
  * size cannot be pulled across in an afternoon of button presses. With the
- * switch on, every run of the five-minute cron does a little of the next
+ * switch on, every run of the cron (the five-minute messaging job, or the
+ * one-minute Edmingle job at /api/cron/edmingle) does a little of the next
  * step that has work, in the order the steps depend on each other, and
  * writes a line to the Edmingle card's history saying what it did. The
- * documents go last on purpose: two thousand PDFs at fifteen a tick take
- * a night, and the archive (who taught what, who attended, who passed)
+ * documents go last on purpose: six thousand PDFs take hours even a minute
+ * at a time, and the archive (who taught what, who attended, who passed)
  * should not wait behind them. The
  * switch is a row in the migration records rather than a setting, because
  * it belongs to the migration and dies with it.
@@ -48,7 +49,7 @@ const ORDER: { key: string; run: (organizationId: string, budgetMs: number) => P
   { key: 'attendance', run: (o, b) => importAttendance(o, { dryRun: false, budgetMs: b }) },
   { key: 'progress', run: (o, b) => importProgress(o, { dryRun: false, budgetMs: b }) },
   { key: 'certificates', run: (o, b) => importCertificates(o, { dryRun: false, budgetMs: b }) },
-  { key: 'files', run: (o, b) => importFiles(o, { dryRun: false, budgetMs: b, max: 15 }) },
+  { key: 'files', run: (o, b) => importFiles(o, { dryRun: false, budgetMs: b, max: 60 }) },
   { key: 'videos', run: (o) => attachVideos(o, { dryRun: false }) },
 ];
 
@@ -59,6 +60,43 @@ const ORDER: { key: string; run: (organizationId: string, budgetMs: number) => P
  */
 export async function runEdmingleAuto(organizationId: string, budgetMs = 25_000): Promise<string | null> {
   if (!(await edmingleAutoOn())) return null;
+  if (!(await takeLease(organizationId, budgetMs + 20_000))) return 'another run is still going';
+  try {
+    return await tick(organizationId, budgetMs);
+  } finally {
+    await releaseLease(organizationId);
+  }
+}
+
+/**
+ * Two schedules call this (the five-minute messaging job, and the
+ * one-minute Edmingle job when the host has it), so a run takes a lease
+ * first: a row whose time is when the lease ends. Claiming it is one
+ * update that only succeeds while the old lease has run out, so two ticks
+ * landing together cannot both pull the same documents into the bucket.
+ */
+const LEASE = { sourceSystem: SOURCE, entity: 'auto-lease' };
+
+async function takeLease(organizationId: string, forMs: number): Promise<boolean> {
+  const now = new Date();
+  const until = new Date(now.getTime() + forMs);
+  await db.migrationRecord.upsert({
+    where: { sourceSystem_entity_sourceId: { ...LEASE, sourceId: organizationId } },
+    create: { ...LEASE, sourceId: organizationId, status: 'SKIPPED', migratedAt: new Date(0) },
+    update: {},
+  });
+  const claimed = await db.migrationRecord.updateMany({
+    where: { ...LEASE, sourceId: organizationId, migratedAt: { lt: now } },
+    data: { migratedAt: until },
+  });
+  return claimed.count === 1;
+}
+
+async function releaseLease(organizationId: string): Promise<void> {
+  await db.migrationRecord.updateMany({ where: { ...LEASE, sourceId: organizationId }, data: { migratedAt: new Date(0) } });
+}
+
+async function tick(organizationId: string, budgetMs: number): Promise<string> {
   const started = Date.now();
   const lines: string[] = [];
   for (const step of ORDER) {

@@ -154,8 +154,8 @@ export function EdmingleConsole({ connected, canApply, done, auto, bucket }: { c
               {auto ? <Badge tone="ok">on</Badge> : <Badge tone="warn">off</Badge>}
             </p>
             <p className="t-small muted">
-              Edmingle allows only a few calls a minute, so the whole library takes hours of presses. With this on, the five-minute job does a little of the next step
-              each run, in order, until every step below reports nothing left. What each run did shows on the Edmingle card&rsquo;s history under Integrations.
+              Edmingle allows only a few calls a minute, so the whole library takes hours of presses. With this on, the scheduled job does a little of the next step each run, in
+              order, until every step below reports nothing left: every five minutes with the messaging job alone, most of every minute once the host also calls <code>/api/cron/edmingle</code> each minute. What each run did shows on the Edmingle card&rsquo;s history under Integrations.
             </p>
             <p className="t-small faint mt-1">Same as pressing &ldquo;Do it for real&rdquo; on each step in turn: rehearse the steps you care about before switching it on.</p>
           </div>
