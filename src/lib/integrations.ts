@@ -473,7 +473,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
   /* Files and video -------------------------------------------------------- */
   {
     id: 's3',
-    name: 'S3 or Cloudflare R2',
+    name: 'S3, Cloudflare R2 or MinIO',
     category: 'storage',
     priority: 1,
     requires:
@@ -486,9 +486,9 @@ export const INTEGRATIONS: IntegrationDef[] = [
     fields: [
       TEXT('endpoint', 'Endpoint', 'S3_ENDPOINT', 'R2 gives you one per account.'),
       TEXT('bucket', 'Bucket', 'S3_BUCKET'),
-      TEXT('region', 'Region', 'S3_REGION', 'auto for R2.'),
-      TEXT('accessKeyId', 'Access key ID', 'S3_ACCESS_KEY_ID'),
-      KEY('secretAccessKey', 'Secret access key', 'S3_SECRET_ACCESS_KEY'),
+      TEXT('region', 'Region', 'S3_REGION', 'auto for R2; us-east-1 for MinIO on the VPS.'),
+      TEXT('accessKeyId', 'Access key ID', 'S3_ACCESS_KEY'),
+      KEY('secretAccessKey', 'Secret access key', 'S3_SECRET_KEY'),
     ],
   },
   {
