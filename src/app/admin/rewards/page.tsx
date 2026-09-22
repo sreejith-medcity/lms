@@ -24,7 +24,7 @@ export default async function RewardsPage() {
   const canEdit = me.permissions['settings.preferences']?.edit ?? false;
   const scope = await staffScope(me);
 
-  const [schemes, achievements, courses, vouchers, cardCount, awardCount] = await Promise.all([
+  const [schemes, achievements, courses, vouchers, cardCount, awardCount, printed, unclaimed] = await Promise.all([
     db.stampScheme.findMany({ where: { organizationId: tenant.organizationId }, orderBy: [{ isActive: 'desc' }, { name: 'asc' }], include: { _count: { select: { cards: true } } } }),
     db.achievement.findMany({ where: { organizationId: tenant.organizationId }, orderBy: [{ isActive: 'desc' }, { name: 'asc' }], include: { _count: { select: { awards: true } } } }),
     db.product.findMany({ where: { organizationId: tenant.organizationId, type: 'COURSE', deletedAt: null }, orderBy: { title: 'asc' }, select: { id: true, title: true } }),
@@ -36,7 +36,13 @@ export default async function RewardsPage() {
     }),
     db.stampCard.count({ where: { organizationId: tenant.organizationId, cardsFilled: { gt: 0 } } }),
     db.achievementAward.count({ where: { achievement: { organizationId: tenant.organizationId } } }),
+    db.voucher.groupBy({ by: ['batchLabel'], where: { organizationId: tenant.organizationId, source: 'BATCH', batchLabel: { not: null } }, _count: { _all: true }, _max: { createdAt: true } }),
+    db.voucher.groupBy({ by: ['batchLabel'], where: { organizationId: tenant.organizationId, source: 'BATCH', batchLabel: { not: null }, status: 'ISSUED', userId: null }, _count: { _all: true } }),
   ]);
+  const batches = printed
+    .map((b) => ({ label: b.batchLabel ?? '', total: b._count._all, unclaimed: unclaimed.find((u) => u.batchLabel === b.batchLabel)?._count._all ?? 0, at: b._max.createdAt }))
+    .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0))
+    .slice(0, 30);
   const courseOptions: CourseOption[] = courses;
   const titleOf = (id: string | null) => (id ? (courses.find((c) => c.id === id)?.title ?? 'one course') : null);
   const schemeRows: SchemeRow[] = schemes.map((s) => ({
@@ -164,6 +170,38 @@ export default async function RewardsPage() {
         </p>
         <div className="mt-4">{canEdit ? <IssueForm courses={courseOptions} claimBase={claimBase} /> : <p className="t-small faint">Issuing needs the preferences permission.</p>}</div>
       </Card>
+
+      {batches.length > 0 && (
+        <Card>
+          <p className="font-semibold">Printed batches</p>
+          <p className="t-small faint mt-0.5">
+            Each batch as a sheet of QR labels in the academy's colours, eight to a page, with the code printed beside each for the phone that will not scan. Only the codes nobody has claimed yet are printed, so a batch printed again halfway through hands out nothing that is already somebody's.
+          </p>
+          <ul className="mt-3 divide-y">
+            {batches.map((b) => (
+              <li key={b.label} className="flex flex-wrap items-center gap-3 py-2">
+                <span className="min-w-0 flex-1">
+                  {b.label}
+                  <span className="t-small faint">
+                    {' '}
+                    {b.unclaimed} of {b.total} unclaimed{b.at ? `, printed ${day(b.at)}` : ''}
+                  </span>
+                </span>
+                {b.unclaimed > 0 ? (
+                  <a href={`/api/qr/vouchers?batch=${encodeURIComponent(b.label)}`} target="_blank" rel="noreferrer" className="t-small underline underline-offset-2">
+                    Print QR labels
+                  </a>
+                ) : (
+                  <span className="t-small faint">all claimed</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="t-small faint mt-3">
+            Posters for a wall or a window (sign up, enquire, a course page) are under <Link href="/admin/storefront" className="underline underline-offset-2">Storefront</Link>.
+          </p>
+        </Card>
+      )}
 
       <Card>
         <p className="flex flex-wrap items-center gap-2 font-semibold">

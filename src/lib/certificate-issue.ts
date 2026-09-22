@@ -114,7 +114,7 @@ async function picture(organizationId: string, assetId: string | null | undefine
 }
 
 /** The academy's mark: an uploaded asset, or the bundled artwork. */
-async function logoPicture(organizationId: string, logoUrl: string | null): Promise<PdfPicture | null> {
+export async function logoPicture(organizationId: string, logoUrl: string | null): Promise<PdfPicture | null> {
   if (!logoUrl) return null;
   const m = /^\/api\/assets\/([A-Za-z0-9_-]+)/.exec(logoUrl);
   if (m) return picture(organizationId, m[1]);

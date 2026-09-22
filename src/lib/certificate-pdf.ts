@@ -137,6 +137,11 @@ export async function renderCertificatePdf(input: CertificatePdfInput): Promise<
   return doc.save();
 }
 
+/** A PNG or JPEG placed in the document; anything else (WebP, SVG) is left out rather than failing the file. */
+export async function embedPicture(doc: PDFDocument, pic: PdfPicture | null | undefined): Promise<PDFImage | null> {
+  return embed(doc, pic);
+}
+
 async function embed(doc: PDFDocument, pic: PdfPicture | null | undefined): Promise<PDFImage | null> {
   if (!pic || pic.bytes.byteLength === 0) return null;
   const mime = (pic.mimeType ?? '').toLowerCase();

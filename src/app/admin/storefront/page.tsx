@@ -4,6 +4,7 @@ import { requireTenant } from '@/lib/tenant';
 import { requireStaff } from '@/lib/auth';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { PageEditor, PostEditor, RemovePage, RemovePost } from './editors';
+import { QrPosterForm } from './qr-form';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -172,6 +173,16 @@ export default async function StorefrontPage_({
                     : undefined
                 }
               />
+            </div>
+          </Card>
+
+          <Card>
+            <h2 className="t-heading">QR posters</h2>
+            <p className="t-small faint mt-1">
+              A code for the notice board, the window or the counter: sign up, enquire, the course list, or any page on this site. Voucher batches print from Rewards.
+            </p>
+            <div className="mt-5">
+              <QrPosterForm />
             </div>
           </Card>
 
