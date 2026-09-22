@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { recordIntegrationEvent } from '@/lib/integration-events';
+import { recentIntegrationEvents, recordIntegrationEvent } from '@/lib/integration-events';
 import { attachVideos, importCatalogue, importFiles, type EdmingleReport } from '@/lib/migrate-edmingle';
 import { importBatches, importEnrollments, importLearners, importPrices } from '@/lib/migrate-edmingle-people';
 import { importQuestions } from '@/lib/migrate-edmingle-questions';
@@ -162,6 +162,16 @@ async function tick(organizationId: string, budgetMs: number): Promise<string> {
     const finished = moved === 0 && report.remaining === 0 && !limited;
     if (finished) await markFinished(organizationId, step.key);
     if (!finished && (moved > 0 || limited || report.remaining > 0 || report.problems.length > 0)) {
+      const detail = `${limited ? "waiting on Edmingle's rate limit; " : ''}${moved} across, ${report.alreadyDone} already, ${report.remaining} left${realProblems.length ? `; ${realProblems.length} notes: ${realProblems[0].slice(0, 160)}` : ''}${moved === 0 && !realProblems.length && report.samples[0] ? `; ${report.samples[0].slice(0, 200)}` : ''}`;
+      // A tick that moved nothing and says exactly what the last one said
+      // (a wait on the asset library, a minute later) adds nothing: one row
+      // per state, not one per minute.
+      const quiet = moved === 0 && !limited;
+      const last = quiet ? (await recentIntegrationEvents(organizationId, 'edmingle', 1))[0] : undefined;
+      if (quiet && last && last.action === `auto ${step.key}` && last.detail === detail) {
+        lines.push(`${step.key} unchanged`);
+        break;
+      }
       await recordIntegrationEvent({
         organizationId,
         provider: 'edmingle',
@@ -171,7 +181,7 @@ async function tick(organizationId: string, budgetMs: number): Promise<string> {
         records: moved,
         // A tick that moved nothing but has something to say (a wait on the
         // asset library, a listing carrying on) says it, so the history reads.
-        detail: `${limited ? "waiting on Edmingle's rate limit; " : ''}${moved} across, ${report.alreadyDone} already, ${report.remaining} left${realProblems.length ? `; ${realProblems.length} notes: ${realProblems[0].slice(0, 160)}` : ''}${moved === 0 && !realProblems.length && report.samples[0] ? `; ${report.samples[0].slice(0, 200)}` : ''}`,
+        detail,
       });
       lines.push(`${step.key} ${moved} across, ${report.remaining} left${limited ? ', waiting' : ''}`);
     }
