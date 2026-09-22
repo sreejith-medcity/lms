@@ -200,19 +200,21 @@ export async function importCatalogue(organizationId: string, options: { dryRun:
     let complete = true;
     for (const s of inOrder(sections)) {
       const sKey = String(s.section_id);
+      // Edmingle leaves the name off a section made by its own import tool.
+      const sectionName = (s.section_name ?? '').trim() || 'Section';
       let sectionId = doneSections.get(sKey) ?? null;
       r.looked += 1;
       if (sectionId) r.alreadyDone += 1;
       else {
         r.wouldCreate += 1;
-        if (options.dryRun) sample(r, `section: ${m.name} / ${s.section_name} (${s.resources?.length ?? 0} materials)`);
+        if (options.dryRun) sample(r, `section: ${m.name} / ${sectionName} (${s.resources?.length ?? 0} materials)`);
         else {
           try {
-            const created = await db.section.create({ data: { moduleId: moduleId!, title: s.section_name.trim().slice(0, 200) || 'Section', sortOrder: sOrder, isVisible: (s.status ?? 'published') === 'published' }, select: { id: true } });
+            const created = await db.section.create({ data: { moduleId: moduleId!, title: sectionName.slice(0, 200), sortOrder: sOrder, isVisible: (s.status ?? 'published') === 'published' }, select: { id: true } });
             sectionId = created.id;
-            await mark('section', sKey, sectionId, { name: s.section_name, module: m.course_id });
+            await mark('section', sKey, sectionId, { name: sectionName, module: m.course_id });
           } catch (err) {
-            problem(r, `section ${s.section_name}: ${err instanceof Error ? err.message : String(err)}`);
+            problem(r, `section ${sectionName}: ${err instanceof Error ? err.message : String(err)}`);
             complete = false;
             continue;
           }
@@ -222,6 +224,7 @@ export async function importCatalogue(organizationId: string, options: { dryRun:
       let mOrder = 0;
       for (const mat of inOrder(s.resources ?? [])) {
         const mKey = String(mat.material_id);
+        const materialName = (mat.material_name ?? '').trim() || (mat.file_name ?? '').trim() || 'Lesson';
         r.looked += 1;
         if (doneMaterials.has(mKey)) {
           r.alreadyDone += 1;
@@ -231,7 +234,7 @@ export async function importCatalogue(organizationId: string, options: { dryRun:
         r.wouldCreate += 1;
         const plan = planMaterial(mat);
         if (options.dryRun) {
-          if (r.samples.length < 8) sample(r, `material: ${mat.material_name} [${plan.type}${plan.video ? ', file from Edmingle export' : plan.needsFile ? ', file pulled' : ''}]`);
+          if (r.samples.length < 8) sample(r, `material: ${materialName} [${plan.type}${plan.video ? ', file from Edmingle export' : plan.needsFile ? ', file pulled' : ''}]`);
           mOrder += 1;
           continue;
         }
@@ -239,7 +242,7 @@ export async function importCatalogue(organizationId: string, options: { dryRun:
           const created = await db.material.create({
             data: {
               sectionId: sectionId!,
-              title: mat.material_name.trim().slice(0, 200) || mat.file_name || 'Lesson',
+              title: materialName.slice(0, 200),
               type: plan.type,
               externalUrl: plan.externalUrl,
               bodyHtml: plan.bodyHtml,
@@ -250,10 +253,10 @@ export async function importCatalogue(organizationId: string, options: { dryRun:
             },
             select: { id: true },
           });
-          const payload: MaterialPayload = { name: mat.material_name, fileName: mat.file_name ?? null, mime: mat.type ?? null, type: plan.type, needsFile: plan.needsFile, video: plan.video, vimeoId: mat.vimeo_url ? String(mat.vimeo_url) : null, sizeBytes: mat.file_size ?? null, moduleId: m.course_id };
+          const payload: MaterialPayload = { name: materialName, fileName: mat.file_name ?? null, mime: mat.type ?? null, type: plan.type, needsFile: plan.needsFile, video: plan.video, vimeoId: mat.vimeo_url ? String(mat.vimeo_url) : null, sizeBytes: mat.file_size ?? null, moduleId: m.course_id };
           await mark('material', mKey, created.id, payload as unknown as Prisma.InputJsonValue);
         } catch (err) {
-          problem(r, `material ${mat.material_name}: ${err instanceof Error ? err.message : String(err)}`);
+          problem(r, `material ${materialName}: ${err instanceof Error ? err.message : String(err)}`);
           complete = false;
         }
         mOrder += 1;

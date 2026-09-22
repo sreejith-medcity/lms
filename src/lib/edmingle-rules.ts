@@ -33,7 +33,7 @@ export interface EdmingleModule {
 
 export interface EdmingleMaterial {
   material_id: number;
-  material_name: string;
+  material_name?: string | null;
   file_name?: string | null;
   description?: string | null;
   /** A mime type for a file ("video/mp4"), or what kind of thing it is otherwise. */
@@ -53,7 +53,7 @@ export interface EdmingleMaterial {
 
 export interface EdmingleSection {
   section_id: number;
-  section_name: string;
+  section_name?: string | null;
   description?: string | null;
   status?: string | null;
   display_index?: number;
@@ -133,7 +133,7 @@ export function matchAsset(m: EdmingleMaterial, assets: EdmingleAsset[]): { asse
   const name = normaliseName(m.file_name ?? '');
   if (!name) return { asset: null, reason: 'no file name' };
   let candidates = assets.filter((a) => normaliseName(a.file_name ?? '') === name);
-  if (candidates.length === 0) candidates = assets.filter((a) => normaliseName(a.asset_name ?? '') === normaliseName(m.material_name));
+  if (candidates.length === 0) candidates = assets.filter((a) => normaliseName(a.asset_name ?? '') === normaliseName(m.material_name ?? ''));
   if (candidates.length === 0) return { asset: null, reason: 'no asset with that file name' };
   if (candidates.length > 1 && m.file_size) {
     const bySize = candidates.filter((a) => a.file_size_bytes === m.file_size);
