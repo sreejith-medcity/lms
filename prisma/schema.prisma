@@ -2475,6 +2475,10 @@ model ExamSitting {
   mode           String            @default("exam")
   /// The one section sat, when a tutor set a part rather than the whole paper.
   sectionId      String?
+  /// The paper as drawn at the start, keys included; marking and the result
+  /// read this, so a set switched off or corrected later changes nothing
+  /// for a paper already under way. Never sent to the browser as it is.
+  paper          Json?
   assignmentId   String?
   allowanceId    String?
   status         ExamSittingStatus @default(IN_PROGRESS)
@@ -2555,6 +2559,7 @@ model ExamSubmission {
   sitting   ExamSitting @relation(fields: [sittingId], references: [id], onDelete: Cascade)
   recording Asset?      @relation(fields: [recordingAssetId], references: [id], onDelete: SetNull)
 
+  @@unique([sittingId, task])
   @@index([organizationId, sittingId])
   @@index([organizationId, markedAt, createdAt])
   @@map("exam_submissions")

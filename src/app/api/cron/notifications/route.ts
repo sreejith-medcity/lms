@@ -10,6 +10,7 @@ import { sendDueCampaigns } from '@/lib/messaging/campaigns';
 import { runDueWorkflows } from '@/lib/workflows';
 import { runEdmingleAuto } from '@/lib/migrate-edmingle-auto';
 import { markOnlineNoShows } from '@/lib/attendance-jobs';
+import { sweepSittings } from '@/lib/exams/sittings';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -36,6 +37,14 @@ async function handle(request: Request) {
 
   const started = Date.now();
   const organizations = await db.organization.findMany({ select: { id: true, name: true } });
+
+  // The test portal: papers left open past any clock are handed in, and one
+  // paper whose writing or speaking the marker could not reach at hand-in is
+  // marked. First and small, so the Edmingle import below cannot starve it.
+  const tests = await sweepSittings(new Date(), 1).catch((err) => {
+    console.error('[cron] tests', err instanceof Error ? err.message : err);
+    return { closed: 0, marked: 0 };
+  });
 
   const results: Record<string, unknown> = {};
   let sent = 0;
@@ -79,6 +88,7 @@ async function handle(request: Request) {
     sent,
     failed,
     purgedOtps: purged,
+    tests,
     ms: Date.now() - started,
     results,
   });
