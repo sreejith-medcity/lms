@@ -100,6 +100,15 @@ export async function startSitting(input: StartInput): Promise<{ id: string; res
   if (input.assignmentId) {
     const a = await db.examAssignment.findFirst({ where: { id: input.assignmentId, organizationId: input.organizationId, active: true, formatCode: format.code } });
     if (!a) throw new ExamError('That paper is no longer set.');
+    /* A set paper is free, so only the batch it was set for may sit it. */
+    if (!input.staff) {
+      const inBatch = a.batchId
+        ? await db.enrollment.count({
+            where: { organizationId: input.organizationId, userId: input.userId, batchId: a.batchId, status: { in: ['ENROLLED', 'REGISTERED', 'COMPLETED'] } },
+          })
+        : 0;
+      if (!inBatch) throw new ExamError('That paper was set for another batch.');
+    }
     drawCode = normaliseDrawCode(a.drawCode);
     sectionId = a.sectionId;
   }
