@@ -30,6 +30,8 @@ const BUDGET_MS = 45_000;
 export interface EdmingleReport extends StepReport {
   /** Work left for another press of the button. */
   remaining: number;
+  /** Items put aside for a while rather than done or failed (a document Edmingle has no file for). */
+  setAside?: number;
 }
 
 interface MaterialPayload {
@@ -395,10 +397,37 @@ async function library(client: EdmingleClient, left: () => number): Promise<{ as
 }
 
 /** Materials created by step 1 whose file has not crossed yet. */
+/**
+ * A document set aside: Edmingle lists the lesson with a file name but its
+ * asset library has no file of that name (or the download failed). The row
+ * is a `file` record with status SKIPPED whose `migratedAt` is when to look
+ * again: a day for a missing file (the library is re-read daily anyway, and
+ * somebody may upload it in the meantime), an hour for a failed download.
+ * Without this the same few hundred lessons were examined and reported on
+ * every tick, ahead of the ones that could be pulled, and the card read
+ * "555 errors today" for what is a fact about Edmingle's data.
+ */
+const SET_ASIDE_MISSING_MS = LIBRARY_STALE_MS;
+const SET_ASIDE_FAILED_MS = 60 * 60_000;
+
+async function setAside(sourceId: string, kind: 'missing' | 'failed', reason: string, payload: MaterialPayload): Promise<void> {
+  const until = new Date(Date.now() + (kind === 'missing' ? SET_ASIDE_MISSING_MS : SET_ASIDE_FAILED_MS));
+  const data = { kind, reason: reason.slice(0, 300), name: payload.name, fileName: payload.fileName, moduleId: payload.moduleId };
+  await db.migrationRecord.upsert({
+    where: { sourceSystem_entity_sourceId: { sourceSystem: SOURCE, entity: 'file', sourceId } },
+    create: { sourceSystem: SOURCE, entity: 'file', sourceId, targetId: null, status: 'SKIPPED', migratedAt: until, payload: data },
+    update: { status: 'SKIPPED', migratedAt: until, payload: data },
+  });
+}
+
 async function waitingForFile(video: boolean): Promise<{ sourceId: string; materialId: string; payload: MaterialPayload }[]> {
+  const now = new Date();
   const [materials, files] = await Promise.all([
     db.migrationRecord.findMany({ where: { sourceSystem: SOURCE, entity: 'material', status: 'MIGRATED' }, select: { sourceId: true, targetId: true, payload: true } }),
-    db.migrationRecord.findMany({ where: { sourceSystem: SOURCE, entity: 'file', status: 'MIGRATED' }, select: { sourceId: true } }),
+    db.migrationRecord.findMany({
+      where: { sourceSystem: SOURCE, entity: 'file', OR: [{ status: 'MIGRATED' }, { status: 'SKIPPED', migratedAt: { gt: now } }] },
+      select: { sourceId: true },
+    }),
   ]);
   const done = new Set(files.map((f) => f.sourceId));
   const out: { sourceId: string; materialId: string; payload: MaterialPayload }[] = [];
@@ -408,6 +437,15 @@ async function waitingForFile(video: boolean): Promise<{ sourceId: string; mater
     out.push({ sourceId: m.sourceId, materialId: m.targetId, payload: p });
   }
   return out;
+}
+
+/** The documents Edmingle has no file for, for the Migration page and its CSV. */
+export async function unmatchedDocumentList(): Promise<{ name: string; fileName: string | null; reason: string }[]> {
+  const rows = await db.migrationRecord.findMany({ where: { sourceSystem: SOURCE, entity: 'file', status: 'SKIPPED' }, select: { payload: true }, orderBy: { sourceId: 'asc' } });
+  return rows
+    .map((r) => r.payload as { kind?: string; name?: string; fileName?: string | null; reason?: string } | null)
+    .filter((p): p is { kind: string; name: string; fileName: string | null; reason: string } => Boolean(p && p.kind === 'missing' && p.name))
+    .map((p) => ({ name: p.name, fileName: p.fileName ?? null, reason: p.reason ?? '' }));
 }
 
 export async function importFiles(organizationId: string, options: { dryRun: boolean; budgetMs?: number; max?: number }): Promise<EdmingleReport> {
@@ -501,6 +539,7 @@ export async function importFiles(organizationId: string, options: { dryRun: boo
   // is paced by the client whatever happens, so the gain is the download
   // and the upload to the bucket overlapping the wait, not more calls.
   let cursor = 0;
+  let missing = 0;
   const claimed = new Set<number>();
   const deferred: typeof waiting = [];
   const worker = async () => {
@@ -510,7 +549,9 @@ export async function importFiles(organizationId: string, options: { dryRun: boo
       const mat: EdmingleMaterial = { material_id: Number(w.sourceId), material_name: w.payload.name, file_name: w.payload.fileName, file_size: w.payload.sizeBytes };
       const { asset, reason } = matchAsset(mat, assets);
       if (!asset) {
-        problem(r, `${w.payload.name}: ${reason}`);
+        // Edmingle's fact, not this run's failure: set aside, listed on the Migration page, looked for again in a day.
+        await setAside(w.sourceId, 'missing', reason ?? 'no file', w.payload);
+        missing += 1;
         continue;
       }
       // Two lessons sharing one file are pulled one after the other, not side by side, so the second finds the first's copy.
@@ -523,7 +564,10 @@ export async function importFiles(organizationId: string, options: { dryRun: boo
       try {
         await pullOne(w, asset);
       } catch (err) {
-        problem(r, `${w.payload.name}: ${err instanceof Error ? err.message : String(err)}`);
+        const message = err instanceof Error ? err.message : String(err);
+        problem(r, `${w.payload.name}: ${message}`);
+        // Tried again in an hour, so one bad link does not sit at the head of the queue every minute.
+        await setAside(w.sourceId, 'failed', message, w.payload);
       } finally {
         claimed.delete(asset.asset_id);
       }
@@ -536,7 +580,9 @@ export async function importFiles(organizationId: string, options: { dryRun: boo
       const mat: EdmingleMaterial = { material_id: Number(w.sourceId), material_name: w.payload.name, file_name: w.payload.fileName, file_size: w.payload.sizeBytes };
       const { asset, reason } = matchAsset(mat, assets);
       if (!asset) {
-        problem(r, `${w.payload.name}: ${reason}`);
+        // A rehearsal names the first few; the real run sets them aside.
+        if (missing < 5) problem(r, `${w.payload.name}: ${reason}`);
+        missing += 1;
         continue;
       }
       r.wouldCreate += 1;
@@ -555,11 +601,17 @@ export async function importFiles(organizationId: string, options: { dryRun: boo
       try {
         await pullOne(w, asset);
       } catch (err) {
-        problem(r, `${w.payload.name}: ${err instanceof Error ? err.message : String(err)}`);
+        const message = err instanceof Error ? err.message : String(err);
+        problem(r, `${w.payload.name}: ${message}`);
+        await setAside(w.sourceId, 'failed', message, w.payload);
       }
     }
   }
-  r.remaining = Math.max(0, waiting.length - moved - r.problems.length);
+  if (missing > 0) {
+    r.setAside = missing;
+    sample(r, `${missing} lessons name a file Edmingle's library does not have: set aside, listed on the Migration page, looked for again tomorrow.`);
+  }
+  r.remaining = Math.max(0, waiting.length - moved - missing - (options.dryRun ? 0 : r.problems.length));
   if (r.remaining > 0) sample(r, `${r.remaining} more to pull: press again.`);
   return r;
 }
@@ -610,8 +662,8 @@ export async function attachVideos(organizationId: string, options: { dryRun: bo
 export async function edmingleSummary(): Promise<{ entity: string; migrated: number }[]> {
   const grouped = await db.migrationRecord.groupBy({ by: ['entity'], where: { sourceSystem: SOURCE, status: 'MIGRATED' }, _count: { _all: true } });
   const counts = grouped.map((row) => ({ entity: row.entity, migrated: row._count._all }));
-  const [docs, videos] = await Promise.all([waitingForFile(false), waitingForFile(true)]);
-  counts.push({ entity: 'documents waiting', migrated: docs.length }, { entity: 'videos waiting', migrated: videos.length });
+  const [docs, videos, unmatched] = await Promise.all([waitingForFile(false), waitingForFile(true), unmatchedDocumentList()]);
+  counts.push({ entity: 'documents waiting', migrated: docs.length }, { entity: 'videos waiting', migrated: videos.length }, { entity: 'documents unmatched', migrated: unmatched.length });
   return counts;
 }
 

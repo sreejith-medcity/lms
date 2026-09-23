@@ -159,10 +159,10 @@ async function tick(organizationId: string, budgetMs: number): Promise<string> {
     // whose batch never came across): those were reported when the step did
     // its work, and a row every minute would only bury the steps still
     // moving. It is remembered so the next tick does not read it again.
-    const finished = moved === 0 && report.remaining === 0 && !limited;
+    const finished = moved === 0 && report.remaining === 0 && !limited && !report.setAside;
     if (finished) await markFinished(organizationId, step.key);
-    if (!finished && (moved > 0 || limited || report.remaining > 0 || report.problems.length > 0)) {
-      const detail = `${limited ? "waiting on Edmingle's rate limit; " : ''}${moved} across, ${report.alreadyDone} already, ${report.remaining} left${realProblems.length ? `; ${realProblems.length} notes: ${realProblems[0].slice(0, 160)}` : ''}${moved === 0 && !realProblems.length && report.samples[0] ? `; ${report.samples[0].slice(0, 200)}` : ''}`;
+    if (!finished && (moved > 0 || limited || report.remaining > 0 || report.problems.length > 0 || report.setAside)) {
+      const detail = `${limited ? "waiting on Edmingle's rate limit; " : ''}${moved} across, ${report.alreadyDone} already, ${report.remaining} left${report.setAside ? `; ${report.setAside} set aside (no such file in Edmingle)` : ''}${realProblems.length ? `; ${realProblems.length} notes: ${realProblems[0].slice(0, 160)}` : ''}${moved === 0 && !realProblems.length && report.samples[0] ? `; ${report.samples[0].slice(0, 200)}` : ''}`;
       // A tick that moved nothing and says exactly what the last one said
       // (a wait on the asset library, a minute later) adds nothing: one row
       // per state, not one per minute.

@@ -26,7 +26,8 @@ const STEPS: { key: EdmingleStep; title: string; blurb: string; caution?: string
     title: 'Documents',
     blurb:
       'Every PDF, slide deck and document is pulled straight from Edmingle’s asset library into this library and attached to its lesson. About twenty-five a press, so a library of two thousand takes a while; nothing is lost between presses.',
-    caution: 'A document whose file name matches several assets of different sizes is reported rather than guessed at.',
+    caution:
+      'A document whose file name matches several assets of different sizes is reported rather than guessed at. A lesson that names a file the library does not have is set aside, listed below, and looked for again the next day.',
     counts: ['file'],
   },
   {
@@ -128,6 +129,7 @@ export function EdmingleConsole({ connected, canApply, done, auto, bucket }: { c
   }
 
   const docsWaiting = count.get('documents waiting') ?? 0;
+  const docsUnmatched = count.get('documents unmatched') ?? 0;
   const videosWaiting = count.get('videos waiting') ?? 0;
 
   return (
@@ -255,9 +257,18 @@ export function EdmingleConsole({ connected, canApply, done, auto, bucket }: { c
               {['prices', 'learners', 'batches', 'enrolments', 'staff', 'sessions', 'certificates'].includes(step.key) && across > 0 && <Badge tone="ok">{across} across</Badge>}
               {['attendance', 'progress'].includes(step.key) && across > 0 && <Badge tone="ok">{count.get(step.counts[0]) ?? 0} classes read</Badge>}
               {waiting > 0 && <Badge tone="warn">{waiting} waiting</Badge>}
+              {step.key === 'files' && docsUnmatched > 0 && <Badge tone="neutral">{docsUnmatched} without a file in Edmingle</Badge>}
             </p>
             <p className="t-small muted mt-1">{step.blurb}</p>
             {step.caution && <p className="t-small faint mt-1">{step.caution}</p>}
+            {step.key === 'files' && docsUnmatched > 0 && (
+              <p className="t-small mt-1">
+                <a href="/admin/settings/migration/unmatched-documents.csv" className="underline">
+                  Download the list of lessons whose file Edmingle&rsquo;s library does not have
+                </a>{' '}
+                <span className="faint">(the lesson, the file name it expects, and why it was set aside)</span>
+              </p>
+            )}
             {step.key === 'videos' && videosWaiting > 0 && (
               <p className="t-small mt-1">
                 <a href="/admin/settings/migration/waiting-videos.csv" className="underline">
