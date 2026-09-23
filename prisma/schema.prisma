@@ -219,6 +219,8 @@ model User {
   attempts          Attempt[]
   partnerResults    PartnerResult[]
   practiceAttempts  PracticeAttempt[]
+  examSittings      ExamSitting[]
+  examAllowances    ExamAllowance[]     @relation("examAllowanceOwner")
   recordingShares   RecordingShare[]
   assessmentGrants  AssessmentGrant[]
   poolGrants        AssessmentPoolGrant[]
@@ -865,6 +867,7 @@ model Product {
   bundle       Bundle?
   inBundles    BundleItem[]
   wishedBy     Wishlist[]
+  testPack     TestPack?
 
   @@unique([organizationId, slug])
   @@index([organizationId, type, status])
@@ -1342,6 +1345,8 @@ model Asset {
 
   assignmentAttachments AssignmentAttachment[]
   assignmentFiles       AssignmentFile[]
+  examAudio             ExamAudio[]
+  examRecordings        ExamSubmission[]
   @@index([organizationId, type])
   @@map("assets")
 }
@@ -2368,6 +2373,273 @@ model PartnerResult {
   @@unique([provider, externalId])
   @@index([organizationId, userId, takenAt])
   @@map("partner_results")
+}
+
+// ---------------------------------------------------------------------------
+// THE TEST PORTAL: mock exams in the format of the real ones (EXAM_PORTAL.md)
+//
+// A format (telc B1, IELTS Academic, ...) is code: src/lib/exams/formats. It
+// says which sections and blocks the exam has, their clocks and points, and
+// how a result is decided. What lives here is the content (sets of variants
+// per block, their listening audio), the sittings, what was written or said,
+// and who may sit how many papers.
+// ---------------------------------------------------------------------------
+
+/// One complete variant of a format: a value for every block. The draw picks
+/// one set per block, so ten sets of twelve blocks are far more than ten
+/// papers. Switched off, a set leaves the draw without being deleted.
+model ExamSet {
+  id             String   @id @default(cuid())
+  organizationId String
+  /// TELC_B1, IELTS_ACADEMIC, ... (src/lib/exams/formats)
+  formatCode     String
+  /// "A", "B", ..., as the authors named them; shown to tutors, never to candidates.
+  name           String
+  title          String   @default("")
+  /// The draw picks by index in this order, so the order decides which paper
+  /// a code produces; alphabetical order would shift every code the day a
+  /// set called "AA" arrived.
+  position       Int      @default(0)
+  active         Boolean  @default(true)
+  note           String   @default("")
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  blocks ExamBlock[]
+
+  @@unique([organizationId, formatCode, name])
+  @@index([organizationId, formatCode, active, position])
+  @@map("exam_sets")
+}
+
+/// One block of one set, in the layout's own JSON shape (src/lib/exams/layouts.ts).
+model ExamBlock {
+  id        String   @id @default(cuid())
+  setId     String
+  /// The block's id in the format: lv1, hv2, sa, ma3, ...
+  blockId   String
+  content   Json
+  updatedAt DateTime @updatedAt
+
+  set   ExamSet     @relation(fields: [setId], references: [id], onDelete: Cascade)
+  audio ExamAudio[]
+
+  @@unique([setId, blockId])
+  @@map("exam_blocks")
+}
+
+/// A listening block's recordings, as assets in the bucket: part 0 is the
+/// announcement when the block has one, then the texts in order. The exam
+/// plays them with the format's reading time and pauses between.
+model ExamAudio {
+  id         String   @id @default(cuid())
+  blockRowId String
+  part       Int
+  assetId    String
+  seconds    Float?
+  /// sha256 of the script that was spoken, so the dashboard can say when the
+  /// script was edited after the audio was made.
+  scriptHash String   @default("")
+  /// generated (which voices) or recorded.
+  source     String   @default("generated")
+  voices     Json?
+  createdAt  DateTime @default(now())
+
+  block ExamBlock @relation(fields: [blockRowId], references: [id], onDelete: Cascade)
+  asset Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([blockRowId, part])
+  @@map("exam_audio")
+}
+
+enum ExamSittingStatus {
+  IN_PROGRESS
+  SUBMITTED
+  /// Every module has a mark; the total and the pass decision stand.
+  EVALUATED
+  EXPIRED
+  VOID
+}
+
+/// One sitting of one paper. The draw is a pure function of the format and
+/// the code, so the server draws the same paper again to mark it and never
+/// takes the browser's word for a score.
+model ExamSitting {
+  id             String            @id @default(cuid())
+  organizationId String
+  userId         String
+  formatCode     String
+  drawCode       String
+  /// exam (clocks run, one pass) or practice (no clocks, free movement).
+  mode           String            @default("exam")
+  /// The one section sat, when a tutor set a part rather than the whole paper.
+  sectionId      String?
+  assignmentId   String?
+  allowanceId    String?
+  status         ExamSittingStatus @default(IN_PROGRESS)
+  startedAt      DateTime          @default(now())
+  /// { sectionId: { startedAt, phase, deadline } } as the candidate moves; the
+  /// clocks are the server's, a reload changes nothing.
+  sectionClock   Json?
+  /// The sections finished, in order, so a closed section stays closed.
+  sectionsDone   Json?
+  /// Answers by item number, as chosen; text and recordings are submissions.
+  answers        Json?
+  /// How many times each listening block was played.
+  plays          Json?
+  /// Preparation notes for the speaking part, kept for the candidate to see.
+  notes          Json?
+  submittedAt    DateTime?
+  /// Points per module id (lv, sb, hv, sa, ma), null until marked.
+  points         Json?
+  total          Float?
+  maxPoints      Float?
+  passed         Boolean?
+  /// Which pass conditions held, by name, for the result page.
+  conditions     Json?
+  correct        Int?
+  questions      Int?
+  minutes        Int?
+  /// The guard's counts: left the window, copy attempts, translation halts.
+  guard          Json?
+  /// The server drew the paper and counted; false only when it could not.
+  verified       Boolean           @default(true)
+  certificateAssetId String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  submissions ExamSubmission[]
+
+  @@index([organizationId, userId, startedAt])
+  @@index([organizationId, formatCode, status, startedAt])
+  @@index([organizationId, assignmentId])
+  @@map("exam_sittings")
+}
+
+enum ExamSubmissionKind {
+  WRITING
+  SPEAKING
+}
+
+/// What the candidate wrote or said for one task, marked by the model at
+/// once and by a tutor when one looks; the tutor's mark wins.
+model ExamSubmission {
+  id           String             @id @default(cuid())
+  organizationId String
+  sittingId    String
+  kind         ExamSubmissionKind
+  /// The block id (sa, ma1, ...), and for a choice of themes the index chosen.
+  task         String
+  title        String             @default("")
+  /// The written text, or the transcript of the recording once marked.
+  text         String             @default("")
+  words        Int?
+  seconds      Int?
+  recordingAssetId String?
+  aiPoints     Float?
+  aiMax        Float?
+  /// [{ criterion, points, comment }] and an overall note, from the model.
+  aiFeedback   Json?
+  aiModel      String?
+  aiAt         DateTime?
+  aiError      String?
+  tutorPoints  Float?
+  tutorNote    String             @default("")
+  markedById   String?
+  markedAt     DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  sitting   ExamSitting @relation(fields: [sittingId], references: [id], onDelete: Cascade)
+  recording Asset?      @relation(fields: [recordingAssetId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, sittingId])
+  @@index([organizationId, markedAt, createdAt])
+  @@map("exam_submissions")
+}
+
+enum ExamAllowanceSource {
+  /// From a course's "Mock tests included", drawn on enrolment.
+  COURSE
+  /// A pack bought on its own.
+  PACK
+  /// Given by staff, by hand or by list.
+  GRANT
+  /// The free sample a visitor gets on registering.
+  SAMPLE
+}
+
+/// How many papers someone may sit: a family (telc) at a level (B1), or any
+/// level when level is null. tests null means unlimited. A sitting counts when
+/// it is submitted, or when its clock runs out.
+model ExamAllowance {
+  id             String              @id @default(cuid())
+  organizationId String
+  userId         String
+  familyCode     String
+  level          String?
+  tests          Int?
+  used           Int                 @default(0)
+  source         ExamAllowanceSource
+  productId      String?
+  orderItemId    String?
+  enrollmentId   String?
+  note           String              @default("")
+  grantedById    String?
+  grantedAt      DateTime            @default(now())
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  revokedById    String?
+
+  user User @relation("examAllowanceOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, userId, familyCode])
+  @@index([organizationId, enrollmentId])
+  @@map("exam_allowances")
+}
+
+/// A tutor's set paper: the same code for the whole class, so everyone sits
+/// the same draw and the marks compare.
+model ExamAssignment {
+  id             String    @id @default(cuid())
+  organizationId String
+  tutorId        String
+  batchId        String?
+  branchId       String?
+  formatCode     String
+  drawCode       String
+  title          String    @default("")
+  note           String    @default("")
+  /// One section only, or null for the whole paper.
+  sectionId      String?
+  dueAt          DateTime?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, batchId, active])
+  @@index([organizationId, tutorId])
+  @@map("exam_assignments")
+}
+
+/// A TEST_SERIES product: so many papers of a family (at a level, or any),
+/// valid for so many days from purchase. Fulfilment writes an allowance.
+model TestPack {
+  id             String  @id @default(cuid())
+  productId      String  @unique
+  organizationId String
+  familyCode     String
+  level          String?
+  /// null = unlimited for the validity.
+  tests          Int?
+  validityDays   Int?
+  description    String?
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, familyCode])
+  @@map("test_packs")
 }
 
 model Attempt {

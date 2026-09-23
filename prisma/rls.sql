@@ -8,7 +8,7 @@
 CREATE OR REPLACE FUNCTION lms_scope_platform() RETURNS boolean LANGUAGE sql STABLE PARALLEL SAFE AS $$ SELECT coalesce(current_setting('app.scope', true), '') = 'platform' $$;
 CREATE OR REPLACE FUNCTION lms_scope_org() RETURNS text LANGUAGE sql STABLE PARALLEL SAFE AS $$ SELECT CASE WHEN coalesce(current_setting('app.scope', true), '') LIKE 'tenant:%' THEN substr(current_setting('app.scope', true), 8) END $$;
 
--- 105 tables that name the academy
+-- 111 tables that name the academy
 
 ALTER TABLE "branches" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "branches" FORCE ROW LEVEL SECURITY;
@@ -264,6 +264,36 @@ ALTER TABLE "partner_results" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "partner_results" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS lms_tenant ON "partner_results";
 CREATE POLICY lms_tenant ON "partner_results" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "exam_sets" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "exam_sets" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "exam_sets";
+CREATE POLICY lms_tenant ON "exam_sets" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "exam_sittings" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "exam_sittings" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "exam_sittings";
+CREATE POLICY lms_tenant ON "exam_sittings" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "exam_submissions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "exam_submissions" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "exam_submissions";
+CREATE POLICY lms_tenant ON "exam_submissions" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "exam_allowances" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "exam_allowances" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "exam_allowances";
+CREATE POLICY lms_tenant ON "exam_allowances" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "exam_assignments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "exam_assignments" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "exam_assignments";
+CREATE POLICY lms_tenant ON "exam_assignments" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "test_packs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "test_packs" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "test_packs";
+CREATE POLICY lms_tenant ON "test_packs" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
 
 ALTER TABLE "grade_scales" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "grade_scales" FORCE ROW LEVEL SECURITY;
@@ -535,7 +565,7 @@ ALTER TABLE "storage_usage" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS lms_tenant ON "storage_usage";
 CREATE POLICY lms_tenant ON "storage_usage" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
 
--- 75 tables that belong to a row in one of those
+-- 77 tables that belong to a row in one of those
 
 -- auth_accounts.userId -> users
 ALTER TABLE "auth_accounts" ENABLE ROW LEVEL SECURITY;
@@ -764,6 +794,18 @@ ALTER TABLE "assessment_courses" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "assessment_courses" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS lms_tenant ON "assessment_courses";
 CREATE POLICY lms_tenant ON "assessment_courses" USING (lms_scope_platform() OR EXISTS (SELECT 1 FROM "assessments" p WHERE p."id" = "assessment_courses"."assessmentId")) WITH CHECK (lms_scope_platform() OR EXISTS (SELECT 1 FROM "assessments" p WHERE p."id" = "assessment_courses"."assessmentId"));
+
+-- exam_blocks.setId -> exam_sets
+ALTER TABLE "exam_blocks" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "exam_blocks" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "exam_blocks";
+CREATE POLICY lms_tenant ON "exam_blocks" USING (lms_scope_platform() OR EXISTS (SELECT 1 FROM "exam_sets" p WHERE p."id" = "exam_blocks"."setId")) WITH CHECK (lms_scope_platform() OR EXISTS (SELECT 1 FROM "exam_sets" p WHERE p."id" = "exam_blocks"."setId"));
+
+-- exam_audio.assetId -> assets
+ALTER TABLE "exam_audio" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "exam_audio" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "exam_audio";
+CREATE POLICY lms_tenant ON "exam_audio" USING (lms_scope_platform() OR EXISTS (SELECT 1 FROM "assets" p WHERE p."id" = "exam_audio"."assetId")) WITH CHECK (lms_scope_platform() OR EXISTS (SELECT 1 FROM "assets" p WHERE p."id" = "exam_audio"."assetId"));
 
 -- attempts.assessmentId -> assessments
 ALTER TABLE "attempts" ENABLE ROW LEVEL SECURITY;

@@ -691,13 +691,13 @@ export const INTEGRATIONS: IntegrationDef[] = [
   /* Practice partners -------------------------------------------------------- */
   {
     id: 'telc',
-    name: 'TELC AI Mocktest',
+    name: 'TELC AI Mocktest (separate site)',
     category: 'practice',
-    priority: 1,
+    priority: 3,
     requires:
       'The telc mock test site with the same shared secret set on its side (LMS_SSO_SECRET) and this site named as its LMS (LMS_RESULTS_URL). Nothing else: no accounts are created by hand.',
     purpose:
-      'One login. A learner presses Open on their dashboard, arrives on the mock test already signed in as themselves, and every result they earn there comes back to their record here and to the admin.',
+      'The earlier arrangement: one login into the separate telc site, with results posted back. Superseded by the test portal (Tests in the admin), where the same papers are sat here; keep this connected only while the old site is still open.',
     status: 'wired',
     docsUrl: 'https://telc.medcitylms.in',
     fields: [
@@ -720,6 +720,20 @@ export const INTEGRATIONS: IntegrationDef[] = [
     fallback: 'Practice is hidden from learners and written answers wait for a trainer to mark them.',
     docsUrl: 'https://console.anthropic.com/settings/keys',
     fields: [KEY('apiKey', 'API key', 'ANTHROPIC_API_KEY')],
+  },
+  {
+    id: 'google_ai',
+    name: 'Google AI (Gemini)',
+    category: 'ai',
+    priority: 2,
+    requires:
+      'A Gemini API key from Google AI Studio, on a project with the Generative Language API switched on and a budget set.',
+    purpose:
+      'The test portal: speaking recordings marked from the audio itself (pronunciation and fluency are heard, not read off a transcript), and writing marked to the exam’s criteria. Every mark is kept with the model’s comments for a tutor to see and overrule.',
+    status: 'wired',
+    fallback: 'Writing and speaking in the test portal wait for a tutor to mark them.',
+    docsUrl: 'https://aistudio.google.com/apikey',
+    fields: [KEY('apiKey', 'Gemini API key', 'GEMINI_API_KEY'), TEXT('model', 'Model', 'GEMINI_MODEL', 'Which Gemini model marks. Left blank, gemini-3.5-flash.')],
   },
   {
     id: 'openai',
