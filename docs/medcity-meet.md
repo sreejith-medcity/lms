@@ -5,7 +5,7 @@ Medcity Meet (meet.medcitylms.in) is our own class platform. It replaces Zoom fo
 ## Connect it (once per academy)
 
 1. In Meet: Integrations → Create key (name it after this academy) → copy the `mk_live_...` key.
-2. In Meet: Integrations → Add endpoint → `https://<this academy's LMS domain>/api/webhooks/meet` → copy the `whsec_...` secret.
+2. In Meet: Integrations → Add endpoint → `https://<this academy's LMS domain>/api/webhooks/meet` (or `/api/meet/webhook`, the same thing) → copy the `whsec_...` secret.
 3. Here: Admin → Settings → Integrations → Medcity Meet → paste both → Save → Test.
 
 Or set `MEET_API_KEY` and `MEET_WEBHOOK_SECRET` (and optionally `MEET_API_URL`) in the environment.
