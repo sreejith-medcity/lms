@@ -13,6 +13,7 @@ import { newDrawCode, normaliseDrawCode } from '@/lib/exams/draw';
 import { scoreSitting } from '@/lib/exams/sittings';
 import { pullAudio, setActive, type PullReport } from '@/lib/exams/content-admin';
 import type { ActionState } from '@/server/courses';
+import { slugify, uniqueSlug } from '@/lib/slug';
 import { TEST_PERMS, endOfDayIn, phoneVariants } from '@/lib/exams/perms';
 
 /**
@@ -234,6 +235,92 @@ export async function endAssignmentAction(id: string): Promise<ActionState> {
     if (!n.count) return { error: 'That paper is gone.' };
     await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: 'tests.assignment_ended', entity: 'ExamAssignment', entityId: id });
     revalidatePath('/admin/tests/assignments');
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/* ------------------------------------------------------------ packs */
+
+/**
+ * A pack is a TEST_SERIES product: a title, a price, and how many papers of
+ * which test for how long. It is sold through the ordinary cart.
+ */
+export async function createPackAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard(TEST_PERMS.packs);
+    const [family, levelRaw] = String(formData.get('target') ?? '').split(':');
+    const fam = examFamilies().find((f) => f.family === family);
+    if (!fam) return { error: 'Choose a test.' };
+    const level = levelRaw && fam.levels.includes(levelRaw) ? levelRaw : null;
+    const unlimited = formData.get('unlimited') === 'on';
+    const tests = unlimited ? null : Math.round(Number(formData.get('tests') ?? 0));
+    if (tests != null && (!Number.isFinite(tests) || tests < 1 || tests > 100)) return { error: 'From 1 to 100 papers, or unlimited.' };
+    const days = Math.round(Number(formData.get('days') ?? 0));
+    if (unlimited && !(days > 0)) return { error: 'Unlimited papers need a validity, or the pack never ends.' };
+    const price = Number(String(formData.get('price') ?? '').replace(/,/g, ''));
+    if (!Number.isFinite(price) || price < 1) return { error: 'A price of at least one rupee.' };
+    const mrpRaw = String(formData.get('mrp') ?? '').replace(/,/g, '').trim();
+    const mrp = mrpRaw ? Number(mrpRaw) : null;
+    if (mrp != null && (!Number.isFinite(mrp) || mrp < price)) return { error: 'The crossed-out price must be above the price.' };
+    const title =
+      String(formData.get('title') ?? '').trim().slice(0, 120) ||
+      `${fam.name}${level ? ` ${level}` : ''}: ${tests == null ? 'unlimited papers' : `${tests} mock test${tests === 1 ? '' : 's'}`}`;
+    const description = String(formData.get('description') ?? '').trim().slice(0, 400) || null;
+    const publish = formData.get('publish') === 'on';
+
+    const slug = await uniqueSlug(slugify(title), async (candidate) =>
+      Boolean(await db.product.findFirst({ where: { organizationId: tenant.organizationId, slug: candidate }, select: { id: true } })),
+    );
+    const created = await db.product.create({
+      data: {
+        organizationId: tenant.organizationId,
+        type: 'TEST_SERIES',
+        title,
+        slug,
+        status: publish ? 'PUBLISHED' : 'DRAFT',
+        createdById: user.id,
+        testPack: { create: { organizationId: tenant.organizationId, familyCode: fam.family, level, tests, validityDays: days > 0 ? days : null, description } },
+        pricingPlans: { create: { name: 'Pack', pricePaise: Math.round(price * 100), mrpPaise: mrp != null ? Math.round(mrp * 100) : null, sortOrder: 0 } },
+      },
+      select: { id: true },
+    });
+    await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: 'tests.pack_created', entity: 'Product', entityId: created.id, after: { title, family: fam.family, level, tests, price } });
+    revalidatePath('/admin/tests/packs');
+    revalidatePath('/tests');
+    return { ok: true, message: publish ? 'Pack on sale.' : 'Pack saved as a draft.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function setPackStatusAction(productId: string, status: 'PUBLISHED' | 'DRAFT' | 'ARCHIVED'): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard(TEST_PERMS.packs, status === 'ARCHIVED' ? 'delete' : 'edit');
+    const n = await db.product.updateMany({
+      where: { id: productId, organizationId: tenant.organizationId, type: 'TEST_SERIES' },
+      data: status === 'ARCHIVED' ? { status: 'DRAFT', deletedAt: new Date() } : { status },
+    });
+    if (!n.count) return { error: 'That pack is gone.' };
+    await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: `tests.pack_${status.toLowerCase()}`, entity: 'Product', entityId: productId });
+    revalidatePath('/admin/tests/packs');
+    revalidatePath('/tests');
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function setPackPriceAction(productId: string, rupees: number): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard(TEST_PERMS.packs);
+    if (!Number.isFinite(rupees) || rupees < 1) return { error: 'A price of at least one rupee.' };
+    const plan = await db.pricingPlan.findFirst({ where: { product: { id: productId, organizationId: tenant.organizationId, type: 'TEST_SERIES' }, isActive: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, pricePaise: true } });
+    if (!plan) return { error: 'That pack has no price to change.' };
+    await db.pricingPlan.update({ where: { id: plan.id }, data: { pricePaise: Math.round(rupees * 100) } });
+    await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: 'tests.pack_price', entity: 'Product', entityId: productId, before: { pricePaise: plan.pricePaise }, after: { pricePaise: Math.round(rupees * 100) } });
+    revalidatePath('/admin/tests/packs');
     return { ok: true };
   } catch (err) {
     return fail(err);

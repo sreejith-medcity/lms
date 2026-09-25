@@ -78,6 +78,16 @@ export const SETTINGS: SettingDef[] = [
       `A forty-minute lesson needs ${Math.round((Number(v) / 100) * 40)} minutes of it watched.`,
   },
   {
+    key: 'learning.testsFreeSample',
+    group: 'learning',
+    label: 'One free mock test paper per level',
+    help: 'On the public test pages (/tests), somebody who creates an account may sit one paper of each level free, once. Each one arrives under Leads as an enquiry from the web, with the test named. Off, the pages still describe the tests and sell the packs.',
+    kind: 'boolean',
+    default: true,
+    live: true,
+    effect: (v) => (v ? 'A free paper per level, once per person.' : 'No free paper; the test pages sell packs only.'),
+  },
+  {
     key: 'learning.autoComplete',
     group: 'learning',
     label: 'Mark a lesson done automatically',

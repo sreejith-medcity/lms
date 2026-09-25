@@ -8,6 +8,7 @@ import { requireStaff } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { recordAudit } from '@/lib/audit';
 import type { ActionState } from '@/server/courses';
+import { withdrawPacks } from '@/lib/exams/packs';
 
 /**
  * Fee plans and refund bookkeeping.
@@ -189,6 +190,7 @@ export async function recordOfflineRefund(
         where: { orderItemId: { in: items.map((i) => i.id) }, status: 'ENROLLED' },
         data: { status: 'EXPIRED', expiresAt: new Date() },
       });
+      await withdrawPacks(tenant.organizationId, items.map((i) => i.id));
     }
 
     await recordAudit({

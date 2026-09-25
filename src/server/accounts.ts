@@ -3,6 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { takeNextPath } from '@/lib/next-path';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { CAPTCHA_REFUSED, verifyCaptcha } from '@/lib/captcha';
@@ -204,7 +205,9 @@ export async function register(_prev: ActionState, formData: FormData): Promise<
 
   // The flag lets the learner home page raise the browser-side sign-up
   // event once, with the same id the server just sent.
-  redirect('/learn?welcome=1');
+  // Somebody sent here on the way to something (a free paper) goes back to it.
+  const next = await takeNextPath();
+  redirect(next ? `${next}${next.includes('?') ? '&' : '?'}welcome=1` : '/learn?welcome=1');
 }
 
 async function startSession(userId: string, userAgent: string | null, forwardedFor: string | null) {

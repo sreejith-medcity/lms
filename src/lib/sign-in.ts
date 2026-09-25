@@ -6,6 +6,7 @@ import { WHO_COOKIE } from '@/lib/who-cookie';
 import { resolveTenantByHost } from '@/lib/tenant';
 import { adoptGuestBasket, publishBasketCountForUser } from '@/lib/cart';
 import { settingNumber } from '@/lib/settings/store';
+import { takeNextPath } from '@/lib/next-path';
 
 /**
  * Becoming signed in.
@@ -71,7 +72,7 @@ export async function completeSignIn(userId: string): Promise<SignInOutcome> {
   }
 
   await issueSession(user.id);
-  return { status: 'signed-in', redirectTo: user.kind === 'STAFF' ? '/admin' : '/' };
+  return { status: 'signed-in', redirectTo: (await takeNextPath()) ?? (user.kind === 'STAFF' ? '/admin' : '/') };
 }
 
 /** The real session cookie. Only ever set once every check has passed. */
@@ -183,5 +184,5 @@ export async function clearPending(): Promise<void> {
 /** Where to send somebody once they are through. */
 export async function landingFor(userId: string): Promise<string> {
   const user = await db.user.findUnique({ where: { id: userId }, select: { kind: true } });
-  return user?.kind === 'STAFF' ? '/admin' : '/';
+  return (await takeNextPath()) ?? (user?.kind === 'STAFF' ? '/admin' : '/');
 }

@@ -46,7 +46,7 @@ export async function reportCardPdf(organizationId: string, id: string): Promise
   return { bytes, fileName: `report-card-${card.user.name.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase()}-${card.id.slice(-6)}.pdf`, userId: card.userId };
 }
 
-async function logoBytes(organizationId: string, logoUrl: string | null) {
+export async function logoBytes(organizationId: string, logoUrl: string | null) {
   if (!logoUrl) return null;
   const m = /^\/api\/assets\/([A-Za-z0-9_-]+)/.exec(logoUrl);
   if (m) {

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { HOST_HEADER, TENANT_HEADER } from '@/lib/http-headers';
+import { legacyRedirect } from '@/lib/exams/legacy';
 
 /**
  * Tenant resolution happens here, on every request, from the hostname.
@@ -71,6 +72,10 @@ export function middleware(req: NextRequest) {
   for (const own of [HOST_HEADER, TENANT_HEADER, 'x-platform', 'x-tenant-slug', 'x-pathname']) requestHeaders.delete(own);
   requestHeaders.set(HOST_HEADER, hostname);
   requestHeaders.set('x-pathname', req.nextUrl.pathname);
+
+  // The retired telc site's name, pointed here: every address goes to its page in the portal.
+  const legacy = legacyRedirect(hostname, req.nextUrl.pathname, { hosts: process.env.TESTS_LEGACY_HOSTS, target: process.env.TESTS_LEGACY_TARGET });
+  if (legacy) return NextResponse.redirect(legacy, 308);
 
   if (hostname === platformHost) {
     requestHeaders.set('x-platform', '1');

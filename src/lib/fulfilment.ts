@@ -13,6 +13,7 @@ import { checkPaidAmount, estimatedGatewayFeePaise } from '@/lib/payment-amount'
 import { settingBool, settingNumber, settingText } from '@/lib/settings/store';
 import { scheduleFromPlan } from '@/lib/dues';
 import { conversionHints } from '@/lib/attribution-server';
+import { grantPackInTx, withdrawPacks } from '@/lib/exams/packs';
 
 /**
  * The one place a payment becomes access.
@@ -250,6 +251,8 @@ export async function fulfilPaidOrder(input: {
           mentorship: {
             select: { sessionsIncluded: true, durationMinutes: true, validityDays: true },
           },
+          // A test pack grants papers in the test portal, not a course.
+          testPack: { select: { familyCode: true, level: true, tests: true, validityDays: true } },
         },
       });
 
@@ -293,6 +296,7 @@ export async function fulfilPaidOrder(input: {
         batchId: batch?.id ?? null,
         validityDays: plan?.validityDays ?? null,
         mentorship: product?.mentorship ?? null,
+        testPack: product?.testPack ?? null,
         // One fee plan per order line: for a bundle, the first course inside
         // carries the schedule and the rest are simply enrolled.
         schedule: first ? schedule : null,
@@ -374,7 +378,7 @@ export async function fulfilPaidOrder(input: {
     //    (user, product, batch) is what makes a second delivery harmless.
     const branchId = order.branchId;
 
-    for (const { item, productId, batchId: itemBatchId, validityDays, mentorship, schedule } of context) {
+    for (const { item, productId, batchId: itemBatchId, validityDays, mentorship, testPack, schedule } of context) {
       /**
        * The fee plan behind an enrolment bought in parts. The first part is
        * what this order took, so it is written as paid against this
@@ -436,6 +440,16 @@ export async function fulfilPaidOrder(input: {
             },
           });
         }
+        continue;
+      }
+
+      /*
+       * A test pack becomes papers to sit, as an allowance keyed on the order
+       * line (a repeated delivery finds it there). No enrolment: there is no
+       * curriculum to open, and the learner's tests page shows the papers.
+       */
+      if (testPack) {
+        await grantPackInTx(tx, { organizationId: input.organizationId, userId: order.userId, productId, orderItemId: item.id, pack: testPack });
         continue;
       }
 
@@ -922,6 +936,7 @@ export async function applyGatewayRefund(input: {
       data: { status: 'EXPIRED', expiresAt: new Date() },
     });
     expired = r.count;
+    await withdrawPacks(existing.organizationId, items.map((i) => i.id));
   }
   return { applied: true, full, expired };
 }

@@ -10,6 +10,7 @@ export const TEST_PERMS = {
   sittings: 'submission.view_submissions',
   grants: 'new_enrollment.single',
   assign: 'courses.assessments',
+  packs: 'courses.pricing_and_publish',
 } as const;
 
 export const ANY_TEST_PERM: string[] = Object.values(TEST_PERMS);

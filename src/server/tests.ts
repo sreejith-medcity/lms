@@ -19,6 +19,8 @@ import {
   startSitting,
 } from '@/lib/exams/sittings';
 import type { SectionClock } from '@/lib/exams/clock';
+import { examFormat } from '@/lib/exams/registry';
+import { claimSample } from '@/lib/exams/sample';
 
 /**
  * What the exam player calls. Every action checks the academy and the
@@ -55,6 +57,29 @@ export async function startTest(formatCode: string, mode: 'exam' | 'practice', a
     });
     id = started.id;
   } catch (err) {
+    return fail(err);
+  }
+  redirect(`/exam/${id}`);
+}
+
+/**
+ * The free paper from a public test page: the allowance is claimed (once per
+ * level, ever) and the paper starts in exam mode. A person who already had it
+ * and has papers from elsewhere simply starts one of those.
+ */
+export async function startSampleAction(formatCode: string): Promise<Result> {
+  let id: string;
+  try {
+    const { organizationId, user } = await who();
+    const format = examFormat(formatCode);
+    if (!format) return { ok: false, error: 'That test is not offered.' };
+    if (user.kind !== 'STAFF') await claimSample(organizationId, user.id, format);
+    const started = await startSitting({ organizationId, userId: user.id, formatCode: format.code, mode: 'exam', staff: user.kind === 'STAFF' });
+    id = started.id;
+  } catch (err) {
+    if (err instanceof ExamError && /no papers left/.test(err.message)) {
+      return { ok: false, error: 'You have had your free paper for this level. A pack gives you more.' };
+    }
     return fail(err);
   }
   redirect(`/exam/${id}`);

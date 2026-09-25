@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { runAsPlatform } from '@/lib/db-scope';
+import { legacyHosts } from '@/lib/exams/legacy';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
 
   if (platformHost && domain === platformHost) return new NextResponse('ok', { status: 200, headers });
   if (base && (domain === base || domain === `www.${base}`)) return new NextResponse('ok', { status: 200, headers });
+  if (legacyHosts(process.env.TESTS_LEGACY_HOSTS).includes(domain)) return new NextResponse('ok', { status: 200, headers });
 
   const known = await runAsPlatform(async () => {
     const named = await db.tenantDomain.findUnique({ where: { hostname: domain }, select: { id: true } });

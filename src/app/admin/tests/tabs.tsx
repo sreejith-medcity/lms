@@ -9,6 +9,7 @@ const TABS = [
   { href: '/admin/tests/marking', label: 'Marking' },
   { href: '/admin/tests/assignments', label: 'Set a paper' },
   { href: '/admin/tests/grants', label: 'Free papers' },
+  { href: '/admin/tests/packs', label: 'Packs' },
 ];
 
 export function TestsTabs() {

@@ -107,8 +107,11 @@ export default async function CheckoutPage({
 
   if (order.status === 'PAID') {
     const productId = order.items[0]?.productId;
+    /* An order of test packs only: papers to sit, not a course to open. */
+    const kinds = await db.product.findMany({ where: { organizationId: tenant.organizationId, id: { in: order.items.map((i) => i.productId) } }, select: { type: true } });
+    const papersOnly = kinds.length > 0 && kinds.every((k) => k.type === 'TEST_SERIES');
     return (
-      <Shell title="You are enrolled">
+      <Shell title={papersOnly ? 'Your papers are ready' : 'You are enrolled'}>
         <TrackEvent
           once={`purchase:${order.orderNo}`}
           event={{
@@ -133,11 +136,11 @@ export default async function CheckoutPage({
         )}
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
-            href={productId ? `/learn/${productId}` : '/learn'}
+            href={papersOnly ? '/learn/tests' : productId ? `/learn/${productId}` : '/learn'}
             className="inline-flex h-11 items-center rounded-[var(--radius-sm)] px-5 text-sm font-medium text-[var(--brand-ink)]"
             style={{ background: 'var(--brand)' }}
           >
-            Start learning
+            {papersOnly ? 'Go to my tests' : 'Start learning'}
           </Link>
           <Link
             href="/learn/purchases"

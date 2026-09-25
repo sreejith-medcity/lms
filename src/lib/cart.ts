@@ -269,7 +269,7 @@ export async function basketRows(organizationId: string): Promise<BasketRow[]> {
       status: p.deletedAt ? 'ARCHIVED' : (p.status as BasketRow['status']),
       onDemandOnly: p.course?.onDemandOnly ?? false,
       thumbnailAssetId: p.course?.thumbnailAssetId ?? p.bundle?.thumbnailAssetId ?? null,
-      href: p.type === 'BUNDLE' ? `/bundle/${p.slug}` : `/course/${p.slug}`,
+      href: p.type === 'BUNDLE' ? `/bundle/${p.slug}` : p.type === 'TEST_SERIES' ? '/tests' : `/course/${p.slug}`,
     });
   }
 

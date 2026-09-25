@@ -2,6 +2,8 @@ import type { MetadataRoute } from 'next';
 import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { canonicalHost } from '@/lib/canonical-host';
+import { EXAM_FORMATS } from '@/lib/exams/registry';
+import { setCounts } from '@/lib/exams/content';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +20,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const tenant = await getTenantContext();
   if (!tenant) return [{ url: base, changeFrequency: 'weekly', priority: 1 }];
 
-  const [products, categories, policies, posts, pages] = await Promise.all([
+  const [products, categories, policies, posts, pages, testCounts] = await Promise.all([
     db.product.findMany({
       where: {
         organizationId: tenant.organizationId,
@@ -48,7 +50,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       },
       select: { slug: true, updatedAt: true, kind: true },
     }),
+    setCounts(tenant.organizationId),
   ]);
+  const liveTests = EXAM_FORMATS.filter((f) => (testCounts[f.code] ?? 0) > 0);
 
   return [
     { url: base, changeFrequency: 'daily', priority: 1 },
@@ -67,6 +71,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly' as const,
       priority: 0.9,
     })),
+    ...(liveTests.length
+      ? [
+          { url: `${base}/tests`, changeFrequency: 'weekly' as const, priority: 0.8 },
+          ...liveTests.map((f) => ({ url: `${base}/tests/${f.slug}`, changeFrequency: 'weekly' as const, priority: 0.8 })),
+        ]
+      : []),
     ...(posts.length > 0
       ? [{ url: `${base}/blog`, changeFrequency: 'weekly' as const, priority: 0.6 }]
       : []),

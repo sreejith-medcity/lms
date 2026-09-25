@@ -85,6 +85,13 @@ export default async function ResultPage({ params }: { params: Promise<{ sitting
           {waiting && <span className="exam-pill">Schreiben und Sprechen werden {aiOn ? 'bewertet' : 'von Ihrer Lehrkraft bewertet'}</span>}
         </div>
         {!scope && <p className="t-small muted mt-2">{format.passNote}</p>}
+        {s.status === 'EVALUATED' && s.mode === 'exam' && !scope && (
+          <p className="mt-3">
+            <a className="exam-btn" href={`/api/tests/${s.id}/result-pdf`} target="_blank" rel="noopener">
+              Ergebnis als PDF
+            </a>
+          </p>
+        )}
       </header>
 
       <section className="exam-result-card">
