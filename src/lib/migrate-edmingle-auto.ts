@@ -138,7 +138,8 @@ async function tick(organizationId: string, budgetMs: number): Promise<string> {
   const lines: string[] = [];
   const done = await finishedSteps(organizationId);
   for (const step of ORDER) {
-    if (done.has(step.key)) continue;
+    /* A documents mark left by an earlier build is ignored for the same reason (below). */
+    if (done.has(step.key) && step.key !== 'files') continue;
     const left = budgetMs - (Date.now() - started);
     if (left < 5_000) break;
     let report: EdmingleReport;
@@ -159,7 +160,12 @@ async function tick(organizationId: string, budgetMs: number): Promise<string> {
     // whose batch never came across): those were reported when the step did
     // its work, and a row every minute would only bury the steps still
     // moving. It is remembered so the next tick does not read it again.
-    const finished = moved === 0 && report.remaining === 0 && !limited && !report.setAside;
+    //
+    // Except the documents: a lesson whose file failed (an hour) or was not
+    // in the library (a day) comes due again later, and a step marked
+    // finished would never look at it. With nothing due it returns before
+    // calling Edmingle, so looking every tick costs nothing.
+    const finished = step.key !== 'files' && moved === 0 && report.remaining === 0 && !limited && !report.setAside;
     if (finished) await markFinished(organizationId, step.key);
     if (!finished && (moved > 0 || limited || report.remaining > 0 || report.problems.length > 0 || report.setAside)) {
       const detail = `${limited ? "waiting on Edmingle's rate limit; " : ''}${moved} across, ${report.alreadyDone} already, ${report.remaining} left${report.setAside ? `; ${report.setAside} set aside (no such file in Edmingle)` : ''}${realProblems.length ? `; ${realProblems.length} notes: ${realProblems[0].slice(0, 160)}` : ''}${moved === 0 && !realProblems.length && report.samples[0] ? `; ${report.samples[0].slice(0, 200)}` : ''}`;
