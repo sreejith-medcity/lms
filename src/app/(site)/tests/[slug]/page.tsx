@@ -119,7 +119,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         </div>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-[var(--radius)] border bg-[var(--surface)] p-6 shadow-sm">
+          <div className="glass glass-strong glass-rim relative rounded-[var(--radius)] border bg-[var(--surface)] p-6 shadow-sm">
             {!live ? (
               <p className="muted">This test is being set up. Check back shortly.</p>
             ) : !signedIn ? (
@@ -130,7 +130,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 </p>
                 <a
                   href={`/tests/${format.slug}/join`}
-                  className="mt-4 inline-flex h-11 w-full items-center justify-center rounded-[var(--radius-sm)] px-5 text-sm font-semibold text-[var(--brand-ink)]"
+                  className="liquid mt-4 inline-flex h-11 w-full items-center justify-center rounded-[var(--radius-sm)] px-5 text-sm font-semibold text-[var(--brand-ink)]"
                   style={{ background: 'var(--brand)' }}
                 >
                   {free ? 'Create an account and start' : 'Create an account'}

@@ -11,7 +11,7 @@ export function PackCards({ packs, title = 'Packs' }: { packs: PackCard[]; title
       <h3 className="t-heading">{title}</h3>
       <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {priced.map((p) => (
-          <div key={p.productId} className="flex flex-col rounded-[var(--radius)] border bg-[var(--surface)] p-5">
+          <div key={p.productId} className="glass-card flex flex-col rounded-[var(--radius)] border bg-[var(--surface)] p-5">
             <span className="font-semibold">{p.title}</span>
             <span className="t-small muted mt-1">{packLine(p)}</span>
             {p.description && <span className="t-small mt-2">{p.description}</span>}

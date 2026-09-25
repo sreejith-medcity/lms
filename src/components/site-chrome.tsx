@@ -27,7 +27,7 @@ export async function SiteHeader() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-[var(--surface)] shadow-[0_1px_0_var(--line),0_2px_8px_rgb(50_32_70/0.06)]">
+    <header className="glass-bar sticky top-0 z-40 bg-[var(--surface)] shadow-[0_1px_0_var(--line),0_2px_8px_rgb(50_32_70/0.06)]">
       <div className="relative mx-auto flex h-[4.25rem] max-w-[90rem] items-center gap-3 px-4 sm:px-6">
         <Suspense>
           <MobileMenu categories={categories} links={links} />
@@ -99,7 +99,7 @@ export async function SiteFooter() {
   const socialLinks = Object.entries(social).filter(([, v]) => Boolean(v));
 
   return (
-    <footer className="mt-20 text-[var(--shell-ink)]" style={{ background: 'var(--shell)' }}>
+    <footer className="glass-shell mt-20 text-[var(--shell-ink)]" style={{ background: 'var(--shell)' }}>
       <div className="mx-auto grid max-w-[90rem] gap-10 px-4 py-14 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
           <p className="text-lg font-bold">{org.name}</p>

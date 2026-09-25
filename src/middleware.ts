@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { HOST_HEADER, TENANT_HEADER } from '@/lib/http-headers';
 import { legacyRedirect } from '@/lib/exams/legacy';
+import { NEXT_COOKIE, safeNextPath } from '@/lib/next-path-rules';
 
 /**
  * Tenant resolution happens here, on every request, from the hostname.
@@ -96,7 +97,16 @@ export function middleware(req: NextRequest) {
     requestHeaders.set('x-tenant-slug', hostname.slice(0, -1 * (base.length + 1)));
   }
 
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  // A link to the door that says where it was going (?next=, from a course's
+  // enrol button or a checkout) is remembered, so whichever way the visitor
+  // then signs in, they land back there.
+  const path = req.nextUrl.pathname;
+  if (path === '/login' || path === '/signup') {
+    const next = safeNextPath(req.nextUrl.searchParams.get('next'));
+    if (next) response.cookies.set(NEXT_COOKIE, next, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', path: '/', maxAge: 60 * 60 });
+  }
+  return response;
 }
 
 export const config = {

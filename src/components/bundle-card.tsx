@@ -11,7 +11,7 @@ import type { BundleCardData } from '@/lib/bundles-data';
 export function BundleCard({ bundle, priority = false }: { bundle: BundleCardData; priority?: boolean }) {
   const href = `/bundle/${bundle.slug}`;
   return (
-    <article className="group relative flex h-full flex-col">
+    <article className="glass-card glass-pad group relative flex h-full flex-col">
       <Link href={href} className="block overflow-hidden rounded-[var(--radius-sm)] border">
         <CourseMedia title={bundle.title} assetId={bundle.thumbnailAssetId} priority={priority} ratio="aspect-video" />
       </Link>

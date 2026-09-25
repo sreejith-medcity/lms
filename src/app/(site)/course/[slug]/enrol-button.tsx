@@ -47,7 +47,7 @@ export function EnrolButton({
         variant={isPaid ? 'accent' : 'primary'}
         disabled={pending}
         size="lg"
-        className={fullWidth ? 'w-full justify-center' : ''}
+        className={`liquid ${fullWidth ? 'w-full justify-center' : ''}`}
         onClick={() =>
           start(async () => {
             if (!signedIn) {

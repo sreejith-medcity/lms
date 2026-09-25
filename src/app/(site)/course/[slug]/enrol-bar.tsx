@@ -56,7 +56,7 @@ export function EnrolBar({ children }: { children: React.ReactNode }) {
   return (
     <div
       aria-hidden={!shown}
-      className={`fixed inset-x-0 bottom-0 z-30 border-t bg-[var(--surface)] px-3 py-2.5
+      className={`glass-bar-bottom fixed inset-x-0 bottom-0 z-30 border-t bg-[var(--surface)] px-3 py-2.5
         shadow-[0_-4px_20px_rgba(50,32,70,0.14)] transition-transform duration-200 lg:hidden
         motion-reduce:transition-none ${shown ? 'translate-y-0' : 'translate-y-full'}`}
       style={{ paddingBottom: 'calc(0.625rem + env(safe-area-inset-bottom))' }}

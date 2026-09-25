@@ -52,7 +52,7 @@ export function CourseCard({
   const href = `/course/${card.slug}`;
 
   return (
-    <article className={`group relative flex h-full flex-col ${compact ? 'w-[15.5rem] shrink-0 sm:w-[17rem]' : ''}`}>
+    <article className={`glass-card glass-pad group relative flex h-full flex-col ${compact ? 'w-[15.5rem] shrink-0 sm:w-[17rem]' : ''}`}>
       <Link href={href} className="block overflow-hidden rounded-[var(--radius-sm)] border">
         <CourseMedia title={card.title} assetId={card.course?.thumbnailAssetId} priority={priority} ratio="aspect-video" />
       </Link>

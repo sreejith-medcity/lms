@@ -303,3 +303,225 @@ body {
 .review-embed--dark .ti-widget * {
   color: var(--shell-ink) !important;
 }
+
+/*
+ * Glass, on the public pages only.
+ *
+ * Everything below is scoped to .site-glass, the wrapper of the (site)
+ * layout, so the admin, the learner portal and the exam never pick it up,
+ * and a component shared with them (the course card) keeps its plain look
+ * there. The rule for what is glass: the chrome (header, menus, footer, the
+ * sticky bars) and the cards; text, tables and forms stay solid, because a
+ * paragraph over a moving blur is harder to read on a cheap phone in the sun.
+ *
+ * Behind it, a fixed backdrop of three soft blobs in the academy's colours
+ * (brand, accent, and a lavender between them) that drift slowly. Radial
+ * gradients rather than blur filters, and only transforms animate, so the
+ * page stays cheap to paint. Light or dark follows the device, through the
+ * same tokens as the rest of the product.
+ */
+.site-glass {
+  --glass-fill: color-mix(in srgb, var(--surface) 52%, transparent);
+  --glass-fill-strong: color-mix(in srgb, var(--surface) 74%, transparent);
+  --glass-line: color-mix(in srgb, var(--brand) 12%, rgb(255 255 255 / 0.5));
+  --glass-hi: rgb(255 255 255 / 0.7);
+  --glass-lo: rgb(255 255 255 / 0.12);
+  --glass-rim: rgb(255 255 255 / 0.85);
+  --glass-shadow: 0 1px 2px rgb(50 32 70 / 0.05), 0 12px 32px -14px rgb(50 32 70 / 0.28);
+  --glass-blur: 20px;
+  --blob-a: color-mix(in srgb, #8a63c7 42%, transparent);
+  --blob-b: color-mix(in srgb, var(--accent) 58%, transparent);
+  --blob-c: color-mix(in srgb, #b9a3dd 62%, transparent);
+  position: relative;
+  isolation: isolate;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .site-glass {
+    --glass-fill: color-mix(in srgb, var(--surface) 55%, transparent);
+    --glass-fill-strong: color-mix(in srgb, var(--surface) 78%, transparent);
+    --glass-line: rgb(255 255 255 / 0.1);
+    --glass-hi: rgb(255 255 255 / 0.16);
+    --glass-lo: rgb(255 255 255 / 0.04);
+    --glass-rim: rgb(255 255 255 / 0.3);
+    --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 14px 36px -14px rgb(0 0 0 / 0.7);
+    --blob-a: color-mix(in srgb, #7b56b3 40%, transparent);
+    --blob-b: color-mix(in srgb, var(--accent) 22%, transparent);
+    --blob-c: color-mix(in srgb, #3f6fd8 22%, transparent);
+  }
+}
+:root[data-theme='dark'] .site-glass {
+  --glass-fill: color-mix(in srgb, var(--surface) 55%, transparent);
+  --glass-fill-strong: color-mix(in srgb, var(--surface) 78%, transparent);
+  --glass-line: rgb(255 255 255 / 0.1);
+  --glass-hi: rgb(255 255 255 / 0.16);
+  --glass-lo: rgb(255 255 255 / 0.04);
+  --glass-rim: rgb(255 255 255 / 0.3);
+  --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 14px 36px -14px rgb(0 0 0 / 0.7);
+  --blob-a: color-mix(in srgb, #7b56b3 40%, transparent);
+  --blob-b: color-mix(in srgb, var(--accent) 22%, transparent);
+  --blob-c: color-mix(in srgb, #3f6fd8 22%, transparent);
+}
+
+.site-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--canvas);
+}
+.site-backdrop > span {
+  position: absolute;
+  width: 64vmax;
+  height: 64vmax;
+  border-radius: 50%;
+  will-change: transform;
+}
+.site-backdrop > span:nth-child(1) {
+  top: -22vmax;
+  left: -16vmax;
+  background: radial-gradient(circle at center, var(--blob-a), transparent 62%);
+  animation: site-drift-a 38s ease-in-out infinite alternate;
+}
+.site-backdrop > span:nth-child(2) {
+  top: 12vh;
+  right: -24vmax;
+  background: radial-gradient(circle at center, var(--blob-b), transparent 60%);
+  animation: site-drift-b 46s ease-in-out infinite alternate;
+}
+.site-backdrop > span:nth-child(3) {
+  bottom: -30vmax;
+  left: 14vw;
+  background: radial-gradient(circle at center, var(--blob-c), transparent 62%);
+  animation: site-drift-c 52s ease-in-out infinite alternate;
+}
+@keyframes site-drift-a { to { transform: translate3d(14vw, 10vh, 0) scale(1.08); } }
+@keyframes site-drift-b { to { transform: translate3d(-12vw, 14vh, 0) scale(0.94); } }
+@keyframes site-drift-c { to { transform: translate3d(-10vw, -12vh, 0) scale(1.1); } }
+@media (prefers-reduced-motion: reduce) {
+  .site-backdrop > span { animation: none; }
+}
+
+/* A glass surface: a frosted fill, a lit top edge, a faint rim, a soft lift. */
+.site-glass .glass,
+.site-glass .glass-card {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-shadow);
+}
+/* The liquid rim: a light catching the upper left and lower right edges. */
+.site-glass .glass-card::before,
+.site-glass .glass-rim::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, var(--glass-rim), transparent 32%, transparent 68%, color-mix(in srgb, var(--glass-rim) 55%, transparent));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+/* Cards take the shape the glass needs: rounded, lifting on hover; a card
+   with no padding of its own (the course card) takes a little with glass-pad. */
+.site-glass .glass-pad { padding: 0.625rem; }
+.site-glass .glass-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s;
+}
+.site-glass .glass-card:hover {
+  transform: translateY(-3px);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), 0 20px 44px -18px rgb(50 32 70 / 0.35);
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-glass .glass-card:hover { transform: none; }
+}
+.site-glass .glass-strong { background: var(--glass-fill-strong); }
+
+/*
+ * The header and the sticky bars: glass edge to edge, a hairline below.
+ * The frosting sits on a layer behind the bar rather than on the bar: a
+ * backdrop-filter on the header itself would make it the containing block
+ * for the mobile menu's fixed overlay and squeeze the menu into the bar.
+ */
+.site-glass .glass-bar,
+.site-glass .glass-bar-bottom {
+  background: transparent;
+}
+.site-glass .glass-bar::before,
+.site-glass .glass-bar-bottom::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--glass-fill-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  pointer-events: none;
+}
+.site-glass .glass-bar {
+  border-bottom: 1px solid var(--glass-line);
+  box-shadow: 0 6px 24px -16px rgb(50 32 70 / 0.35);
+}
+.site-glass .glass-bar-bottom {
+  border-top: 1px solid var(--glass-line);
+  box-shadow: 0 -8px 24px -14px rgb(50 32 70 / 0.3);
+}
+
+/* The footer: the academy's own dark colour, as smoked glass. */
+.site-glass .glass-shell {
+  background: color-mix(in srgb, var(--shell) 88%, transparent) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+/* The hero panel keeps its dark colour, with the backdrop glowing through. */
+.site-glass .glass-hero {
+  background:
+    radial-gradient(120% 90% at 8% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 55%),
+    linear-gradient(115deg, color-mix(in srgb, var(--shell) 90%, transparent), color-mix(in srgb, var(--shell) 74%, transparent)) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+  backdrop-filter: blur(28px) saturate(150%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 0 0 1px rgb(255 255 255 / 0.08), 0 30px 70px -30px color-mix(in srgb, var(--shell) 70%, transparent) !important;
+}
+
+/* A liquid button: a highlight across the top half, a lit rim, depth below. */
+.site-glass .liquid {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.45), inset 0 -3px 8px rgb(0 0 0 / 0.12), 0 10px 24px -12px color-mix(in srgb, var(--brand) 65%, transparent);
+}
+.site-glass .liquid::after {
+  content: '';
+  position: absolute;
+  inset: 1px 1px 52% 1px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0.32), rgb(255 255 255 / 0));
+  pointer-events: none;
+}
+/* A glass pill for secondary actions on light surfaces. */
+.site-glass .glass-pill {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 4px 14px -8px rgb(50 32 70 / 0.3);
+}
+
+/* Phones: a lighter blur, which is most of the cost. */
+@media (max-width: 640px) {
+  .site-glass { --glass-blur: 14px; }
+}
+/* No backdrop-filter (an old browser): solid enough to read. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-glass { --glass-fill: color-mix(in srgb, var(--surface) 94%, transparent); --glass-fill-strong: var(--surface); }
+}

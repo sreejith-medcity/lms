@@ -47,7 +47,7 @@ export function SubjectCard({
 
   return (
     <article
-      className={`relative flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] border
+      className={`glass glass-rim relative flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] border
         bg-[var(--surface)] shadow-sm ${subject.comingSoon ? '' : 'lift'}`}
     >
       <CourseMedia

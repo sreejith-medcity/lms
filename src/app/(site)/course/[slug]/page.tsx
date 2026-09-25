@@ -581,7 +581,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                 taller than the window would pin its top and put the buy
                 button permanently out of reach. */}
             <div className="lg:sticky lg:top-[7.75rem] lg:max-h-[calc(100vh-8.5rem)] lg:overflow-y-auto lg:overscroll-contain">
-              <div className="overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--surface)] shadow-[var(--shadow)]">
+              <div className="glass glass-strong glass-rim relative overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--surface)] shadow-[var(--shadow)]">
                 <div className="hidden lg:block">
                   <CourseMedia title={product.title} assetId={course.thumbnailAssetId} priority fit="natural" ratio="aspect-video" />
                 </div>
@@ -944,7 +944,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                   <li key={r.id}>
                     <Link
                       href={`/course/${r.slug}`}
-                      className="lift flex h-full flex-col overflow-hidden rounded-[var(--radius)] border bg-[var(--surface)]"
+                      className="glass glass-rim lift relative flex h-full flex-col overflow-hidden rounded-[var(--radius)] border bg-[var(--surface)]"
                     >
                       <CourseMedia
                         title={r.title}

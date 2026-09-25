@@ -3,7 +3,13 @@ import { SiteFooter, SiteHeader } from '@/components/site-chrome';
 
 export default function SiteLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-[var(--canvas)]">
+    <div className="site-glass flex min-h-dvh flex-col bg-[var(--canvas)]">
+      {/* The backdrop the glass frosts: three slow blobs in the academy's colours. */}
+      <div className="site-backdrop" aria-hidden>
+        <span />
+        <span />
+        <span />
+      </div>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50

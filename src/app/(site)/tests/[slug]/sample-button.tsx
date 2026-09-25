@@ -18,7 +18,7 @@ export function SampleButton({ formatCode }: { formatCode: string }) {
             if (r && !r.ok) setError(r.error);
           })
         }
-        className="inline-flex h-11 w-full items-center justify-center rounded-[var(--radius-sm)] bg-[var(--brand)] px-5 text-sm font-semibold text-[var(--brand-ink)] disabled:opacity-50"
+        className="liquid inline-flex h-11 w-full items-center justify-center rounded-[var(--radius-sm)] bg-[var(--brand)] px-5 text-sm font-semibold text-[var(--brand-ink)] disabled:opacity-50"
       >
         {pending ? 'Opening…' : 'Start my free paper'}
       </button>

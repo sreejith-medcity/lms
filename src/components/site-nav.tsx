@@ -47,7 +47,7 @@ export function SearchBox({ autoFocus = false, size = 'md' }: { autoFocus?: bool
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="Search for a course, an exam or a language"
-        className={`w-full rounded-full border border-[var(--line-strong)] bg-[var(--surface-2)] pl-11 pr-4 text-sm
+        className={`glass-pill w-full rounded-full border border-[var(--line-strong)] bg-[var(--surface-2)] pl-11 pr-4 text-sm
           placeholder:text-[var(--ink-3)] focus:border-[var(--brand)] focus:bg-[var(--surface)] focus:outline-none
           focus:ring-4 focus:ring-[var(--brand-soft)] ${size === 'lg' ? 'h-12' : 'h-11'}`}
       />
@@ -118,7 +118,7 @@ export function ExploreMenu({ categories }: { categories: ExploreCategory[] }) {
 
       {open && (
         <div
-          className="absolute left-0 top-full z-50 flex w-[44rem] overflow-hidden rounded-[var(--radius)] border
+          className="glass glass-strong absolute left-0 top-full z-50 flex w-[44rem] overflow-hidden rounded-[var(--radius)] border
             bg-[var(--surface)] shadow-[var(--shadow)]"
           role="menu"
         >
@@ -259,7 +259,7 @@ export function MobileMenu({
       {open && (
         <div className="fixed inset-0 top-[4.25rem] z-50 bg-black/30" onClick={() => setOpen(false)}>
           <nav
-            className="h-full w-[86%] max-w-sm overflow-y-auto bg-[var(--surface)] shadow-2xl"
+            className="glass glass-strong h-full w-[86%] max-w-sm overflow-y-auto bg-[var(--surface)] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             aria-label="Menu"
           >
@@ -343,7 +343,7 @@ export function MobileSearch() {
         <SearchIcon />
       </button>
       {open && (
-        <div className="absolute inset-x-0 top-full border-b bg-[var(--surface)] p-3 shadow-lg">
+        <div className="glass glass-strong absolute inset-x-0 top-full border-b bg-[var(--surface)] p-3 shadow-lg">
           <SearchBox autoFocus />
         </div>
       )}

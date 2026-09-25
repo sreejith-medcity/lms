@@ -56,7 +56,7 @@ export default async function TestsHome() {
                   <Link
                     key={f.code}
                     href={`/tests/${f.slug}`}
-                    className="group flex flex-col rounded-[var(--radius)] border bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--brand)]"
+                    className="glass-card group flex flex-col rounded-[var(--radius)] border bg-[var(--surface)] p-5 shadow-sm transition hover:border-[var(--brand)]"
                   >
                     <span className="t-micro faint font-semibold uppercase">{f.level ?? f.subtitle}</span>
                     <span className="mt-1 text-lg font-semibold">{f.name}</span>
@@ -74,7 +74,7 @@ export default async function TestsHome() {
         ))
       )}
 
-      <section className="mt-14 grid gap-8 rounded-[var(--radius)] border bg-[var(--surface)] p-6 sm:p-8 lg:grid-cols-[1fr_2fr]">
+      <section className="glass glass-rim relative mt-14 grid gap-8 rounded-[var(--radius)] border bg-[var(--surface)] p-6 sm:p-8 lg:grid-cols-[1fr_2fr]">
         <h2 className="t-title">What a paper gives you</h2>
         <ul className="space-y-3">
           {WHAT_YOU_GET.map((w) => (

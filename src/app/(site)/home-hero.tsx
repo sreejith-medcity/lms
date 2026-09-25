@@ -47,7 +47,7 @@ export function HomeHero({
   return (
     <section className="mx-auto max-w-[86rem] px-3 pt-3 sm:px-4 sm:pt-4">
       <div
-        className="relative isolate overflow-hidden rounded-[1.125rem] sm:rounded-[1.5rem]"
+        className="glass-hero relative isolate overflow-hidden rounded-[1.125rem] sm:rounded-[1.5rem]"
         style={{
           background: `
             radial-gradient(120% 90% at 8% 100%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
@@ -94,7 +94,7 @@ export function HomeHero({
           <div className="mt-8 flex flex-wrap justify-center gap-3 lg:justify-start">
             <Link
               href="/courses"
-              className="inline-flex h-12 items-center gap-2.5 rounded-[0.625rem] px-7 text-[0.9375rem] font-bold
+              className="liquid inline-flex h-12 items-center gap-2.5 rounded-[0.625rem] px-7 text-[0.9375rem] font-bold
                 transition hover:-translate-y-0.5 hover:brightness-[1.04] motion-reduce:hover:translate-y-0"
               style={{
                 background: 'var(--accent)',
