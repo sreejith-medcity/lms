@@ -10,6 +10,7 @@ import { redirectResponse } from '@/lib/http-headers';
 import { assignmentsWhereFor, learnerEnrolments } from '@/lib/assignment-access';
 import { getParentSession } from '@/lib/parent-session';
 import { playbackFor } from '@/lib/video';
+import { meetFor, parseMeetAssetKey, recordingLinks } from '@/lib/medcity-meet';
 
 export const dynamic = 'force-dynamic';
 
@@ -338,6 +339,17 @@ export async function GET(
   // on the first seek past the expiry. Media gets two hours; everything else stays
   // short, because a leaked document link is worth more to a leaker than a stream.
   const streaming = asset.type === 'VIDEO' || asset.type === 'AUDIO';
+
+  // A class recording that lives in Medcity Meet's storage: the same
+  // entitlement check has passed, so ask Meet for a fresh signed link.
+  const fromMeet = parseMeetAssetKey(asset.storageKey);
+  if (fromMeet) {
+    const meet = await meetFor(tenant.organizationId);
+    const rec = meet ? await recordingLinks(meet, fromMeet.code, fromMeet.recordingId).catch(() => null) : null;
+    const link = rec ? (wantsDownload && (downloadAllowed || staffMayDownload) ? rec.downloadUrl : rec.playbackUrl) : null;
+    if (!link) return new NextResponse('This recording is not available right now', { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
+    return redirectResponse(link, { status: 302, headers: { 'Cache-Control': 'private, no-store' } });
+  }
 
   const url = readUrlFor(asset.storageKey, {
     expiresIn: streaming ? 7200 : 300,

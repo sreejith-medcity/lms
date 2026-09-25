@@ -256,6 +256,22 @@ export async function testIntegration(provider: string): Promise<ActionState> {
       }
     }
 
+    if (provider === 'medcity_meet') {
+      const { meetFor } = await import('@/lib/medcity-meet');
+      const client = await meetFor(tenant.organizationId);
+      if (!client) return { error: 'Add the API key from Medcity Meet first.' };
+      try {
+        const me = await client.request<{ workspace?: { name?: string } }>('/ping');
+        const note = client.webhookSecret ? '' : ' Add the webhook secret too, or attendance and recordings will not come back.';
+        await recordIntegrationEvent({ organizationId: tenant.organizationId, provider, direction: 'CHECK', action: 'Credential check', ok: true, detail: `Meet answered as ${me.workspace?.name ?? 'a workspace'}.` });
+        return { ok: true, message: `Medcity Meet is connected to ${me.workspace?.name ?? 'your workspace'}. New classes get Meet rooms from now on.${note}` };
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        await recordIntegrationEvent({ organizationId: tenant.organizationId, provider, direction: 'CHECK', action: 'Credential check', ok: false, detail });
+        return { error: detail };
+      }
+    }
+
     if (provider === 'razorpay') {
       const auth = Buffer.from(
         `${resolved.values.keyId}:${resolved.values.keySecret}`,

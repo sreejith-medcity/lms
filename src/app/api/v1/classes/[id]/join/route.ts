@@ -3,6 +3,7 @@ import { bearerUser } from '@/lib/api/auth';
 import { fail, ok } from '@/lib/api/http';
 import { lateAfterMinutes, recordAttendance } from '@/lib/attendance';
 import { statusForJoin } from '@/lib/attendance-rules';
+import { joinTargetFor } from '@/lib/live-join';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const ctx = await bearerUser(request);
   if (!ctx) return fail('unauthorised', 'Sign in.', 401);
   const { id } = await params;
-  const session = await db.liveSession.findFirst({ where: { id, organizationId: ctx.tenant.organizationId, status: { not: 'CANCELLED' } }, select: { id: true, startsAt: true, joinUrl: true, batchId: true, learnerId: true } });
+  const session = await db.liveSession.findFirst({ where: { id, organizationId: ctx.tenant.organizationId, status: { not: 'CANCELLED' } }, select: { id: true, startsAt: true, joinUrl: true, batchId: true, learnerId: true, provider: true, providerMeetingId: true } });
   if (!session) return fail('not_found', 'That class is not available.', 404);
   if (session.learnerId && session.learnerId !== ctx.user.id) return fail('not_yours', 'That class is not yours.', 403);
   if (!session.learnerId) {
@@ -29,5 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { afterLearning } = await import('@/lib/badges-data');
     await afterLearning(ctx.tenant.organizationId, ctx.user.id);
   }
-  return ok({ url: session.joinUrl });
+  const target = await joinTargetFor(ctx.tenant.organizationId, session, ctx.user);
+  if ('error' in target) return fail('no_link', target.error, 409);
+  return ok({ url: target.url });
 }

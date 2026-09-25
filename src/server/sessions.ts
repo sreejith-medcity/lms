@@ -14,6 +14,7 @@ import { provisionMeetings, releaseMeeting } from '@/lib/zoom-sessions';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { lateAfterMinutes, recordAttendance } from '@/lib/attendance';
 import { statusForJoin } from '@/lib/attendance-rules';
+import { joinTargetFor } from '@/lib/live-join';
 
 /** Sign-in is "in time" if it lands within this many minutes of the start. */
 
@@ -138,8 +139,8 @@ export async function scheduleSessions(_prev: ActionState, formData: FormData): 
       if (provisioned.created > 0) {
         zoomNote =
           provisioned.created === occurrences.length
-            ? ' Zoom meetings created.'
-            : ` Zoom meetings created for the first ${provisioned.created}; the rest are made a fortnight before each class.`;
+            ? ' Class rooms created.'
+            : ` Class rooms created for the first ${provisioned.created}; the rest are made a fortnight before each class.`;
       } else if (provisioned.reason) {
         zoomNote = ` ${provisioned.reason}`;
       }
@@ -211,11 +212,11 @@ export async function createMeetingNow(sessionId: string): Promise<ActionState> 
     revalidatePath('/admin/sessions');
     revalidatePath('/learn');
 
-    if (result.created > 0) return { ok: true, message: 'Zoom meeting created.' };
-    if (result.reason) return { error: `Zoom refused: ${result.reason}` };
+    if (result.created > 0) return { ok: true, message: 'Class room created.' };
+    if (result.reason) return { error: `The class platform refused: ${result.reason}` };
     return {
       error:
-        'Nothing was created. The class may already be in the past, or Zoom is not connected for this academy.',
+        'Nothing was created. The class may already be in the past, have a link typed in by hand, or no class platform (Medcity Meet or Zoom) is connected for this academy.',
     };
   } catch (err) {
     return fail(err);
@@ -238,7 +239,7 @@ export async function joinSession(sessionId: string): Promise<ActionState & { ur
         organizationId: tenant.organizationId,
         status: { not: 'CANCELLED' },
       },
-      select: { id: true, startsAt: true, joinUrl: true, batchId: true },
+      select: { id: true, startsAt: true, joinUrl: true, batchId: true, provider: true, providerMeetingId: true },
     });
     if (!session) return { error: 'That class is not available.' };
 
@@ -268,7 +269,9 @@ export async function joinSession(sessionId: string): Promise<ActionState & { ur
     }
 
     revalidatePath('/learn');
-    return { ok: true, url: session.joinUrl ?? undefined };
+    const target = await joinTargetFor(tenant.organizationId, session, user);
+    if ('error' in target) return { error: target.error };
+    return { ok: true, url: target.url };
   } catch (err) {
     return fail(err);
   }

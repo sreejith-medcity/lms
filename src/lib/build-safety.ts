@@ -29,6 +29,8 @@ const SERVER_ONLY = [
   'lib/otp',
   'lib/totp',
   'lib/zoom',
+  'lib/medcity-meet',
+  'lib/live-join',
   'lib/sso',
   'lib/storage',
 ];

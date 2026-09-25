@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { zoomFor, createMeeting, deleteMeeting, updateMeeting, ZoomError } from '@/lib/zoom';
 import { recordIntegrationEvent } from '@/lib/integration-events';
+import { meetFor, createClass, moveClass, cancelClass, MeetError } from '@/lib/medcity-meet';
 
 /**
  * Giving classes their Zoom meetings.
@@ -28,7 +29,127 @@ export interface ProvisionResult {
   reason?: string;
 }
 
+/**
+ * Rooms for upcoming classes, on whichever platform the academy uses.
+ * Medcity Meet takes over once it is connected; Zoom stays for academies
+ * that have not moved, and for classes that already have a Zoom meeting.
+ */
 export async function provisionMeetings(
+  organizationId: string,
+  options: { limit?: number; sessionIds?: string[] } = {},
+): Promise<ProvisionResult> {
+  const meet = await meetFor(organizationId);
+  if (meet) return provisionMeetRooms(organizationId, meet, options);
+  return provisionZoomMeetings(organizationId, options);
+}
+
+/** The path a learner or trainer opens: it mints their personal Meet link. */
+export const meetJoinPath = (sessionId: string) => `/live/${sessionId}/join`;
+
+async function provisionMeetRooms(
+  organizationId: string,
+  client: NonNullable<Awaited<ReturnType<typeof meetFor>>>,
+  options: { limit?: number; sessionIds?: string[] },
+): Promise<ProvisionResult> {
+  // Meet makes a room in well under a second and has no seat limit, so the
+  // horizon is the same fortnight but a run can take more of them.
+  const horizon = new Date(Date.now() + HORIZON_DAYS * 86_400_000);
+  const due = await db.liveSession.findMany({
+    where: {
+      organizationId,
+      ...(options.sessionIds ? { id: { in: options.sessionIds } } : {}),
+      providerMeetingId: null,
+      provider: { in: ['ZOOM', 'MEET'] },
+      // A link typed in by hand is the trainer's choice; leave it alone.
+      joinUrl: null,
+      status: 'SCHEDULED',
+      cancelledAt: null,
+      isHoliday: false,
+      startsAt: { gte: new Date(), lte: options.sessionIds ? undefined : horizon },
+    },
+    orderBy: { startsAt: 'asc' },
+    take: options.limit ?? 50,
+    select: {
+      id: true,
+      title: true,
+      topics: true,
+      startsAt: true,
+      endsAt: true,
+      autoRecord: true,
+      learnerId: true,
+      batch: { select: { name: true } },
+      instructors: {
+        orderBy: { isPrimary: 'desc' },
+        take: 3,
+        select: { isPrimary: true, instructor: { select: { user: { select: { email: true, name: true } } } } },
+      },
+    },
+  });
+  if (!due.length) return { created: 0, failed: 0, skipped: 0 };
+
+  const organization = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } });
+
+  let created = 0;
+  let failed = 0;
+  let skipped = 0;
+  let stopReason: string | undefined;
+  let lastError: string | undefined;
+
+  for (const session of due) {
+    if (stopReason) {
+      skipped += 1;
+      continue;
+    }
+    const host = session.instructors.map((i) => i.instructor.user).find((u) => u.email);
+    if (!host?.email) {
+      failed += 1;
+      lastError = `"${session.title}" has no trainer with an email, so Meet has nobody to make host.`;
+      continue;
+    }
+    try {
+      const meeting = await createClass(client, {
+        sessionId: session.id,
+        title: session.batch?.name ? `${session.title} (${session.batch.name})` : session.title,
+        topics: session.topics,
+        hostEmail: host.email,
+        hostName: host.name ?? undefined,
+        startsAt: session.startsAt,
+        minutes: Math.round((session.endsAt.getTime() - session.startsAt.getTime()) / 60_000),
+        timezone: organization?.timezone ?? 'Asia/Kolkata',
+        oneToOne: Boolean(session.learnerId),
+        autoRecord: session.autoRecord,
+      });
+      await db.liveSession.update({
+        where: { id: session.id },
+        data: {
+          provider: 'MEET',
+          providerMeetingId: meeting.code,
+          providerHostId: host.email,
+          joinUrl: meetJoinPath(session.id),
+          hostUrl: meetJoinPath(session.id),
+        },
+      });
+      created += 1;
+    } catch (err) {
+      failed += 1;
+      lastError = err instanceof Error ? err.message : String(err);
+      if (err instanceof MeetError && err.permanent && err.code !== 'invalid_schedule') stopReason = lastError;
+    }
+  }
+
+  await recordIntegrationEvent({
+    organizationId,
+    provider: 'medcity_meet',
+    direction: 'OUT',
+    action: 'Class rooms created',
+    ok: failed === 0,
+    records: created,
+    detail: stopReason ?? lastError ?? null,
+  });
+  return { created, failed, skipped, reason: stopReason ?? lastError };
+}
+
+async function provisionZoomMeetings(
   organizationId: string,
   options: { limit?: number; sessionIds?: string[] } = {},
 ): Promise<ProvisionResult> {
@@ -150,9 +271,22 @@ export async function provisionMeetings(
 export async function syncMeeting(organizationId: string, sessionId: string): Promise<void> {
   const session = await db.liveSession.findFirst({
     where: { id: sessionId, organizationId },
-    select: { providerMeetingId: true, title: true, startsAt: true, endsAt: true },
+    select: { providerMeetingId: true, provider: true, title: true, startsAt: true, endsAt: true },
   });
   if (!session?.providerMeetingId) return;
+
+  if (session.provider === 'MEET') {
+    const meet = await meetFor(organizationId);
+    if (!meet) return;
+    await moveClass(meet, sessionId, {
+      title: session.title,
+      startsAt: session.startsAt,
+      minutes: Math.round((session.endsAt.getTime() - session.startsAt.getTime()) / 60_000),
+    }).catch((err: unknown) => {
+      console.error('[meet] could not move the class:', err instanceof Error ? err.message : err);
+    });
+    return;
+  }
 
   const client = await zoomFor(organizationId);
   if (!client) return;
@@ -177,9 +311,20 @@ export async function syncMeeting(organizationId: string, sessionId: string): Pr
 export async function releaseMeeting(organizationId: string, sessionId: string): Promise<void> {
   const session = await db.liveSession.findFirst({
     where: { id: sessionId, organizationId },
-    select: { providerMeetingId: true },
+    select: { providerMeetingId: true, provider: true },
   });
   if (!session?.providerMeetingId) return;
+
+  if (session.provider === 'MEET') {
+    const meet = await meetFor(organizationId);
+    if (meet) {
+      await cancelClass(meet, sessionId).catch((err: unknown) => {
+        console.error('[meet] could not cancel the class:', err instanceof Error ? err.message : err);
+      });
+    }
+    await db.liveSession.update({ where: { id: sessionId }, data: { providerMeetingId: null, joinUrl: null, hostUrl: null } });
+    return;
+  }
 
   const client = await zoomFor(organizationId);
   if (!client) return;

@@ -393,6 +393,24 @@ export const INTEGRATIONS: IntegrationDef[] = [
 
   /* Live classes ----------------------------------------------------------- */
   {
+    id: 'medcity_meet',
+    name: 'Medcity Meet',
+    category: 'meeting',
+    priority: 1,
+    requires:
+      'An API key from Medcity Meet (Integrations, Create key), and a webhook endpoint added there pointing at /api/webhooks/meet on this site, with its signing secret.',
+    purpose:
+      'Classes on our own platform with no limit on how many run at once. Rooms are made when a class is scheduled, Join signs the learner straight in, and attendance and recordings come back on their own. Takes over from Zoom once connected.',
+    status: 'wired',
+    fallback: 'Classes use Zoom, or join links pasted in by hand.',
+    docsUrl: 'https://github.com/sreejith-medcity/meet/blob/main/deploy/LMS-API.md',
+    fields: [
+      TEXT('apiUrl', 'API URL', 'MEET_API_URL', 'Optional. Leave blank for https://meet.medcitylms.in/api/v1.'),
+      KEY('apiKey', 'API key', 'MEET_API_KEY', 'Starts with mk_live_.'),
+      KEY('webhookSecret', 'Webhook signing secret', 'MEET_WEBHOOK_SECRET', 'Optional for scheduling, needed for attendance and recordings. Starts with whsec_.'),
+    ],
+  },
+  {
     id: 'zoom',
     name: 'Zoom',
     category: 'meeting',
