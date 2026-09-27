@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
 import { mockTestAllowance, telcConfig } from '@/lib/telc';
+import { ieltsConfig } from '@/lib/ielts';
 import { mockTestLine, mockTestsLeft } from '@/lib/mock-tests';
 import { anthropicReady } from '@/lib/anthropic';
 import { settingBool } from '@/lib/settings/store';
@@ -61,6 +62,33 @@ export async function MockTestCard({
   );
 }
 
+/** The IELTS computer-delivered mock test portal: one button in, no second password. */
+export function IeltsCard({ unavailable = false }: { unavailable?: boolean }) {
+  return (
+    <Card className="flex flex-col">
+      <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
+        IELTS
+      </p>
+      <p className="mt-1 text-base font-bold">IELTS CD Mock Test</p>
+      <p className="t-small muted mt-1.5 leading-relaxed">
+        Computer-delivered IELTS mock tests on the same screen as the real exam: Listening, Reading, Writing and
+        Speaking with an AI examiner, bands to 9 with your CEFR level. You are signed in there with this account; no
+        second password.
+      </p>
+      <div className="mt-auto pt-4">
+        <a
+          href="/api/sso/ielts/start"
+          className="inline-flex h-10 items-center rounded-[var(--radius-sm)] px-4 text-sm font-semibold text-[var(--brand-ink)]"
+          style={{ background: 'var(--brand)' }}
+        >
+          Open IELTS mock tests
+        </a>
+        {unavailable && <p className="t-small mt-2 text-[var(--bad)]">The IELTS portal could not be opened just now. Try again in a minute.</p>}
+      </div>
+    </Card>
+  );
+}
+
 export async function PartnerPractice({
   organizationId,
   userId,
@@ -71,8 +99,9 @@ export async function PartnerPractice({
   /** The learner just came back from a handoff that could not be made. */
   unavailable?: boolean;
 }) {
-  const [telc, examiner, results] = await Promise.all([
+  const [telc, ielts, examiner, results] = await Promise.all([
     telcConfig(organizationId),
+    ieltsConfig(organizationId),
     settingBool(organizationId, 'ai.practiceEnabled').then(async (on) => on && (await anthropicReady(organizationId))),
     db.partnerResult.findMany({
       where: { organizationId, userId },
@@ -82,11 +111,12 @@ export async function PartnerPractice({
     }),
   ]);
 
-  if (!telc && !examiner && results.length === 0) return null;
+  if (!telc && !ielts && !examiner && results.length === 0) return null;
+  const cards = [examiner, telc, ielts].filter(Boolean).length;
 
   return (
     <Section title="Practice">
-      <div className={`grid gap-4 ${telc && examiner ? 'lg:grid-cols-3' : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]'}`}>
+      <div className={`grid gap-4 ${cards >= 3 ? 'lg:grid-cols-2' : cards === 2 ? 'lg:grid-cols-3' : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]'}`}>
         {examiner && (
           <Card className="flex flex-col">
             <p className="t-eyebrow" style={{ color: 'var(--brand)' }}>
@@ -110,6 +140,7 @@ export async function PartnerPractice({
           </Card>
         )}
         {telc && <MockTestCard organizationId={organizationId} userId={userId} unavailable={unavailable} />}
+        {ielts && <IeltsCard unavailable={unavailable} />}
 
         <Card padded={false}>
           <p className="border-b px-5 py-3 text-sm font-semibold">Your results</p>

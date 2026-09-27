@@ -724,6 +724,23 @@ export const INTEGRATIONS: IntegrationDef[] = [
     ],
   },
 
+  {
+    id: 'ielts',
+    name: 'IELTS CD Mock Test (ielts.medcitylms.in)',
+    category: 'practice',
+    priority: 3,
+    requires:
+      'The IELTS portal with the same shared secret set on its side (LMS_SSO_SECRET) and this site named as its LMS (LMS_RESULTS_URL = https://<this site>/api/integrations/ielts/results). No accounts are created by hand.',
+    purpose:
+      'Computer-delivered IELTS mock tests in the IDP format (Listening, Reading, Writing, Speaking with an AI examiner). Learners open it with one button and no second password; every result comes back here. Courses named after an IELTS package (Essential, Premium, Comprehensive) unlock that package there.',
+    status: 'wired',
+    docsUrl: 'https://ielts.medcitylms.in',
+    fields: [
+      TEXT('baseUrl', 'Site address', undefined, 'https://ielts.medcitylms.in'),
+      KEY('sharedSecret', 'Shared secret', undefined, 'A long random string, the same on both sides. openssl rand -hex 32 makes one.'),
+    ],
+  },
+
   /* AI --------------------------------------------------------------------- */
   {
     id: 'anthropic',

@@ -8,7 +8,8 @@ import { settingBool } from '@/lib/settings/store';
 import { EXAM_PRESETS, presetFor } from '@/lib/ai-evaluation';
 import { Badge, Card, EmptyState } from '@/components/ui';
 import { telcConfig } from '@/lib/telc';
-import { MockTestCard } from '@/components/partner-practice';
+import { ieltsConfig } from '@/lib/ielts';
+import { IeltsCard, MockTestCard } from '@/components/partner-practice';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Practice' };
@@ -27,10 +28,11 @@ export default async function PracticePage() {
   const user = await getSessionUser();
   if (!user) return null;
 
-  const [enabled, ready, telc] = await Promise.all([
+  const [enabled, ready, telc, ielts] = await Promise.all([
     settingBool(tenant.organizationId, 'ai.practiceEnabled'),
     anthropicReady(tenant.organizationId),
     telcConfig(tenant.organizationId),
+    ieltsConfig(tenant.organizationId),
   ]);
 
   const [allowance, attempts] = await Promise.all([
@@ -53,7 +55,7 @@ export default async function PracticePage() {
         <div>
           <h1 className="text-xl font-semibold">Practice</h1>
           <p className="t-small faint mt-1 max-w-2xl">
-            {telc ? 'Full-length mock exams, and writing' : 'Writing'} and speaking tasks in the style of your exam, marked to the official criteria within a
+            {telc || ielts ? 'Full-length mock exams, and writing' : 'Writing'} and speaking tasks in the style of your exam, marked to the official criteria within a
             minute, with corrections in your own words. It is practice, not a prediction: a real examiner on
             the day may see it differently.
           </p>
@@ -66,11 +68,12 @@ export default async function PracticePage() {
         )}
       </div>
 
-      {telc && (
+      {(telc || ielts) && (
         <section className="mt-8">
           <h2 className="text-base font-semibold">Mock exams</h2>
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            <MockTestCard organizationId={tenant.organizationId} userId={user.id} />
+            {telc && <MockTestCard organizationId={tenant.organizationId} userId={user.id} />}
+            {ielts && <IeltsCard />}
           </div>
         </section>
       )}
