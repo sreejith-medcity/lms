@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { HOST_HEADER, TENANT_HEADER } from '@/lib/http-headers';
 import { legacyRedirect } from '@/lib/exams/legacy';
+import { hostRedirect } from '@/lib/host-redirect';
 import { NEXT_COOKIE, safeNextPath } from '@/lib/next-path-rules';
 
 /**
@@ -73,6 +74,10 @@ export function middleware(req: NextRequest) {
   for (const own of [HOST_HEADER, TENANT_HEADER, 'x-platform', 'x-tenant-slug', 'x-pathname']) requestHeaders.delete(own);
   requestHeaders.set(HOST_HEADER, hostname);
   requestHeaders.set('x-pathname', req.nextUrl.pathname);
+
+  // An address the academy has moved away from (demo.medcitylms.in to medcitylms.com).
+  const moved = hostRedirect(hostname, req.nextUrl.pathname, req.nextUrl.search, process.env.HOST_REDIRECTS);
+  if (moved) return NextResponse.redirect(moved, 308);
 
   // The retired telc site's name, pointed here: every address goes to its page in the portal.
   const legacy = legacyRedirect(hostname, req.nextUrl.pathname, { hosts: process.env.TESTS_LEGACY_HOSTS, target: process.env.TESTS_LEGACY_TARGET });
