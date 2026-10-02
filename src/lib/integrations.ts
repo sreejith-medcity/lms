@@ -741,6 +741,20 @@ export const INTEGRATIONS: IntegrationDef[] = [
     ],
   },
 
+  {
+    id: 'hrsuite',
+    name: 'HRSuite (online tutors)',
+    category: 'reporting',
+    priority: 2,
+    requires:
+      "HRSuite with this site named as its LMS (Time, Online tutors, LMS connection: this site's address) and the same shared secret on both sides.",
+    purpose:
+      "Pays online tutors from the classes they take here. HRSuite reads each class, who taught it, whether it was held or cancelled, how many learners came and the tutor's own time in class, applies the tutor's pay rules, and puts the month on the payslip. Read-only: HRSuite never changes a class.",
+    status: 'wired',
+    docsUrl: 'https://hrms.mymedcity.com',
+    fields: [KEY('sharedSecret', 'Shared secret', undefined, 'A long random string, the same in HRSuite. openssl rand -hex 32 makes one.')],
+  },
+
   /* AI --------------------------------------------------------------------- */
   {
     id: 'anthropic',
