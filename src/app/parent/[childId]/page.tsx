@@ -9,6 +9,8 @@ import { formatMoney } from '@/lib/money';
 import { formatDateTime, formatTime } from '@/lib/clock';
 import { Badge, Card, Cell, ProgressBar, Row, Table } from '@/components/ui';
 
+import { progressNotes } from '@/lib/tutoring/data';
+import { milestoneLabel } from '@/lib/tutoring/rules';
 import { AccessRemoved } from '../access-removed';
 import { ChildTabs } from '../child-tabs';
 
@@ -32,6 +34,7 @@ export default async function ChildPage({ params }: { params: Promise<{ childId:
 
   const now = new Date();
   const d = await childDetail(tenant.organizationId, child.id, now);
+  const tutorNotes = await progressNotes(tenant.organizationId, child.id);
   const day = (at: Date) => at.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: tenant.timezone });
 
   const feesOpen = d.enrolments.flatMap((e) => e.instalments.filter((i) => balanceOf(i) > 0).map((i) => ({ ...i, course: e.product.title })));
@@ -235,6 +238,25 @@ export default async function ChildPage({ params }: { params: Promise<{ childId:
             </div>
           )}
         </Card>
+
+        {tutorNotes.length > 0 && (
+          <Card>
+            <h2 className="t-heading">Progress notes from the online tutor</h2>
+            <ul className="mt-3 divide-y">
+              {tutorNotes.map((n) => (
+                <li key={n.id} className="py-2.5">
+                  <p className="t-small faint">
+                    {n.tutor} · {milestoneLabel(n.milestone)} · {day(n.at)}
+                  </p>
+                  <p className="mt-1">
+                    <Badge tone={(n.rating ?? 0) >= 4 ? 'ok' : (n.rating ?? 0) <= 2 ? 'warn' : 'neutral'}>Progress {n.rating} / 5</Badge>
+                  </p>
+                  <p className="t-small mt-1 whitespace-pre-wrap">{n.comment}</p>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
 
         <Card>
           <h2 className="t-heading">Report cards</h2>

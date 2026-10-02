@@ -264,6 +264,8 @@ export async function fulfilPaidOrder(input: {
                 courseId: product.course.id,
                 status: { in: ['ACTIVE', 'UPCOMING'] },
                 deletedAt: null,
+                // An online tutor's group is nobody's default batch.
+                isTutoring: false,
               },
               orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
               select: { id: true },

@@ -226,6 +226,7 @@ export async function importLearners(
                 courseId: product.course.id,
                 status: { in: ['ACTIVE', 'UPCOMING'] },
                 deletedAt: null,
+                isTutoring: false,
               },
               orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
               select: { id: true },

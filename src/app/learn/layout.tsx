@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { ImpersonationBanner } from '@/components/impersonation-banner';
 import { learnerNav } from '@/lib/learner-nav';
+import { hasTutoring } from '@/lib/tutoring/data';
 import { BrandLockup } from '@/components/brand-lockup';
 import { LearnerMenu, LearnerSidebar } from './learner-sidebar';
 import { inApp } from '@/lib/in-app';
@@ -35,6 +36,11 @@ export default async function LearnLayout({ children }: { children: React.ReactN
   const [locale, offered] = await Promise.all([getLocale(), offeredForTenant()]);
   const t = translatorFor(locale);
   const nav = (await learnerNav(tenant.organizationId)).map((item) => ({ ...item, label: t(item.label) }));
+  // A learner with an online tutor, or on a course taught with one, gets
+  // the item whether or not the academy put it in the menu for everybody.
+  if (!nav.some((item) => item.key === 'tutoring') && (await hasTutoring(tenant.organizationId, user.id))) {
+    nav.splice(Math.min(2, nav.length), 0, { key: 'tutoring', label: t('Online tutor'), href: '/learn/tutoring' });
+  }
   const initial = user.name.trim().slice(0, 1).toUpperCase() || '?';
   const avatarUrl = (await db.user.findUnique({ where: { id: user.id }, select: { avatarUrl: true } }))?.avatarUrl ?? null;
   const unread = await db.notificationLog.count({ where: { organizationId: tenant.organizationId, userId: user.id, channel: 'IN_APP', status: 'SENT' } });

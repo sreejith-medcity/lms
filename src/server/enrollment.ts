@@ -77,6 +77,7 @@ export async function enrol(productId: string, pricingPlanId?: string): Promise<
         organizationId: tenant.organizationId,
         courseId: product.course.id,
         status: { in: ['ACTIVE', 'UPCOMING'] },
+        isTutoring: false,
       },
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
         select: { id: true },

@@ -685,6 +685,9 @@ model InstructorProfile {
   perSessionPaise Int?
   isMentor        Boolean  @default(false)
   hideNameOnCards Boolean  @default(false)
+  /// The trainer's employee code in the payroll system, so hours sent there
+  /// land on the right person.
+  employeeCode    String?
 
   user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions SessionInstructor[]
@@ -1371,6 +1374,10 @@ model Batch {
   /// (A1, B2, Module 3); free text when the program lists none.
   level            String?
   mode             BatchMode   @default(IN_PERSON)
+  /// An online tutor's group (TutoringGroup): an ordinary batch for its
+  /// classes, register and join links, but kept out of the batch list and
+  /// never the batch a new enrolment is put in by default.
+  isTutoring       Boolean     @default(false)
   legacyEdmingleId String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -5131,4 +5138,188 @@ model SupportTicket {
 
   @@index([tenantId, status])
   @@map("support_tickets")
+}
+
+// ---------------------------------------------------------------------------
+// ONLINE TUTORING (TUTORING.md)
+// ---------------------------------------------------------------------------
+
+/// A course that can be taken with an online tutor: one to one, or in a small
+/// group, as a fixed number of classes at the same time on the same weekdays.
+model TutoringOffer {
+  id             String   @id @default(cuid())
+  organizationId String
+  courseId       String   @unique
+  /// ONE_TO_ONE or GROUP.
+  format         String   @default("ONE_TO_ONE")
+  /// Learners in one group; 1 for one to one.
+  groupSize      Int      @default(1)
+  classMinutes   Int      @default(60)
+  classesTotal   Int      @default(30)
+  /// The weekdays classes run on, 0 Sunday.
+  weekdays       Int[]
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tutors TutoringTutor[]
+  groups TutoringGroup[]
+
+  @@index([organizationId, active])
+  @@map("tutoring_offers")
+}
+
+/// Which tutors may be given this course's online learners.
+model TutoringTutor {
+  offerId String
+  userId  String
+
+  offer TutoringOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@id([offerId, userId])
+  @@index([userId])
+  @@map("tutoring_tutors")
+}
+
+/// When a tutor can teach online, marked by the tutor: a window on a weekday,
+/// in the academy's time, minutes from midnight.
+model TutorAvailability {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  weekday        Int
+  startMinute    Int
+  endMinute      Int
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, userId])
+  @@map("tutor_availability")
+}
+
+/// A tutor and a time slot, with the learners placed in it. The classes, the
+/// register and the join links belong to its batch, which is an ordinary
+/// batch kept out of the batch list.
+model TutoringGroup {
+  id             String   @id @default(cuid())
+  organizationId String
+  offerId        String
+  batchId        String   @unique
+  tutorId        String
+  weekdays       Int[]
+  startMinute    Int
+  classMinutes   Int
+  capacity       Int      @default(1)
+  classesTotal   Int
+  /// The first class day, YYYY-MM-DD on the academy's calendar.
+  startsOn       String
+  /// ACTIVE, COMPLETED or CLOSED.
+  status         String   @default("ACTIVE")
+  /// The tutor is away for long and nobody else was free at this time: the
+  /// office has to choose a tutor or a new time.
+  needsTutor     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  offer TutoringOffer  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  seats TutoringSeat[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, tutorId, status])
+  @@map("tutoring_groups")
+}
+
+/// One learner's place in online tutoring: waiting for a tutor, or placed.
+model TutoringSeat {
+  id              String    @id @default(cuid())
+  organizationId  String
+  offerId         String
+  userId          String
+  enrollmentId    String?
+  groupId         String?
+  /// The start time the learner asked for, minutes from midnight.
+  preferredMinute Int
+  /// The day they want to start, YYYY-MM-DD.
+  preferredFrom   String
+  /// WAITING, PLACED, COMPLETED or CANCELLED.
+  status          String    @default("WAITING")
+  note            String    @default("")
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  placedAt        DateTime?
+  completedAt     DateTime?
+
+  group TutoringGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, userId])
+  @@map("tutoring_seats")
+}
+
+/// A tutor's leave. Up to seven days, the classes on those days are called
+/// off and added to the end; longer, the tutor's groups go to another tutor.
+model TutorLeave {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  fromDay        String
+  toDay          String
+  reason         String    @default("")
+  /// PENDING, APPROVED, REJECTED or WITHDRAWN.
+  status         String    @default("PENDING")
+  decidedById    String?
+  decidedAt      DateTime?
+  /// What approving it did: classes called off, groups handed over, groups left needing a tutor.
+  outcome        Json?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, status, fromDay])
+  @@index([organizationId, userId, fromDay])
+  @@map("tutor_leaves")
+}
+
+/// A learner's leave from online classes: up to three days at a time. One to
+/// one, the classes move to the end; in a group, the class goes on without
+/// them and they are marked excused.
+model LearnerLeave {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  seatId         String
+  fromDay        String
+  toDay          String
+  reason         String   @default("")
+  /// APPROVED or WITHDRAWN.
+  status         String   @default("APPROVED")
+  classesMoved   Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, userId, fromDay])
+  @@index([seatId])
+  @@map("learner_leaves")
+}
+
+/// Feedback asked for after the 5th, 10th and 15th class and at the end
+/// (milestone 0), both ways: the learner on the tutor, the tutor on the learner.
+model TutoringFeedback {
+  id             String    @id @default(cuid())
+  organizationId String
+  seatId         String
+  groupId        String
+  learnerId      String
+  tutorId        String
+  milestone      Int
+  /// LEARNER (about the tutor) or TUTOR (about the learner).
+  direction      String
+  rating         Int?
+  /// The learner's answers per question, or the tutor's marks per skill.
+  answers        Json?
+  comment        String    @default("")
+  dueAt          DateTime  @default(now())
+  submittedAt    DateTime?
+
+  @@unique([seatId, milestone, direction])
+  @@index([organizationId, submittedAt])
+  @@index([organizationId, tutorId, direction, submittedAt])
+  @@index([organizationId, learnerId, direction, submittedAt])
+  @@map("tutoring_feedback")
 }

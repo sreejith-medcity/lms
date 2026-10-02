@@ -41,6 +41,11 @@ export default async function DeskPage() {
       <PageHeader
         title="My teaching"
         description={`${d.batches.length} ${d.batches.length === 1 ? 'batch' : 'batches'}, ${d.monthClasses} ${d.monthClasses === 1 ? 'class' : 'classes'} taken in ${month.label}.`}
+        action={
+          <Link href="/admin/desk/tutoring" className="inline-flex h-10 items-center rounded-[var(--radius-sm)] border bg-[var(--surface)] px-3.5 text-sm font-medium hover:bg-[var(--surface-2)]">
+            Online tutoring: my hours, leave and notes
+          </Link>
+        }
       />
 
       <StatGrid>

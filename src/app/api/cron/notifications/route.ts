@@ -11,6 +11,7 @@ import { runDueWorkflows } from '@/lib/workflows';
 import { runEdmingleAuto } from '@/lib/migrate-edmingle-auto';
 import { markOnlineNoShows } from '@/lib/attendance-jobs';
 import { sweepSittings } from '@/lib/exams/sittings';
+import { sweepTutoring } from '@/lib/tutoring/data';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -44,6 +45,14 @@ async function handle(request: Request) {
   const tests = await sweepSittings(new Date(), 1).catch((err) => {
     console.error('[cron] tests', err instanceof Error ? err.message : err);
     return { closed: 0, marked: 0 };
+  });
+
+  // Online tutoring: classes with a register in are marked held, feedback
+  // that has fallen due is asked for, finished groups are closed and
+  // learners waiting for a tutor are tried again.
+  const tutoring = await sweepTutoring(new Date()).catch((err) => {
+    console.error('[cron] tutoring', err instanceof Error ? err.message : err);
+    return { held: 0, asked: 0, finished: 0, placed: 0 };
   });
 
   const results: Record<string, unknown> = {};
@@ -89,6 +98,7 @@ async function handle(request: Request) {
     failed,
     purgedOtps: purged,
     tests,
+    tutoring,
     ms: Date.now() - started,
     results,
   });

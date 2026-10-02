@@ -39,6 +39,7 @@ export default async function EnrolPage() {
       where: {
         organizationId: tenant.organizationId,
         deletedAt: null,
+        isTutoring: false,
         status: { in: ['UPCOMING', 'ACTIVE'] },
         ...batchWhere(scope),
       },

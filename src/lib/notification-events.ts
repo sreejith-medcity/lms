@@ -57,6 +57,19 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
     ],
   },
   {
+    group: 'Online tutoring',
+    events: [
+      { key: 'tutoring.assigned', label: 'A tutor and class time were set', who: 'The learner, and the tutor', live: true },
+      { key: 'tutoring.class_cancelled', label: 'Classes called off for a tutor’s leave', who: 'The learners of that tutor, with the new end date', live: true },
+      { key: 'tutoring.tutor_changed', label: 'The tutor changed', who: 'The learners of the group, and the new tutor', live: true },
+      { key: 'tutoring.slot_changed', label: 'The class time changed', who: 'The learners of the group', live: true },
+      { key: 'tutoring.learner_leave', label: 'A learner took leave', who: 'Their tutor', live: true },
+      { key: 'tutoring.leave_decided', label: 'A tutor’s leave was approved or refused', who: 'The tutor', live: true },
+      { key: 'tutoring.feedback_due', label: 'Feedback is due', who: 'The learner and the tutor, after classes 5, 10 and 15 and at the end', live: true },
+      { key: 'tutoring.progress_note', label: 'The tutor wrote a progress note', who: 'The learner', live: true },
+    ],
+  },
+  {
     group: 'Account',
     events: [
       { key: 'account.otp', label: 'A one-time code was asked for', who: 'Whoever asked for it', live: true },

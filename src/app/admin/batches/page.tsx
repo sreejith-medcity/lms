@@ -27,7 +27,8 @@ export default async function BatchesPage() {
   ]);
 
   const batches = await db.batch.findMany({
-    where: { organizationId: tenant.organizationId, deletedAt: null, ...batchWhere(scope) },
+    // Online tutors' groups have their own screen (Online tutors), so they stay out of this list.
+    where: { organizationId: tenant.organizationId, deletedAt: null, isTutoring: false, ...batchWhere(scope) },
     include: {
       course: { include: { product: { select: { title: true } } } },
       _count: { select: { enrollments: true, sessions: true } },

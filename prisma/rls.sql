@@ -8,7 +8,7 @@
 CREATE OR REPLACE FUNCTION lms_scope_platform() RETURNS boolean LANGUAGE sql STABLE PARALLEL SAFE AS $$ SELECT coalesce(current_setting('app.scope', true), '') = 'platform' $$;
 CREATE OR REPLACE FUNCTION lms_scope_org() RETURNS text LANGUAGE sql STABLE PARALLEL SAFE AS $$ SELECT CASE WHEN coalesce(current_setting('app.scope', true), '') LIKE 'tenant:%' THEN substr(current_setting('app.scope', true), 8) END $$;
 
--- 111 tables that name the academy
+-- 118 tables that name the academy
 
 ALTER TABLE "branches" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "branches" FORCE ROW LEVEL SECURITY;
@@ -565,7 +565,42 @@ ALTER TABLE "storage_usage" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS lms_tenant ON "storage_usage";
 CREATE POLICY lms_tenant ON "storage_usage" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
 
--- 77 tables that belong to a row in one of those
+ALTER TABLE "tutoring_offers" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tutoring_offers" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "tutoring_offers";
+CREATE POLICY lms_tenant ON "tutoring_offers" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "tutor_availability" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tutor_availability" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "tutor_availability";
+CREATE POLICY lms_tenant ON "tutor_availability" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "tutoring_groups" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tutoring_groups" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "tutoring_groups";
+CREATE POLICY lms_tenant ON "tutoring_groups" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "tutoring_seats" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tutoring_seats" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "tutoring_seats";
+CREATE POLICY lms_tenant ON "tutoring_seats" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "tutor_leaves" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tutor_leaves" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "tutor_leaves";
+CREATE POLICY lms_tenant ON "tutor_leaves" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "learner_leaves" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "learner_leaves" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "learner_leaves";
+CREATE POLICY lms_tenant ON "learner_leaves" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+ALTER TABLE "tutoring_feedback" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tutoring_feedback" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "tutoring_feedback";
+CREATE POLICY lms_tenant ON "tutoring_feedback" USING (lms_scope_platform() OR "organizationId" = lms_scope_org()) WITH CHECK (lms_scope_platform() OR "organizationId" = lms_scope_org());
+
+-- 78 tables that belong to a row in one of those
 
 -- auth_accounts.userId -> users
 ALTER TABLE "auth_accounts" ENABLE ROW LEVEL SECURITY;
@@ -1028,5 +1063,11 @@ ALTER TABLE "webhook_deliveries" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "webhook_deliveries" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS lms_tenant ON "webhook_deliveries";
 CREATE POLICY lms_tenant ON "webhook_deliveries" USING (lms_scope_platform() OR EXISTS (SELECT 1 FROM "webhooks" p WHERE p."id" = "webhook_deliveries"."webhookId")) WITH CHECK (lms_scope_platform() OR EXISTS (SELECT 1 FROM "webhooks" p WHERE p."id" = "webhook_deliveries"."webhookId"));
+
+-- tutoring_tutors.offerId -> tutoring_offers
+ALTER TABLE "tutoring_tutors" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tutoring_tutors" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS lms_tenant ON "tutoring_tutors";
+CREATE POLICY lms_tenant ON "tutoring_tutors" USING (lms_scope_platform() OR EXISTS (SELECT 1 FROM "tutoring_offers" p WHERE p."id" = "tutoring_tutors"."offerId")) WITH CHECK (lms_scope_platform() OR EXISTS (SELECT 1 FROM "tutoring_offers" p WHERE p."id" = "tutoring_tutors"."offerId"));
 
 -- Left open, nothing of one academy's in them: organizations, permissions, session_recurrences, scheduled_jobs, migration_records, tenants, tenant_domains, plans, plan_limits, plan_features, tenant_entitlements, tenant_subscriptions, tenant_invoices, usage_records, platform_users, impersonation_logs, provisioning_jobs, support_tickets

@@ -43,6 +43,7 @@ export const ADMIN_NAV: NavGroup[] = [
       { label: 'Batches', href: '/admin/batches' },
       { label: 'Sessions', href: '/admin/sessions' },
       { label: 'One to one', href: '/admin/one-to-one' },
+      { label: 'Online tutors', href: '/admin/tutoring' },
       { label: 'Calendar', href: '/admin/calendar' },
       { label: 'Recordings', href: '/admin/recordings' },
       { label: 'Media library', href: '/admin/library' },

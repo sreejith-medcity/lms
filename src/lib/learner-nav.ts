@@ -15,6 +15,7 @@ export const LEARNER_NAV_ITEMS = [
   { key: 'community', label: 'Community', href: '/learn/community' },
   { key: 'wallet', label: 'Credit', href: '/learn/wallet' },
   { key: 'one-to-one', label: 'One to one', href: '/learn/book' },
+  { key: 'tutoring', label: 'Online tutor', href: '/learn/tutoring' },
   { key: 'purchases', label: 'Purchases', href: '/learn/purchases' },
   { key: 'fees', label: 'Fees', href: '/learn/fees' },
   { key: 'practice', label: 'Practice', href: '/learn/practice' },

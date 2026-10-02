@@ -931,6 +931,19 @@ export const INTEGRATIONS: IntegrationDef[] = [
     fields: [TEXT('domain', 'Domain', undefined, 'yourname.freshdesk.com'), KEY('apiKey', 'API key')],
   },
   {
+    id: 'hrms',
+    name: 'HRMS (payroll)',
+    category: 'accounting',
+    priority: 2,
+    requires:
+      'A long random key that you make up yourself (openssl rand -hex 32 makes one), typed here and in the HRMS. Nothing else: the HRMS fetches the hours, this site never signs in to it.',
+    purpose:
+      'Online tutors’ class hours for payroll. The HRMS calls /api/hrms/tutor-hours?month=YYYY-MM on this site with the key as Authorization: Bearer and gets each tutor’s classes held, minutes and hours for the month, matched by employee code or email. Read only.',
+    status: 'wired',
+    fallback: 'The same figures as a CSV, under Online tutors, Hours.',
+    fields: [KEY('apiKey', 'Key the HRMS sends', undefined, 'At least 16 characters. The same value goes in the HRMS.')],
+  },
+  {
     id: 'zoho_books',
     name: 'Zoho Books',
     category: 'accounting',

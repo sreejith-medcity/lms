@@ -90,6 +90,7 @@ export async function enrolManually(
             courseId: product.course.id,
             status: { in: ['ACTIVE', 'UPCOMING'] },
             deletedAt: null,
+            isTutoring: false,
             ...batchWhere(scope),
           },
           orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
