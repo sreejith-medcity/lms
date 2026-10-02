@@ -15,7 +15,7 @@ export default async function TutoringHours({ searchParams }: { searchParams: Pr
   const months = recentMonthKeys(now, tenant.timezone, 6);
   const key = sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : dayKey(now, tenant.timezone).slice(0, 7);
   const window = monthWindow(key, tenant.timezone)!;
-  const [rows, hrms] = await Promise.all([tutorHours(tenant.organizationId, window.from, window.to, tenant.timezone, now), resolveIntegration(tenant.organizationId, 'hrms')]);
+  const [rows, hrsuite] = await Promise.all([tutorHours(tenant.organizationId, window.from, window.to, tenant.timezone, now), resolveIntegration(tenant.organizationId, 'hrsuite')]);
   const total = rows.reduce((n, r) => n + r.minutes, 0);
   const unconfirmed = rows.reduce((n, r) => n + r.unconfirmed, 0);
 
@@ -58,19 +58,20 @@ export default async function TutoringHours({ searchParams }: { searchParams: Pr
           </Table>
         )}
         <p className="t-small faint">
-          {hoursLabel(total)} in all. An hour counts once the class is held: the tutor submitted the register, or the Zoom meeting ended. {unconfirmed > 0 ? `${unconfirmed} classes have passed with neither and add nothing until the register is in.` : ''}
+          {hoursLabel(total)} in all. An hour counts once the class is held: the tutor submitted the register, or the class ended on Medcity Meet or Zoom. {unconfirmed > 0 ? `${unconfirmed} classes have passed with neither and add nothing until the register is in.` : ''}
         </p>
       </Section>
 
-      <Section title="Payroll (HRMS)">
+      <Section title="Payroll (HRSuite)">
         <Card>
           <p className="t-small">
-            {hrms?.values.apiKey ? <Badge tone="ok">key set</Badge> : <Badge tone="warn">no key yet</Badge>} The HRMS fetches these hours itself from{' '}
-            <code>/api/hrms/tutor-hours?month={key}</code> on this site, sending the key as <code>Authorization: Bearer</code>. Set the key on the HRMS card under{' '}
+            {hrsuite?.values.sharedSecret ? <Badge tone="ok">connected</Badge> : <Badge tone="warn">not connected yet</Badge>} HRSuite reads every class itself from{' '}
+            <code>/api/integrations/hrsuite/classes</code> on this site and works out the pay with its own rules: nothing is sent from here. The totals on this page are at{' '}
+            <code>/api/integrations/hrsuite/tutor-hours?month={key}</code> with the same secret, to check a payslip against. Set the shared secret on the HRSuite card under{' '}
             <Link href="/admin/settings/integrations" className="underline">
               Settings, Integrations
             </Link>
-            , and the same key in the HRMS. Tutors are matched there by employee code, then by email.
+            , and the same one in HRSuite. Each tutor goes across with their email, phone and employee code to match on.
           </p>
         </Card>
       </Section>

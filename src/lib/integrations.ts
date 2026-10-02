@@ -749,7 +749,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
     requires:
       "HRSuite with this site named as its LMS (Time, Online tutors, LMS connection: this site's address) and the same shared secret on both sides.",
     purpose:
-      "Pays online tutors from the classes they take here. HRSuite reads each class, who taught it, whether it was held or cancelled, how many learners came and the tutor's own time in class, applies the tutor's pay rules, and puts the month on the payslip. Read-only: HRSuite never changes a class.",
+      "Pays online tutors from the classes they take here. HRSuite reads each class, who taught it, whether it was held or cancelled, how many learners came and the tutor's own time in class, applies the tutor's pay rules, and puts the month on the payslip. Classes with an online tutor are marked as such, one to one or group, and each tutor carries their employee code. The month's totals as this site counts them are at /api/integrations/hrsuite/tutor-hours?month=YYYY-MM, to check a payslip against. Read-only: HRSuite never changes a class.",
     status: 'wired',
     docsUrl: 'https://hrms.mymedcity.com',
     fields: [KEY('sharedSecret', 'Shared secret', undefined, 'A long random string, the same in HRSuite. openssl rand -hex 32 makes one.')],
@@ -929,19 +929,6 @@ export const INTEGRATIONS: IntegrationDef[] = [
     status: 'planned',
     landsIn: 'Phase 8',
     fields: [TEXT('domain', 'Domain', undefined, 'yourname.freshdesk.com'), KEY('apiKey', 'API key')],
-  },
-  {
-    id: 'hrms',
-    name: 'HRMS (payroll)',
-    category: 'accounting',
-    priority: 2,
-    requires:
-      'A long random key that you make up yourself (openssl rand -hex 32 makes one), typed here and in the HRMS. Nothing else: the HRMS fetches the hours, this site never signs in to it.',
-    purpose:
-      'Online tutors’ class hours for payroll. The HRMS calls /api/hrms/tutor-hours?month=YYYY-MM on this site with the key as Authorization: Bearer and gets each tutor’s classes held, minutes and hours for the month, matched by employee code or email. Read only.',
-    status: 'wired',
-    fallback: 'The same figures as a CSV, under Online tutors, Hours.',
-    fields: [KEY('apiKey', 'Key the HRMS sends', undefined, 'At least 16 characters. The same value goes in the HRMS.')],
   },
   {
     id: 'zoho_books',

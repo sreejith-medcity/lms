@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { getTenantContext } from '@/lib/tenant';
 import { resolveIntegration } from '@/lib/integration-store';
 import { recordIntegrationEvent } from '@/lib/integration-events';
-import { bearerMatches, instructorMinutes, parseWindow, type FeedSession } from '@/lib/hrsuite-feed';
+import { bearerMatches, instructorMinutes, isOneToOne, parseWindow, type FeedSession } from '@/lib/hrsuite-feed';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * Authorization: Bearer <the shared secret set under Integrations, HRSuite>
  *
  * Every class in the window (held, cancelled, not yet taken) with its
- * tutors. Where the office did not name a tutor on the class, the batch's
+ * tutors, each with their employee code where the office has set one. Where the office did not name a tutor on the class, the batch's
  * primary tutor took it, as the payouts here read it.
  */
 export async function GET(request: Request) {
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       learnerId: true,
       batchId: true,
       registerSubmittedAt: true,
-      batch: { select: { id: true, name: true, mode: true, level: true, course: { select: { product: { select: { title: true } } } }, _count: { select: { enrollments: true } } } },
+      batch: { select: { id: true, name: true, mode: true, level: true, isTutoring: true, course: { select: { product: { select: { title: true } } } }, _count: { select: { enrollments: true } } } },
       instructors: { select: { userId: true, isPrimary: true } },
       attendances: { select: { userId: true, status: true, joinedAt: true, leftAt: true, minutesPresent: true } },
       _count: { select: { recordings: true } },
@@ -73,9 +73,19 @@ export async function GET(request: Request) {
     tutorsOf.set(s.id, list);
   }
   const people = tutorIds.size
-    ? await db.user.findMany({ where: { organizationId: tenant.organizationId, id: { in: Array.from(tutorIds) } }, select: { id: true, name: true, email: true, phone: true } })
+    ? await db.user.findMany({
+        where: { organizationId: tenant.organizationId, id: { in: Array.from(tutorIds) } },
+        select: { id: true, name: true, email: true, phone: true, instructorProfile: { select: { employeeCode: true } } },
+      })
     : [];
   const person = new Map(people.map((p) => [p.id, p]));
+
+  // An online tutor's group knows how many learners it seats: one is one to one.
+  const tutoringBatches = Array.from(new Set(sessions.filter((s) => s.batch?.isTutoring).map((s) => s.batchId as string)));
+  const groups = tutoringBatches.length
+    ? await db.tutoringGroup.findMany({ where: { organizationId: tenant.organizationId, batchId: { in: tutoringBatches } }, select: { batchId: true, capacity: true } })
+    : [];
+  const capacityOf = new Map(groups.map((g) => [g.batchId, g.capacity]));
 
   const out: FeedSession[] = sessions.map((s) => {
     const tutors = tutorsOf.get(s.id) ?? [];
@@ -90,7 +100,8 @@ export async function GET(request: Request) {
       status: s.status,
       cancelledAt: s.cancelledAt ? s.cancelledAt.toISOString() : null,
       cancelReason: s.cancelReason,
-      oneToOne: Boolean(s.learnerId),
+      oneToOne: isOneToOne(s, s.batchId ? capacityOf.get(s.batchId) : undefined),
+      tutoring: Boolean(s.batch?.isTutoring),
       batch: s.batch ? { id: s.batch.id, name: s.batch.name, mode: s.batch.mode, level: s.batch.level } : null,
       course: s.batch?.course?.product?.title ?? null,
       provider: s.provider,
@@ -103,6 +114,7 @@ export async function GET(request: Request) {
         const own = s.attendances.find((a) => a.userId === t.userId);
         return {
           userId: t.userId,
+          employeeCode: p?.instructorProfile?.employeeCode ?? null,
           email: p?.email ?? null,
           name: p?.name ?? null,
           phone: p?.phone ?? null,

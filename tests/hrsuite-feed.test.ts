@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bearerMatches, instructorMinutes, parseWindow } from '@/lib/hrsuite-feed';
+import { bearerMatches, instructorMinutes, isOneToOne, parseWindow } from '@/lib/hrsuite-feed';
 
 test('the bearer token must match the shared secret', () => {
   assert.equal(bearerMatches('Bearer s3cret', 's3cret'), true);
@@ -21,4 +21,11 @@ test("a tutor's minutes from their own attendance row", () => {
   assert.equal(instructorMinutes(undefined), null);
   assert.equal(instructorMinutes({ joinedAt: null, leftAt: null, minutesPresent: 55 }), 55);
   assert.equal(instructorMinutes({ joinedAt: new Date('2026-10-05T10:00:00Z'), leftAt: new Date('2026-10-05T10:48:00Z'), minutesPresent: 0 }), 48);
+});
+
+test("one to one is a class booked for one learner, or an online tutor's group of one", () => {
+  assert.equal(isOneToOne({ learnerId: 'u1' }, undefined), true);
+  assert.equal(isOneToOne({ learnerId: null }, 1), true);
+  assert.equal(isOneToOne({ learnerId: null }, 4), false);
+  assert.equal(isOneToOne({ learnerId: null }, undefined), false);
 });
