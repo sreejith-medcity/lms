@@ -451,7 +451,7 @@ export function TutorNoteForm({ feedbackId }: { feedbackId: string }) {
 
 export function ChooseSlotForm({ offerId, times, today, days }: { offerId: string; times: { value: string; label: string }[]; today: string; days: string }) {
   const [state, action, pending] = useRefreshing(chooseSlotAction);
-  if (!times.length) return <p className="t-small muted">No class times are open just now. The office has been shown that you are waiting; please check back, or contact them.</p>;
+  if (!times.length) return <p className="t-small muted">No class times are open just now. The office can see that you have no class time yet; check back, or contact them.</p>;
   return (
     <form action={action} className="space-y-3">
       <Notes state={state} />

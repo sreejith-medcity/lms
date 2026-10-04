@@ -334,7 +334,7 @@ S3_SECRET_KEY=...`}
           <pre className="mt-2 overflow-x-auto rounded-[var(--radius-sm)] border bg-[var(--surface-2)] p-3 text-xs">
 {`[
   {
-    "AllowedOrigins": ["https://demo.medcitylms.in"],
+    "AllowedOrigins": ["https://<this site's address>"],
     "AllowedMethods": ["PUT", "GET", "HEAD"],
     "AllowedHeaders": ["*"],
     "ExposeHeaders": ["ETag"],

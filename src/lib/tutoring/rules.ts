@@ -200,3 +200,28 @@ export function hoursOf(minutes: number): number {
 
 /** A learner's rating at or below this is put in front of the office. */
 export const LOW_RATING = 2;
+
+/** A mark from 1 to 5 out of whatever a form or a phone sent; null when it is not one. */
+export function scoreOf(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) && n >= 1 && n <= 5 ? n : null;
+}
+
+/** Why a learner's feedback cannot be taken as written, or null when it can. */
+export function learnerFeedbackProblem(rating: number | null, comment: string): string | null {
+  if (!rating) return 'Choose a rating from 1 to 5.';
+  if (rating <= LOW_RATING && comment.trim().length < 5) return 'Tell us in a few words what is not working, so the office can fix it.';
+  return null;
+}
+
+/**
+ * The enrolments that can still take a run of classes. One enrolment buys one
+ * run: an enrolment with a seat against it (waiting, running or finished) has
+ * had its run, so finishing a course does not open a second one for free. A
+ * cancelled seat does not count, and the office can still enrol by hand.
+ */
+export function freeEnrolments<T extends { id: string }>(enrolments: T[], seats: { enrollmentId: string | null; status: string }[]): T[] {
+  const used = new Set(seats.filter((s) => s.status !== 'CANCELLED' && s.enrollmentId).map((s) => s.enrollmentId as string));
+  return enrolments.filter((e) => !used.has(e.id));
+}

@@ -9,8 +9,9 @@ import { recordAudit } from '@/lib/audit';
 import { dayKey } from '@/lib/clock';
 import type { ActionState } from '@/server/courses';
 import { phoneVariants } from '@/lib/exams/perms';
-import { LOW_RATING, learnerLeaveProblem, minuteOf, timeLabel, tutorLeaveProblem } from '@/lib/tutoring/rules';
-import { TutoringError, applyLearnerLeave, applyTutorLeave, changeSlot, placeSeat, reassignGroup, tell } from '@/lib/tutoring/data';
+import { minuteOf, scoreOf, timeLabel, tutorLeaveProblem } from '@/lib/tutoring/rules';
+import { TutoringError, applyTutorLeave, changeSlot, placeSeat, reassignGroup, tell } from '@/lib/tutoring/data';
+import { chooseSlot, sendFeedback, takeLeave } from '@/lib/tutoring/learner';
 
 /**
  * Online tutoring: what the office, a tutor and a learner can each do.
@@ -366,27 +367,10 @@ export async function withdrawTutorLeaveAction(leaveId: string): Promise<ActionS
 export async function chooseSlotAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user } = await learner();
-    const offer = await db.tutoringOffer.findFirst({ where: { id: String(formData.get('offerId') ?? ''), organizationId: tenant.organizationId, active: true }, select: { id: true, courseId: true } });
-    if (!offer) return { error: 'That course is not offered with an online tutor.' };
-    const course = await db.course.findFirst({ where: { id: offer.courseId, organizationId: tenant.organizationId }, select: { productId: true } });
-    const enrolment = course
-      ? await db.enrollment.findFirst({ where: { organizationId: tenant.organizationId, userId: user.id, productId: course.productId, status: { in: ['ENROLLED', 'REGISTERED'] } }, select: { id: true } })
-      : null;
-    if (!enrolment) return { error: 'Enrol on the course first, then choose your class time.' };
-    const open = await db.tutoringSeat.count({ where: { organizationId: tenant.organizationId, offerId: offer.id, userId: user.id, status: { in: ['WAITING', 'PLACED'] } } });
-    if (open) return { error: 'You have already chosen a time for this course.' };
-    const minute = minuteOf(formData.get('time'));
-    if (minute == null) return { error: 'Choose a class time.' };
-    const today = dayKey(new Date(), tenant.timezone);
-    const fromDay = String(formData.get('fromDay') ?? '') || today;
-    if (!isDay(fromDay) || fromDay < today) return { error: 'Choose today or a later day to start.' };
-
-    const seat = await db.tutoringSeat.create({ data: { organizationId: tenant.organizationId, offerId: offer.id, userId: user.id, enrollmentId: enrolment.id, preferredMinute: minute, preferredFrom: fromDay }, select: { id: true } });
-    const placed = await placeSeat(tenant.organizationId, seat.id);
+    const r = await chooseSlot(tenant, user.id, { offerId: String(formData.get('offerId') ?? ''), time: formData.get('time'), fromDay: String(formData.get('fromDay') ?? '') });
+    if (!r.ok) return { error: r.error };
     refresh();
-    return placed.placed
-      ? { ok: true, message: `You are set: classes at ${timeLabel(minute)}. Your tutor and the dates are below.` }
-      : { ok: true, message: 'That time has just been taken. You are on the list for it, and the office will offer you the nearest time.' };
+    return { ok: true, message: r.message };
   } catch (err) {
     return fail(err);
   }
@@ -395,46 +379,35 @@ export async function chooseSlotAction(_prev: ActionState, formData: FormData): 
 export async function learnerLeaveAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user } = await learner();
-    const fromDay = String(formData.get('fromDay') ?? '');
-    const toDay = String(formData.get('toDay') ?? '') || fromDay;
-    const problem = learnerLeaveProblem(fromDay, toDay, dayKey(new Date(), tenant.timezone));
-    if (problem) return { error: problem };
-    const r = await applyLearnerLeave(tenant.organizationId, { userId: user.id, seatId: String(formData.get('seatId') ?? ''), fromDay, toDay, reason: String(formData.get('reason') ?? '').trim() });
+    const r = await takeLeave(tenant, user.id, {
+      seatId: String(formData.get('seatId') ?? ''),
+      fromDay: String(formData.get('fromDay') ?? ''),
+      toDay: String(formData.get('toDay') ?? ''),
+      reason: String(formData.get('reason') ?? ''),
+    });
+    if (!r.ok) return { error: r.error };
     refresh();
-    return {
-      ok: true,
-      message: r.moved
-        ? `Leave noted and your tutor told. ${r.moved === 1 ? 'That class has' : `Those ${r.moved} classes have`} moved to the end of your course.`
-        : r.excused
-          ? 'Leave noted and your tutor told. The group class goes on; you are marked excused.'
-          : 'Leave noted and your tutor told. There was no class on those days.',
-    };
+    return { ok: true, message: r.message };
   } catch (err) {
     return fail(err);
   }
 }
 
-const score = (v: FormDataEntryValue | null) => {
-  const n = Math.round(Number(v));
-  return Number.isFinite(n) && n >= 1 && n <= 5 ? n : null;
-};
-
 /** The learner on the tutor: an overall rating, three short questions, and a few words. */
 export async function learnerFeedbackAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user } = await learner();
-    const rating = score(formData.get('rating'));
-    if (!rating) return { error: 'Choose a rating from 1 to 5.' };
-    const answers = { clear: score(formData.get('clear')), punctual: score(formData.get('punctual')), pace: score(formData.get('pace')) };
-    const comment = String(formData.get('comment') ?? '').trim().slice(0, 2000);
-    if (rating <= LOW_RATING && comment.length < 5) return { error: 'Tell us in a few words what is not working, so the office can fix it.' };
-    const n = await db.tutoringFeedback.updateMany({
-      where: { id: String(formData.get('feedbackId') ?? ''), organizationId: tenant.organizationId, learnerId: user.id, direction: 'LEARNER', submittedAt: null },
-      data: { rating, answers, comment, submittedAt: new Date() },
+    const r = await sendFeedback(tenant, user.id, {
+      feedbackId: String(formData.get('feedbackId') ?? ''),
+      rating: formData.get('rating'),
+      clear: formData.get('clear'),
+      punctual: formData.get('punctual'),
+      pace: formData.get('pace'),
+      comment: String(formData.get('comment') ?? ''),
     });
-    if (!n.count) return { error: 'That feedback has already been sent.' };
+    if (!r.ok) return { error: r.error };
     refresh();
-    return { ok: true, message: 'Thank you. The office reads every one.' };
+    return { ok: true, message: r.message };
   } catch (err) {
     return fail(err);
   }
@@ -444,9 +417,9 @@ export async function learnerFeedbackAction(_prev: ActionState, formData: FormDa
 export async function tutorFeedbackAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user } = await anyStaff();
-    const rating = score(formData.get('rating'));
+    const rating = scoreOf(formData.get('rating'));
     if (!rating) return { error: 'Choose an overall mark from 1 to 5.' };
-    const answers = { attendance: score(formData.get('attendance')), participation: score(formData.get('participation')), homework: score(formData.get('homework')) };
+    const answers = { attendance: scoreOf(formData.get('attendance')), participation: scoreOf(formData.get('participation')), homework: scoreOf(formData.get('homework')) };
     const comment = String(formData.get('comment') ?? '').trim().slice(0, 2000);
     if (comment.length < 10) return { error: 'Write a line or two on how the learner is doing and what to work on.' };
     const id = String(formData.get('feedbackId') ?? '');

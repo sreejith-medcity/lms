@@ -6,12 +6,15 @@ import {
   clashes,
   covers,
   daysBetween,
+  freeEnrolments,
   hoursOf,
+  learnerFeedbackProblem,
   learnerLeaveProblem,
   milestonesDue,
   minuteOf,
   openStartTimes,
   pickTutor,
+  scoreOf,
   slotLabel,
   timeLabel,
   tutorLeavePlan,
@@ -104,4 +107,33 @@ test('labels and fields', () => {
   assert.equal(minuteOf('25:00'), null);
   assert.equal(hoursOf(90), 1.5);
   assert.equal(hoursOf(100), 1.67);
+});
+
+test('a mark is a whole number from 1 to 5, whatever sent it', () => {
+  assert.equal(scoreOf(4), 4);
+  assert.equal(scoreOf('5'), 5);
+  assert.equal(scoreOf(3.6), 4);
+  assert.equal(scoreOf(0), null);
+  assert.equal(scoreOf(6), null);
+  assert.equal(scoreOf(''), null);
+  assert.equal(scoreOf(null), null);
+  assert.equal(scoreOf(undefined), null);
+  assert.equal(scoreOf('good'), null);
+});
+
+test("a learner's low rating needs a few words, a good one does not", () => {
+  assert.equal(learnerFeedbackProblem(null, ''), 'Choose a rating from 1 to 5.');
+  assert.equal(learnerFeedbackProblem(5, ''), null);
+  assert.equal(learnerFeedbackProblem(3, ''), null);
+  assert.match(learnerFeedbackProblem(2, 'ok') ?? '', /few words/);
+  assert.equal(learnerFeedbackProblem(1, 'Always late to class'), null);
+});
+
+test('one enrolment buys one run of classes', () => {
+  const enrolments = [{ id: 'e1' }, { id: 'e2' }];
+  assert.deepEqual(freeEnrolments(enrolments, []), enrolments);
+  assert.deepEqual(freeEnrolments(enrolments, [{ enrollmentId: 'e1', status: 'COMPLETED' }]), [{ id: 'e2' }]);
+  assert.deepEqual(freeEnrolments(enrolments, [{ enrollmentId: 'e1', status: 'PLACED' }, { enrollmentId: 'e2', status: 'WAITING' }]), []);
+  /* A seat the office cancelled gives the enrolment its run back; a seat with no enrolment uses none up. */
+  assert.deepEqual(freeEnrolments(enrolments, [{ enrollmentId: 'e1', status: 'CANCELLED' }, { enrollmentId: null, status: 'PLACED' }]), enrolments);
 });

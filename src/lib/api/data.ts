@@ -1,3 +1,4 @@
+import { hasTutoring } from '@/lib/tutoring/data';
 import { db } from '@/lib/db';
 import { resolveIntegration } from '@/lib/integration-store';
 import { curriculumGate } from '@/lib/curriculum-access';
@@ -56,6 +57,9 @@ export async function meProfile(tenant: TenantContext, user: ApiUser) {
     settingBool(tenant.organizationId, 'learning.badges'),
   ]);
   const streak = badgesOn ? await streakFor(tenant.organizationId, user.id) : null;
+  /* As on the web: a learner with an online tutor gets the item whether or not the academy put it in the menu for everybody. */
+  const keys = nav.map((n) => n.key);
+  if (user.kind === 'LEARNER' && !keys.includes('tutoring') && (await hasTutoring(tenant.organizationId, user.id))) keys.push('tutoring');
   return {
     id: user.id,
     name: user.name,
@@ -65,7 +69,7 @@ export async function meProfile(tenant: TenantContext, user: ApiUser) {
     locale: user.locale,
     avatarUrl: user.avatarUrl,
     timezone: user.timezone,
-    nav: nav.map((n) => n.key),
+    nav: keys,
     unreadNotifications: unread,
     streakDays: streak ? currentStreak(streak, dayKey(new Date(), tenant.timezone)) : 0,
   };
