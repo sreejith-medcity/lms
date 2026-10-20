@@ -8,6 +8,7 @@ import { dayKey, formatDayLabel } from '@/lib/clock';
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
+import { ON_ROLL } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -39,7 +40,7 @@ export default async function BranchDesk() {
       where: { organizationId: tenant.organizationId, status: { in: ['COMPLETED', 'LIVE'] }, isHoliday: false, endsAt: { gte: weekAgo, lte: now }, batchId: { not: null }, registerSubmittedAt: null, ...sessionWhere(scope) },
       orderBy: { startsAt: 'desc' },
       take: 40,
-      select: { id: true, title: true, startsAt: true, batch: { select: { name: true, _count: { select: { enrollments: { where: { status: { in: ['ENROLLED', 'COMPLETED'] } } } } } } }, _count: { select: { attendances: true } } },
+      select: { id: true, title: true, startsAt: true, batch: { select: { name: true, _count: { select: { enrollments: { where: ON_ROLL } } } } }, _count: { select: { attendances: true } } },
     }),
     db.attendance.findMany({
       where: { status: 'ABSENT', session: { organizationId: tenant.organizationId, startsAt: { gte: monthAgo }, ...sessionWhere(scope) } },

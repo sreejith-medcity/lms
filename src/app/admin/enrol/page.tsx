@@ -6,6 +6,7 @@ import { batchWhere, enrollmentWhere, learnerWhere, staffScope } from '@/lib/sco
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, Cell, EmptyState, PageHeader, Row, Table } from '@/components/ui';
 import { EnrolForm } from './form';
+import { HOLDS_SEAT } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -44,7 +45,7 @@ export default async function EnrolPage() {
         ...batchWhere(scope),
       },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, courseId: true, capacity: true, _count: { select: { enrollments: true } } },
+      select: { id: true, name: true, courseId: true, capacity: true, _count: { select: { enrollments: { where: HOLDS_SEAT } } } },
     }),
     db.enrollment.findMany({
       where: { organizationId: tenant.organizationId, source: { in: ['ADMIN_SINGLE', 'ADMIN_BULK'] }, ...enrollmentWhere(scope) },

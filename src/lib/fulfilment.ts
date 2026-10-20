@@ -14,6 +14,7 @@ import { settingBool, settingNumber, settingText } from '@/lib/settings/store';
 import { scheduleFromPlan } from '@/lib/dues';
 import { conversionHints } from '@/lib/attribution-server';
 import { grantPackInTx, withdrawPacks } from '@/lib/exams/packs';
+import { HOLDS_SEAT, firstWithRoom } from '@/lib/seats';
 
 /**
  * The one place a payment becomes access.
@@ -258,18 +259,27 @@ export async function fulfilPaidOrder(input: {
 
       const [batch, plan] = await Promise.all([
         product?.course
-          ? db.batch.findFirst({
-              where: {
-                organizationId: input.organizationId,
-                courseId: product.course.id,
-                status: { in: ['ACTIVE', 'UPCOMING'] },
-                deletedAt: null,
-                // An online tutor's group is nobody's default batch.
-                isTutoring: false,
-              },
-              orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
-              select: { id: true },
-            })
+          ? db.batch
+              .findMany({
+                where: {
+                  organizationId: input.organizationId,
+                  courseId: product.course.id,
+                  status: { in: ['ACTIVE', 'UPCOMING'] },
+                  deletedAt: null,
+                  // An online tutor's group is nobody's default batch.
+                  isTutoring: false,
+                },
+                orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
+                take: 20,
+                select: { id: true, capacity: true, _count: { select: { enrollments: { where: HOLDS_SEAT } } } },
+              })
+              // The default batch while it has room, then the next one that does.
+              // When every batch is full the learner has still paid, so they go
+              // into the default one and the office moves them.
+              .then((open) => {
+                const rooms = open.map((b) => ({ id: b.id, capacity: b.capacity, taken: b._count.enrollments }));
+                return firstWithRoom(rooms) ?? rooms[0] ?? null;
+              })
           : Promise.resolve(null),
         item.pricingPlanId
           ? db.pricingPlan.findUnique({

@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/auth';
 import { formatMoney } from '@/lib/money';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { EventForm } from './editors';
+import { HOLDS_SEAT, seatsLeftLabel } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -29,7 +30,7 @@ export default async function EventsPage({
       status: true,
       event: true,
       pricingPlans: { where: { isActive: true }, take: 1, select: { pricePaise: true, currency: true } },
-      _count: { select: { enrollments: true } },
+      _count: { select: { enrollments: { where: HOLDS_SEAT } } },
     },
   });
 
@@ -48,8 +49,7 @@ export default async function EventsPage({
             <EmptyState title="No events yet" hint="A one-off session people register for." />
           ) : (
             events.map((e) => {
-              const seatsLeft =
-                e.event?.capacity != null ? e.event.capacity - e._count.enrollments : null;
+              const seatsLeft = seatsLeftLabel({ id: e.id, capacity: e.event?.capacity ?? null, taken: e._count.enrollments });
               const past = e.event?.startsAt != null && e.event.startsAt < new Date();
 
               return (
@@ -90,7 +90,7 @@ export default async function EventsPage({
                           : 'No price'}
                         {' · '}
                         {e._count.enrollments} registered
-                        {seatsLeft != null ? `, ${Math.max(0, seatsLeft)} seats left` : ''}
+                        {seatsLeft ? `, ${seatsLeft}` : ''}
                       </p>
                     </div>
                   </div>

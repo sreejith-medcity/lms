@@ -8,6 +8,7 @@ import { recordAudit } from '@/lib/audit';
 import { canSeeBatch, staffScope } from '@/lib/scope';
 import type { $Enums } from '@prisma/client';
 import type { ActionState } from '@/server/courses';
+import { HOLDS_SEAT } from '@/lib/seats';
 
 /** The classroom: who teaches it, what it teaches, and who is in it. */
 
@@ -42,7 +43,7 @@ export async function updateBatch(_prev: ActionState, formData: FormData): Promi
 
     const batch = await db.batch.findFirst({
       where: { id, organizationId: tenant.organizationId },
-      select: { id: true, courseId: true, _count: { select: { enrollments: true } } },
+      select: { id: true, courseId: true, _count: { select: { enrollments: { where: HOLDS_SEAT } } } },
     });
     if (!batch) return { error: 'Batch not found.' };
 
@@ -261,7 +262,7 @@ export async function moveEnrollment(enrollmentId: string, toBatchId: string): P
 
     const to = await db.batch.findFirst({
       where: { id: toBatchId, organizationId: tenant.organizationId, deletedAt: null },
-      select: { id: true, name: true, branchId: true, courseId: true, capacity: true, _count: { select: { enrollments: { where: { status: { notIn: ['CANCELLED', 'ARCHIVED'] } } } } } },
+      select: { id: true, name: true, branchId: true, courseId: true, capacity: true, _count: { select: { enrollments: { where: HOLDS_SEAT } } } },
     });
     if (!to) return { error: 'Batch not found.' };
     if (!canSeeBatch(scope, to)) return { error: 'The batch to move to is outside your branch.' };

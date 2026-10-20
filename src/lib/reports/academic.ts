@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { attendanceFigure, type Mark } from '@/lib/progress-rules';
 import type { ReportDef } from './types';
+import { ON_ROLL } from '@/lib/seats';
 
 /**
  * What a Branch Head and Head Office asked for: whether registers are
@@ -35,7 +36,7 @@ export const academicReports: ReportDef[] = [
           status: true,
           providerMeetingId: true,
           registerSubmittedAt: true,
-          batch: { select: { name: true, mode: true, branch: { select: { name: true } }, _count: { select: { enrollments: { where: { status: { in: ['ENROLLED', 'COMPLETED'] } } } } } } },
+          batch: { select: { name: true, mode: true, branch: { select: { name: true } }, _count: { select: { enrollments: { where: ON_ROLL } } } } },
           attendances: { select: { status: true } },
         },
       });

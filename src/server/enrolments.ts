@@ -12,6 +12,7 @@ import { recordAudit } from '@/lib/audit';
 import { happened, notifyLearner } from '@/lib/events';
 import { computeTax } from '@/lib/money';
 import type { ActionState } from '@/server/courses';
+import { HOLDS_SEAT, firstWithRoom, hasRoom } from '@/lib/seats';
 
 /**
  * Enrolling someone by hand.
@@ -79,25 +80,39 @@ export async function enrolManually(
     const scope = await staffScope(actor);
 
     /* The batch. */
-    const batch = d.batchId
-      ? await db.batch.findFirst({
-          where: { id: d.batchId, organizationId: tenant.organizationId, deletedAt: null },
-          select: { id: true, branchId: true },
-        })
-      : await db.batch.findFirst({
-          where: {
-            organizationId: tenant.organizationId,
-            courseId: product.course.id,
-            status: { in: ['ACTIVE', 'UPCOMING'] },
-            deletedAt: null,
-            isTutoring: false,
-            ...batchWhere(scope),
-          },
-          orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
-          select: { id: true, branchId: true },
-        });
-    if (d.batchId && !batch) return { error: 'Batch not found.' };
-    if (batch && !canSeeBatch(scope, batch)) return { error: 'That batch is outside your branch.' };
+    const seats = { id: true, name: true, branchId: true, capacity: true, _count: { select: { enrollments: { where: HOLDS_SEAT } } } } as const;
+    const room = (b: { id: string; capacity: number | null; _count: { enrollments: number } }) => ({ id: b.id, capacity: b.capacity, taken: b._count.enrollments });
+    let batch: { id: string; branchId: string } | null = null;
+    if (d.batchId) {
+      const chosen = await db.batch.findFirst({
+        where: { id: d.batchId, organizationId: tenant.organizationId, deletedAt: null },
+        select: seats,
+      });
+      if (!chosen) return { error: 'Batch not found.' };
+      if (!canSeeBatch(scope, chosen)) return { error: 'That batch is outside your branch.' };
+      if (!hasRoom(room(chosen))) return { error: `${chosen.name} is full (${chosen.capacity} seats). Raise its cap on the batch, or pick another batch.` };
+      batch = chosen;
+    } else {
+      // The default batch while it has room, then the next one that does.
+      const open = await db.batch.findMany({
+        where: {
+          organizationId: tenant.organizationId,
+          courseId: product.course.id,
+          status: { in: ['ACTIVE', 'UPCOMING'] },
+          deletedAt: null,
+          isTutoring: false,
+          ...batchWhere(scope),
+        },
+        orderBy: [{ isDefault: 'desc' }, { startDate: 'asc' }],
+        take: 20,
+        select: seats,
+      });
+      if (open.length) {
+        const pick = firstWithRoom(open.map(room));
+        if (!pick) return { error: `Every open batch of ${product.title} is full. Raise a batch's cap, or add a batch.` };
+        batch = open.find((b) => b.id === pick.id) ?? null;
+      }
+    }
 
     // The enrolment belongs to the batch's branch; without a batch, to the
     // person's own branch, and only then to the academy's first.

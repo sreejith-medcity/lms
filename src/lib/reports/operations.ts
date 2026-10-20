@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { formatBytes } from '@/lib/storage';
 import { dayKey, formatTime } from '@/lib/clock';
 import type { ReportDef } from './types';
+import { HOLDS_SEAT, ON_ROLL } from '@/lib/seats';
 
 /**
  * Trainers, messages, assessments and the plumbing.
@@ -44,7 +45,7 @@ export const trainerReports: ReportDef[] = [
             startsAt: true,
             endsAt: true,
             attendances: { select: { status: true } },
-            batch: { select: { _count: { select: { enrollments: true } } } },
+            batch: { select: { _count: { select: { enrollments: { where: ON_ROLL } } } } },
           },
         }),
       ]);
@@ -350,7 +351,7 @@ export const operationsReports: ReportDef[] = [
             where: { deletedAt: null },
             select: {
               id: true,
-              _count: { select: { enrollments: true } },
+              _count: { select: { enrollments: { where: HOLDS_SEAT } } },
             },
           },
         },
@@ -505,7 +506,7 @@ export const operationsReports: ReportDef[] = [
           batch: {
             select: {
               name: true,
-              _count: { select: { enrollments: true } },
+              _count: { select: { enrollments: { where: ON_ROLL } } },
               branch: { select: { name: true } },
             },
           },

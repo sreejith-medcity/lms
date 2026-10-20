@@ -32,6 +32,7 @@ import { EnrolBar } from './enrol-bar';
 import { SectionNav } from './section-nav';
 import { CourseEnquiry } from './course-enquiry';
 import { captchaSite } from '@/lib/captcha';
+import { HOLDS_SEAT, seatsLeftLabel } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,7 +119,7 @@ async function load(slug: string) {
               status: true,
               branch: { select: { name: true, city: true } },
               staff: { where: { role: 'PRIMARY_TUTOR' }, select: { userId: true } },
-              _count: { select: { enrollments: true } },
+              _count: { select: { enrollments: { where: HOLDS_SEAT } } },
             },
           },
         },
@@ -715,7 +716,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
               </p>
               <ul className="divide-y overflow-hidden rounded-[var(--radius)] border bg-[var(--surface)]">
                 {course.batches.map((b) => {
-                  const seatsLeft = b.capacity ? b.capacity - b._count.enrollments : null;
+                  const seatsLeft = seatsLeftLabel({ id: b.id, capacity: b.capacity, taken: b._count.enrollments });
                   return (
                     <li
                       key={b.id}
@@ -741,7 +742,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                         </Badge>
                         {seatsLeft !== null && (
                           <span className="t-small faint tabular-nums">
-                            {seatsLeft > 0 ? `${seatsLeft} seats left` : 'Full, ask about the waiting list'}
+                            {seatsLeft === 'full' ? 'Full, ask about the waiting list' : seatsLeft}
                           </span>
                         )}
                       </div>

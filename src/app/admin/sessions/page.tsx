@@ -6,6 +6,7 @@ import { batchWhere, sessionWhere, staffScope } from '@/lib/scope';
 import { Badge, Card, EmptyState, PageHeader, Section } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { ScheduleForm } from './schedule-form';
+import { ON_ROLL } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ export default async function SessionsPage() {
       where: { organizationId: orgId, startsAt: { gte: dayStart, lt: dayEnd }, ...sessionWhere(scope) },
       orderBy: { startsAt: 'asc' },
       include: {
-        batch: { select: { name: true, _count: { select: { enrollments: true } } } },
+        batch: { select: { name: true, _count: { select: { enrollments: { where: ON_ROLL } } } } },
         _count: { select: { attendances: true } },
       },
     }),

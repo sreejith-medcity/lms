@@ -4,6 +4,7 @@ import { getTenantContext } from '@/lib/tenant';
 import { resolveIntegration } from '@/lib/integration-store';
 import { recordIntegrationEvent } from '@/lib/integration-events';
 import { bearerMatches, instructorMinutes, isOneToOne, parseWindow, type FeedSession } from '@/lib/hrsuite-feed';
+import { ON_ROLL } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
       learnerId: true,
       batchId: true,
       registerSubmittedAt: true,
-      batch: { select: { id: true, name: true, mode: true, level: true, isTutoring: true, course: { select: { product: { select: { title: true } } } }, _count: { select: { enrollments: true } } } },
+      batch: { select: { id: true, name: true, mode: true, level: true, isTutoring: true, course: { select: { product: { select: { title: true } } } }, _count: { select: { enrollments: { where: ON_ROLL } } } } },
       instructors: { select: { userId: true, isPrimary: true } },
       attendances: { select: { userId: true, status: true, joinedAt: true, leftAt: true, minutesPresent: true } },
       _count: { select: { recordings: true } },

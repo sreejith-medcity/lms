@@ -18,6 +18,7 @@ import {
 import { PageHeader } from '@/components/ui';
 import { CalendarControls, HolidayForm } from './controls';
 import { MonthView, TimeGridView, ListView, type CalendarEvent } from './views';
+import { ON_ROLL } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -95,7 +96,7 @@ export default async function CalendarPage({
             id: true,
             name: true,
             staff: { where: activeStaffWhere(new Date()), select: { userId: true, role: true } },
-            _count: { select: { enrollments: true } },
+            _count: { select: { enrollments: { where: ON_ROLL } } },
           },
         },
         _count: { select: { attendances: true } },

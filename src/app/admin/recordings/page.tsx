@@ -7,6 +7,7 @@ import { describeRemaining } from '@/lib/recording-share';
 import { EmptyState, PageHeader } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { RecordingsTable, Filters } from './table';
+import { ON_ROLL } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -75,7 +76,7 @@ export default async function RecordingsPage({
             id: true,
             title: true,
             startsAt: true,
-            batch: { select: { id: true, name: true, _count: { select: { enrollments: true } } } },
+            batch: { select: { id: true, name: true, _count: { select: { enrollments: { where: ON_ROLL } } } } },
           },
         },
       },

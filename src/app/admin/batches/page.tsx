@@ -5,6 +5,7 @@ import { requireStaffAny } from '@/lib/auth';
 import { batchWhere, branchWhere, scopeNote, staffScope } from '@/lib/scope';
 import { Badge, Card, Cell, EmptyState, PageHeader, ProgressRing, Row, Table } from '@/components/ui';
 import { NewBatchForm, BatchStatus } from './editors';
+import { HOLDS_SEAT } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,7 @@ export default async function BatchesPage() {
     where: { organizationId: tenant.organizationId, deletedAt: null, isTutoring: false, ...batchWhere(scope) },
     include: {
       course: { include: { product: { select: { title: true } } } },
-      _count: { select: { enrollments: true, sessions: true } },
+      _count: { select: { enrollments: { where: HOLDS_SEAT }, sessions: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: 50,

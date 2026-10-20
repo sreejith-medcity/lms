@@ -5,6 +5,7 @@ import { requireStaff } from '@/lib/auth';
 import { scopeNote, sessionWhere, staffScope } from '@/lib/scope';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
+import { ON_ROLL } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -41,7 +42,7 @@ export default async function RegisterList() {
       startsAt: true,
       status: true,
       registerSubmittedAt: true,
-      batch: { select: { name: true, mode: true, _count: { select: { enrollments: { where: { status: { in: ['ENROLLED', 'COMPLETED'] } } } } } } },
+      batch: { select: { name: true, mode: true, _count: { select: { enrollments: { where: ON_ROLL } } } } },
       _count: { select: { attendances: true } },
     },
   });

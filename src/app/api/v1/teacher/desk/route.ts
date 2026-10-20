@@ -4,6 +4,7 @@ import { dayEnd, dayStart, todayKey } from '@/lib/clock';
 import { teacherDesk } from '@/lib/teacher-desk';
 import { batchWhere, staffScope } from '@/lib/scope';
 import { db } from '@/lib/db';
+import { ON_ROLL } from '@/lib/seats';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     db.batch.findMany({
       where: { organizationId: tenant.organizationId, deletedAt: null, status: { in: ['UPCOMING', 'ACTIVE'] }, ...batchWhere(scope) },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, status: true, level: true, mode: true, branch: { select: { name: true } }, course: { select: { product: { select: { title: true } } } }, _count: { select: { enrollments: { where: { status: { in: ['ENROLLED', 'COMPLETED'] } } } } } },
+      select: { id: true, name: true, status: true, level: true, mode: true, branch: { select: { name: true } }, course: { select: { product: { select: { title: true } } } }, _count: { select: { enrollments: { where: ON_ROLL } } } },
     }),
   ]);
   return ok({

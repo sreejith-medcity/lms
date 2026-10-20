@@ -9,6 +9,7 @@ import { getSessionUser } from '@/lib/auth';
 import { requireTenant } from '@/lib/tenant';
 import { curriculumGate } from '@/lib/curriculum-access';
 import type { ActionState } from '@/server/courses';
+import { HOLDS_SEAT, firstWithRoom } from '@/lib/seats';
 
 /**
  * Self-enrolment. Free plans go through immediately; paid ones wait for the
@@ -72,16 +73,22 @@ export async function enrol(productId: string, pricingPlanId?: string): Promise<
       });
       if (!branch) return { error: 'This academy has no branch configured.' };
 
-      const batch = await db.batch.findFirst({
+      // The default batch while it has room, then the next one that does; when
+      // every one is full the learner still gets the course, in the default batch.
+      const open = await db.batch.findMany({
         where: {
-        organizationId: tenant.organizationId,
-        courseId: product.course.id,
-        status: { in: ['ACTIVE', 'UPCOMING'] },
-        isTutoring: false,
-      },
+          organizationId: tenant.organizationId,
+          courseId: product.course.id,
+          status: { in: ['ACTIVE', 'UPCOMING'] },
+          deletedAt: null,
+          isTutoring: false,
+        },
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
-        select: { id: true },
+        take: 20,
+        select: { id: true, capacity: true, _count: { select: { enrollments: { where: HOLDS_SEAT } } } },
       });
+      const rooms = open.map((b) => ({ id: b.id, capacity: b.capacity, taken: b._count.enrollments }));
+      const batch = firstWithRoom(rooms) ?? rooms[0] ?? null;
 
       const created = await db.enrollment.create({
         data: {

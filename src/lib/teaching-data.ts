@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { activeStaffWhere } from '@/lib/scope-rules';
 import { computePayout, sessionMinutes, type PayoutLine } from '@/lib/payouts';
+import { ON_ROLL } from '@/lib/seats';
 
 /**
  * Who took which class.
@@ -91,7 +92,7 @@ export async function myDesk(organizationId: string, userId: string, now: Date, 
       // Only what is assigned today: an ended assignment leaves the desk the
       // day after its end date, an upcoming one arrives on its start date.
       where: { userId, batch: { organizationId, deletedAt: null }, ...activeStaffWhere(now) },
-      select: { role: true, batch: { select: { id: true, name: true, status: true, startDate: true, endDate: true, course: { select: { id: true, product: { select: { id: true, title: true } } } }, _count: { select: { enrollments: true } } } } },
+      select: { role: true, batch: { select: { id: true, name: true, status: true, startDate: true, endDate: true, course: { select: { id: true, product: { select: { id: true, title: true } } } }, _count: { select: { enrollments: { where: ON_ROLL } } } } } },
     }),
     db.instructorProfile.findUnique({ where: { userId }, select: { hourlyRatePaise: true, perSessionPaise: true, isMentor: true } }),
   ]);
