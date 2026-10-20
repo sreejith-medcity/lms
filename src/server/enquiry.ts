@@ -51,6 +51,17 @@ export async function submitEnquiry(_prev: EnquiryState, formData: FormData): Pr
       return { error: 'Leave an email address or a phone number so we can reply.' };
     }
 
+    /*
+     * Sent from a course page: the course is read from the product the page
+     * belongs to, never taken from the form, so the lead names the course the
+     * visitor was actually looking at.
+     */
+    const productId = String(formData.get('productId') ?? '').trim().slice(0, 60);
+    const product = productId
+      ? await db.product.findFirst({ where: { id: productId, organizationId: tenant.organizationId, status: 'PUBLISHED', deletedAt: null }, select: { id: true, title: true } })
+      : null;
+    const interestedIn = product?.title ?? (d.interestedIn || null);
+
     const attribution = await requestAttribution();
 
     const lead = await db.lead.create({
@@ -60,7 +71,7 @@ export async function submitEnquiry(_prev: EnquiryState, formData: FormData): Pr
         email: d.email || null,
         phone: d.phone || null,
         message: d.message || null,
-        interestedIn: d.interestedIn || null,
+        interestedIn,
         source: 'WEB',
         campaign: attribution?.last.utm_campaign ?? null,
         attribution: attributionJson(attribution),
@@ -73,7 +84,7 @@ export async function submitEnquiry(_prev: EnquiryState, formData: FormData): Pr
       key: 'lead.created',
       leadId: lead.id,
       subjectId: lead.id,
-      data: { leadId: lead.id, name: d.name, email: d.email || null, phone: d.phone || null, interestedIn: d.interestedIn || null, source: 'WEB' },
+      data: { leadId: lead.id, name: d.name, email: d.email || null, phone: d.phone || null, interestedIn, productId: product?.id ?? null, source: 'WEB' },
     });
 
     // Told to the ad platforms from here as well as from the browser, keyed

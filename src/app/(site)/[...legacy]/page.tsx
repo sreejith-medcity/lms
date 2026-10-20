@@ -6,7 +6,7 @@ import { NoTenantNotice } from '@/components/tenant-notices';
 import { findRedirect, countHit } from '@/lib/redirects';
 import { parseBlocks, pageSummary } from '@/lib/page-blocks';
 import { PageBlocks } from '@/components/page-blocks';
-import CoursePage from '@/app/(site)/course/[slug]/page';
+import CoursePage, { generateMetadata as courseMetadata } from '@/app/(site)/course/[slug]/page';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,6 +65,8 @@ export async function generateMetadata({
   const { legacy } = await params;
   const { site, page } = await resolve(legacy ?? []);
   if (!site || !page) return { title: 'Page not found', robots: { index: false, follow: true } };
+  /* A course landing is the course page at this address, so it says what the course page says (title, share picture, canonical). */
+  if (page.kind === 'COURSE_LANDING' && page.course?.product.slug) return courseMetadata({ params: Promise.resolve({ slug: page.course.product.slug }) });
 
   const description = page.seoDescription ?? pageSummary(parseBlocks(page.blocks)) ?? undefined;
 

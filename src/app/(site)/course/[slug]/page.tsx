@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import { db } from '@/lib/db';
 import { languageName } from '@/lib/language';
 import { getSiteContext } from '@/lib/site';
@@ -29,6 +30,8 @@ import { CourseCta } from './course-cta';
 import { Curriculum } from './curriculum';
 import { EnrolBar } from './enrol-bar';
 import { SectionNav } from './section-nav';
+import { CourseEnquiry } from './course-enquiry';
+import { captchaSite } from '@/lib/captcha';
 
 export const dynamic = 'force-dynamic';
 
@@ -164,6 +167,15 @@ export async function generateMetadata({
 
   const title = landing?.seoTitle ?? `${found.product.title} — ${found.site.organization.name}`;
 
+  /*
+   * The picture a link shows when it is shared on WhatsApp or Facebook,
+   * which is how most of these pages travel. Crawlers need an absolute
+   * address, and this app answers on more than one host, so it is built
+   * from the host the request came in on.
+   */
+  const host = (await headers()).get('host');
+  const image = found.course.thumbnailAssetId && host ? `https://${host}/api/assets/${found.course.thumbnailAssetId}` : null;
+
   return {
     title,
     description,
@@ -171,7 +183,8 @@ export async function generateMetadata({
        that is the one search engines were told about for years, so it stays
        the canonical one and /course/<slug> points at it. */
     alternates: { canonical: landing ? `/${landing.slug}` : `/course/${found.product.slug}` },
-    openGraph: { title: found.product.title, description, type: 'website' },
+    openGraph: { title: found.product.title, description, type: 'website', ...(image ? { images: [{ url: image, alt: found.product.title }] } : {}) },
+    twitter: { card: image ? 'summary_large_image' : 'summary', title: found.product.title, description, ...(image ? { images: [image] } : {}) },
   };
 }
 
@@ -201,6 +214,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
     settingText(site.organizationId, 'website.googleReviewCount'),
     settingText(site.organizationId, 'website.reviewWidgetHtml'),
   ]);
+  const captcha = captchaSite(site.organizationId);
 
   const [instructors, related, addons, ratingRows, prerequisites, unlocks, bundles] = await Promise.all([
     // Named only where a trainer is actually assigned to a running batch.
@@ -353,6 +367,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
     shownInstructors.length > 0 ? { id: 'trainers', label: 'Trainers' } : null,
     reviews.length > 0 || hasReviewWidget ? { id: 'reviews', label: 'Reviews' } : null,
     hasPath || bundles.length > 0 ? { id: 'path', label: 'Learning path' } : null,
+    { id: 'ask', label: 'Ask us' },
     { id: 'faq', label: 'Before you enrol' },
   ].filter((i): i is { id: string; label: string } => Boolean(i));
 
@@ -446,6 +461,10 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
       <p className="t-small faint mt-2.5 text-center">
         Secure checkout. A coupon can be applied before you pay.
       </p>
+
+      <a href="#ask" className="t-small mt-2 flex items-center justify-center gap-1.5 underline" style={{ color: 'var(--brand)' }}>
+        Not sure yet? Talk to a counsellor
+      </a>
 
       {preview && (
         <Link
@@ -893,6 +912,25 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
             </ol>
           </Section>
 
+          {/* Talk to a counsellor ----------------------------------------- */}
+          <Section id="ask" eyebrow="Talk to a counsellor" title="Not sure this is the right course?">
+            <div className="grid max-w-4xl gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <CourseEnquiry productId={product.id} courseTitle={product.title} captcha={await captcha} />
+              <div className="t-small muted space-y-3">
+                <p>Leave your number and a counsellor calls you back about {product.title}: the level that suits you, batch times, the fee and instalments.</p>
+                {site.organization.contactNumber && (
+                  <p>
+                    Or call us now on{' '}
+                    <a href={`tel:${site.organization.contactNumber.replace(/[^+0-9]/g, '')}`} className="font-medium underline" style={{ color: 'var(--brand)' }}>
+                      {site.organization.contactNumber}
+                    </a>
+                    .
+                  </p>
+                )}
+              </div>
+            </div>
+          </Section>
+
           {/* Before you enrol --------------------------------------------- */}
           <Section id="faq" eyebrow="Before you enrol" title="The things people ask us first">
             <div className="max-w-3xl divide-y overflow-hidden rounded-[var(--radius)] border bg-[var(--surface)]">
@@ -988,13 +1026,13 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
                 Enrol now
                 <span aria-hidden>→</span>
               </a>
-              <Link
-                href="/contact"
+              <a
+                href="#ask"
                 className="inline-flex h-11 items-center rounded-[var(--radius-sm)] border px-5 text-sm font-medium transition hover:bg-white/10"
                 style={{ borderColor: 'var(--shell-line)', color: 'var(--shell-ink)' }}
               >
                 Talk to an advisor
-              </Link>
+              </a>
             </div>
           </section>
             </div>
