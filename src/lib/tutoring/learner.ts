@@ -190,25 +190,36 @@ export async function chooseSlot(academy: Academy, userId: string, input: { offe
   const offer = await db.tutoringOffer.findFirst({ where: { id: input.offerId, organizationId, active: true }, select: { id: true, courseId: true } });
   if (!offer) return { ok: false, error: 'That course is not offered with an online tutor.' };
   const course = await db.course.findFirst({ where: { id: offer.courseId, organizationId }, select: { productId: true } });
-  const [enrolments, seats] = await Promise.all([
-    course
-      ? db.enrollment.findMany({ where: { organizationId, userId, productId: course.productId, status: { in: ['ENROLLED', 'REGISTERED'] } }, orderBy: { createdAt: 'asc' }, select: { id: true } })
-      : Promise.resolve([]),
-    db.tutoringSeat.findMany({ where: { organizationId, userId, status: { in: ['WAITING', 'PLACED', 'COMPLETED'] } }, select: { offerId: true, enrollmentId: true, status: true } }),
-  ]);
-  if (!enrolments.length) return { ok: false, error: 'Enrol on the course first, then choose your class time.' };
-  if (seats.some((s) => s.offerId === offer.id && s.status !== 'COMPLETED')) return { ok: false, error: 'You have already chosen a time for this course.' };
-  const enrolment = freeEnrolments(enrolments, seats)[0];
-  if (!enrolment) return { ok: false, error: 'You have had your classes on this course. To take it again, enrol again or ask the office.' };
   const minute = minuteOf(input.time);
   if (minute == null) return { ok: false, error: 'Choose a class time.' };
   const today = dayKey(new Date(), timezone);
   const fromDay = input.fromDay || today;
   if (!isDay(fromDay) || fromDay < today) return { ok: false, error: 'Choose today or a later day to start.' };
 
+  /*
+   * The checks and the new seat in one transaction, behind a lock on this
+   * learner and this course: two taps on the button (or the web and the
+   * phone at once) would otherwise both pass the checks and make two seats.
+   */
+  const claimed = await db.$transaction(async (tx): Promise<{ ok: false; error: string } | { ok: true; seatId: string }> => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`tutoring-seat:${userId}:${offer.id}`}))`;
+    const [enrolments, seats] = await Promise.all([
+      course
+        ? tx.enrollment.findMany({ where: { organizationId, userId, productId: course.productId, status: { in: ['ENROLLED', 'REGISTERED'] } }, orderBy: { createdAt: 'asc' }, select: { id: true } })
+        : Promise.resolve([]),
+      tx.tutoringSeat.findMany({ where: { organizationId, userId, status: { in: ['WAITING', 'PLACED', 'COMPLETED'] } }, select: { offerId: true, enrollmentId: true, status: true } }),
+    ]);
+    if (!enrolments.length) return { ok: false, error: 'Enrol on the course first, then choose your class time.' };
+    if (seats.some((s) => s.offerId === offer.id && s.status !== 'COMPLETED')) return { ok: false, error: 'You have already chosen a time for this course.' };
+    const enrolment = freeEnrolments(enrolments, seats)[0];
+    if (!enrolment) return { ok: false, error: 'You have had your classes on this course. To take it again, enrol again or ask the office.' };
+    const seat = await tx.tutoringSeat.create({ data: { organizationId, offerId: offer.id, userId, enrollmentId: enrolment.id, preferredMinute: minute, preferredFrom: fromDay }, select: { id: true } });
+    return { ok: true, seatId: seat.id };
+  });
+  if (!claimed.ok) return { ok: false, error: claimed.error };
+
   try {
-    const seat = await db.tutoringSeat.create({ data: { organizationId, offerId: offer.id, userId, enrollmentId: enrolment.id, preferredMinute: minute, preferredFrom: fromDay }, select: { id: true } });
-    const placed = await placeSeat(organizationId, seat.id);
+    const placed = await placeSeat(organizationId, claimed.seatId);
     return placed.placed
       ? { ok: true, message: `You are set: classes at ${timeLabel(minute)}. Your tutor and the dates are below.` }
       : { ok: true, message: 'That time has just been taken. You are on the list for it, and the office will offer you the nearest time.' };
