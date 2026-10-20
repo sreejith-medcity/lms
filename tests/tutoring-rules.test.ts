@@ -18,6 +18,7 @@ import {
   slotLabel,
   timeLabel,
   tutorLeavePlan,
+  tutorNoteProblem,
   weekdaysLabel,
   type TutorState,
 } from '../src/lib/tutoring/rules';
@@ -136,4 +137,10 @@ test('one enrolment buys one run of classes', () => {
   assert.deepEqual(freeEnrolments(enrolments, [{ enrollmentId: 'e1', status: 'PLACED' }, { enrollmentId: 'e2', status: 'WAITING' }]), []);
   /* A seat the office cancelled gives the enrolment its run back; a seat with no enrolment uses none up. */
   assert.deepEqual(freeEnrolments(enrolments, [{ enrollmentId: 'e1', status: 'CANCELLED' }, { enrollmentId: null, status: 'PLACED' }]), enrolments);
+});
+
+test("a tutor's progress note needs a mark and a line or two", () => {
+  assert.equal(tutorNoteProblem(null, 'Doing well with the listening'), 'Choose an overall mark from 1 to 5.');
+  assert.match(tutorNoteProblem(4, 'Good') ?? '', /line or two/);
+  assert.equal(tutorNoteProblem(4, 'Steady progress; work on articles.'), null);
 });

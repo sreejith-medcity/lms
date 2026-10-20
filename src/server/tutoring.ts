@@ -9,9 +9,10 @@ import { recordAudit } from '@/lib/audit';
 import { dayKey } from '@/lib/clock';
 import type { ActionState } from '@/server/courses';
 import { phoneVariants } from '@/lib/exams/perms';
-import { minuteOf, scoreOf, timeLabel, tutorLeaveProblem } from '@/lib/tutoring/rules';
-import { TutoringError, applyTutorLeave, changeSlot, placeSeat, reassignGroup, tell } from '@/lib/tutoring/data';
+import { minuteOf, timeLabel } from '@/lib/tutoring/rules';
+import { TutoringError, applyTutorLeave, placeSeat, reassignGroup, tell } from '@/lib/tutoring/data';
 import { chooseSlot, sendFeedback, takeLeave } from '@/lib/tutoring/learner';
+import { addHours, moveGroupTime, removeHours, requestLeave, sendProgressNote, withdrawLeave } from '@/lib/tutoring/tutor';
 
 /**
  * Online tutoring: what the office, a tutor and a learner can each do.
@@ -217,19 +218,15 @@ export async function reassignAction(_prev: ActionState, formData: FormData): Pr
 export async function changeSlotAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user, isOffice } = await anyStaff();
-    const groupId = String(formData.get('groupId') ?? '');
-    const group = await db.tutoringGroup.findFirst({ where: { id: groupId, organizationId: tenant.organizationId }, select: { tutorId: true } });
-    if (!group) return { error: 'That group is gone.' };
-    if (!isOffice && group.tutorId !== user.id) return { error: 'Only the tutor of a group, or the office, can move its time.' };
-    const minute = minuteOf(formData.get('time'));
-    if (minute == null) return { error: 'Choose the new time.' };
-    const fromDay = String(formData.get('fromDay') ?? '');
-    if (!isDay(fromDay)) return { error: 'Choose the day.' };
-    const onlyThatDay = formData.get('scope') !== 'onwards';
-    const moved = await changeSlot(tenant.organizationId, groupId, { startMinute: minute, fromDay, onlyThatDay });
-    await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: 'tutoring.slot_changed', entity: 'TutoringGroup', entityId: groupId, after: { minute, fromDay, onlyThatDay, moved } });
+    const r = await moveGroupTime(tenant, { id: user.id, isOffice }, {
+      groupId: String(formData.get('groupId') ?? ''),
+      time: formData.get('time'),
+      fromDay: String(formData.get('fromDay') ?? ''),
+      onlyThatDay: formData.get('scope') !== 'onwards',
+    });
+    if (!r.ok) return { error: r.error };
     refresh();
-    return { ok: true, message: `${moved} ${moved === 1 ? 'class' : 'classes'} moved to ${timeLabel(minute)}. The learners have been told.` };
+    return { ok: true, message: r.message };
   } catch (err) {
     return fail(err);
   }
@@ -240,29 +237,15 @@ export async function changeSlotAction(_prev: ActionState, formData: FormData): 
 export async function addAvailabilityAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user, isOffice } = await anyStaff();
-    const forUser = String(formData.get('userId') ?? '') || user.id;
-    if (forUser !== user.id && !isOffice) return { error: 'You can mark only your own hours.' };
-    if (forUser !== user.id) {
-      const staff = await db.user.findFirst({ where: { id: forUser, organizationId: tenant.organizationId, kind: 'STAFF' }, select: { id: true } });
-      if (!staff) return { error: 'That person is not on the team.' };
-    }
-    const weekdays = weekdaysFrom(formData);
-    if (!weekdays.length) return { error: 'Tick at least one day.' };
-    const start = minuteOf(formData.get('from'));
-    const end = minuteOf(formData.get('to'));
-    if (start == null || end == null || end <= start) return { error: 'The end time must be after the start time.' };
-
-    /* A new window swallows what it overlaps on that day, so the list never holds two windows saying the same hours. */
-    const existing = await db.tutorAvailability.findMany({ where: { organizationId: tenant.organizationId, userId: forUser, weekday: { in: weekdays } } });
-    for (const day of weekdays) {
-      const touching = existing.filter((w) => w.weekday === day && w.startMinute <= end && w.endMinute >= start);
-      const from = Math.min(start, ...touching.map((w) => w.startMinute));
-      const to = Math.max(end, ...touching.map((w) => w.endMinute));
-      if (touching.length) await db.tutorAvailability.deleteMany({ where: { organizationId: tenant.organizationId, id: { in: touching.map((w) => w.id) } } });
-      await db.tutorAvailability.create({ data: { organizationId: tenant.organizationId, userId: forUser, weekday: day, startMinute: from, endMinute: to } });
-    }
+    const r = await addHours(tenant, { id: user.id, isOffice }, {
+      userId: String(formData.get('userId') ?? '') || undefined,
+      weekdays: weekdaysFrom(formData),
+      from: formData.get('from'),
+      to: formData.get('to'),
+    });
+    if (!r.ok) return { error: r.error };
     refresh();
-    return { ok: true, message: 'Hours saved. New learners can be placed with you in them.' };
+    return { ok: true, message: r.message };
   } catch (err) {
     return fail(err);
   }
@@ -271,10 +254,8 @@ export async function addAvailabilityAction(_prev: ActionState, formData: FormDa
 export async function removeAvailabilityAction(id: string): Promise<ActionState> {
   try {
     const { tenant, user, isOffice } = await anyStaff();
-    const row = await db.tutorAvailability.findFirst({ where: { id, organizationId: tenant.organizationId }, select: { userId: true } });
-    if (!row) return { ok: true };
-    if (row.userId !== user.id && !isOffice) return { error: 'You can change only your own hours.' };
-    await db.tutorAvailability.deleteMany({ where: { id, organizationId: tenant.organizationId } });
+    const r = await removeHours(tenant, { id: user.id, isOffice }, id);
+    if (!r.ok) return { error: r.error };
     refresh();
     return { ok: true };
   } catch (err) {
@@ -287,26 +268,15 @@ export async function removeAvailabilityAction(id: string): Promise<ActionState>
 export async function requestTutorLeaveAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user, isOffice } = await anyStaff();
-    const forUser = String(formData.get('userId') ?? '') || user.id;
-    if (forUser !== user.id && !isOffice) return { error: 'You can ask for leave only for yourself.' };
-    const fromDay = String(formData.get('fromDay') ?? '');
-    const toDay = String(formData.get('toDay') ?? '') || fromDay;
-    const problem = tutorLeaveProblem(fromDay, toDay, dayKey(new Date(), tenant.timezone));
-    if (problem) return { error: problem };
-    const overlap = await db.tutorLeave.count({ where: { organizationId: tenant.organizationId, userId: forUser, status: { in: ['PENDING', 'APPROVED'] }, fromDay: { lte: toDay }, toDay: { gte: fromDay } } });
-    if (overlap) return { error: 'There is already leave on some of those days.' };
-    const reason = String(formData.get('reason') ?? '').trim().slice(0, 500);
-
-    /* The office entering leave for a tutor is the approval; a tutor's own request waits for it. */
-    const direct = isOffice && forUser !== user.id;
-    const leave = await db.tutorLeave.create({
-      data: { organizationId: tenant.organizationId, userId: forUser, fromDay, toDay, reason, status: direct ? 'APPROVED' : 'PENDING', decidedById: direct ? user.id : null, decidedAt: direct ? new Date() : null },
-      select: { id: true },
+    const r = await requestLeave(tenant, { id: user.id, isOffice }, {
+      userId: String(formData.get('userId') ?? '') || undefined,
+      fromDay: String(formData.get('fromDay') ?? ''),
+      toDay: String(formData.get('toDay') ?? ''),
+      reason: String(formData.get('reason') ?? ''),
     });
-    if (direct) await applyTutorLeave(tenant.organizationId, leave.id);
-    await recordAudit({ organizationId: tenant.organizationId, actorId: user.id, action: direct ? 'tutoring.leave_entered' : 'tutoring.leave_requested', entity: 'TutorLeave', entityId: leave.id, after: { forUser, fromDay, toDay } });
+    if (!r.ok) return { error: r.error };
     refresh();
-    return { ok: true, message: direct ? 'Leave entered. The classes are rearranged and the learners told.' : 'Sent to the office. Nothing changes for your learners until it is approved.' };
+    return { ok: true, message: r.message };
   } catch (err) {
     return fail(err);
   }
@@ -352,9 +322,9 @@ export async function decideTutorLeaveAction(leaveId: string, approve: boolean):
 
 export async function withdrawTutorLeaveAction(leaveId: string): Promise<ActionState> {
   try {
-    const { tenant, user } = await anyStaff();
-    const n = await db.tutorLeave.updateMany({ where: { id: leaveId, organizationId: tenant.organizationId, userId: user.id, status: 'PENDING' }, data: { status: 'WITHDRAWN' } });
-    if (!n.count) return { error: 'Only a request still waiting can be withdrawn. For approved leave, speak to the office.' };
+    const { tenant, user, isOffice } = await anyStaff();
+    const r = await withdrawLeave(tenant, { id: user.id, isOffice }, leaveId);
+    if (!r.ok) return { error: r.error };
     refresh();
     return { ok: true };
   } catch (err) {
@@ -417,30 +387,17 @@ export async function learnerFeedbackAction(_prev: ActionState, formData: FormDa
 export async function tutorFeedbackAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   try {
     const { tenant, user } = await anyStaff();
-    const rating = scoreOf(formData.get('rating'));
-    if (!rating) return { error: 'Choose an overall mark from 1 to 5.' };
-    const answers = { attendance: scoreOf(formData.get('attendance')), participation: scoreOf(formData.get('participation')), homework: scoreOf(formData.get('homework')) };
-    const comment = String(formData.get('comment') ?? '').trim().slice(0, 2000);
-    if (comment.length < 10) return { error: 'Write a line or two on how the learner is doing and what to work on.' };
-    const id = String(formData.get('feedbackId') ?? '');
-    const n = await db.tutoringFeedback.updateMany({
-      where: { id, organizationId: tenant.organizationId, tutorId: user.id, direction: 'TUTOR', submittedAt: null },
-      data: { rating, answers, comment, submittedAt: new Date() },
+    const r = await sendProgressNote(tenant, user.id, {
+      feedbackId: String(formData.get('feedbackId') ?? ''),
+      rating: formData.get('rating'),
+      attendance: formData.get('attendance'),
+      participation: formData.get('participation'),
+      homework: formData.get('homework'),
+      comment: String(formData.get('comment') ?? ''),
     });
-    if (!n.count) return { error: 'That note has already been sent, or is not yours.' };
-    const row = await db.tutoringFeedback.findFirst({ where: { id, organizationId: tenant.organizationId }, select: { learnerId: true } });
-    if (row) {
-      await tell({
-        organizationId: tenant.organizationId,
-        eventKey: 'tutoring.progress_note',
-        userIds: [row.learnerId],
-        subject: 'A progress note from your tutor',
-        body: 'Hello {{name}}, your tutor has written a progress note on your online classes. It is under Online tutor in your portal.',
-        dedupe: `note:${id}`,
-      });
-    }
+    if (!r.ok) return { error: r.error };
     refresh();
-    return { ok: true, message: 'Sent. The learner can read it.' };
+    return { ok: true, message: r.message };
   } catch (err) {
     return fail(err);
   }

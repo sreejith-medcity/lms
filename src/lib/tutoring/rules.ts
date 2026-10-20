@@ -225,3 +225,10 @@ export function freeEnrolments<T extends { id: string }>(enrolments: T[], seats:
   const used = new Set(seats.filter((s) => s.status !== 'CANCELLED' && s.enrollmentId).map((s) => s.enrollmentId as string));
   return enrolments.filter((e) => !used.has(e.id));
 }
+/** Why a tutor's progress note cannot be taken as written, or null. */
+export function tutorNoteProblem(rating: number | null, comment: string): string | null {
+  if (!rating) return 'Choose an overall mark from 1 to 5.';
+  if (comment.trim().length < 10) return 'Write a line or two on how the learner is doing and what to work on.';
+  return null;
+}
+
