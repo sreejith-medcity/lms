@@ -13,6 +13,7 @@ export async function GET() {
       'PATCH /api/v1/me { locale?, timezone? }',
       'GET /api/v1/courses',
       'GET /api/v1/courses/:productId',
+      'GET /api/v1/courses/:productId/downloads',
       'GET /api/v1/lessons/:materialId',
       'POST /api/v1/lessons/:materialId/progress { positionSeconds?, durationSeconds?, complete? }',
       'GET /api/v1/classes?days=14',
