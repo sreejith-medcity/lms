@@ -5,6 +5,9 @@ import { formatMoney } from '@/lib/money';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { EventForm } from './editors';
 import { HOLDS_SEAT, seatsLeftLabel } from '@/lib/seats';
+import { toLocalInput } from '@/lib/clock';
+import { eventWhen } from '@/lib/event-rules';
+import { eventRegistrants } from '@/lib/event-tickets';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -35,6 +38,8 @@ export default async function EventsPage({
   });
 
   const current = events.find((e) => e.id === editing);
+  const registrants = current ? await eventRegistrants(tenant.organizationId, current.id) : [];
+  const zone = tenant.timezone;
 
   return (
     <div>
@@ -72,13 +77,7 @@ export default async function EventsPage({
                       </div>
 
                       <p className="t-small faint mt-1">
-                        {e.event?.startsAt?.toLocaleString('en-IN', {
-                          weekday: 'short',
-                          day: 'numeric',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {eventWhen(e.event?.startsAt ?? null, e.event?.endsAt ?? null, zone)}
                         {e.event?.venue ? ` · ${e.event.venue}` : ''}
                       </p>
 
@@ -93,6 +92,11 @@ export default async function EventsPage({
                         {seatsLeft ? `, ${seatsLeft}` : ''}
                       </p>
                     </div>
+                    {e.status === 'PUBLISHED' && (
+                      <a href={`/event/${e.slug}`} target="_blank" rel="noopener" className="t-small underline">
+                        Public page
+                      </a>
+                    )}
                   </div>
                 </Card>
               );
@@ -109,17 +113,45 @@ export default async function EventsPage({
                   ? {
                       id: current.id,
                       title: current.title,
-                      startsAt: current.event?.startsAt?.toISOString() ?? '',
-                      endsAt: current.event?.endsAt?.toISOString() ?? '',
+                      startsAt: toLocalInput(current.event?.startsAt, zone),
+                      endsAt: toLocalInput(current.event?.endsAt, zone),
                       isOnline: current.event?.isOnline ?? true,
                       venue: current.event?.venue ?? '',
+                      summary: current.event?.summary ?? '',
+                      joinUrl: current.event?.joinUrl ?? '',
                       capacity: current.event?.capacity ?? 0,
+                      priceRupees: (current.pricingPlans[0]?.pricePaise ?? 0) / 100,
                       status: current.status,
                     }
                   : undefined
               }
             />
           </div>
+
+          {current && (
+            <div className="mt-8 border-t pt-5">
+              <h3 className="t-title">
+                Who is coming <span className="faint tabular-nums">{registrants.length}</span>
+              </h3>
+              {registrants.length === 0 ? (
+                <p className="t-small faint mt-2">Nobody has a place yet.</p>
+              ) : (
+                <ul className="mt-3 divide-y rounded-[var(--radius-sm)] border">
+                  {registrants.map((r) => (
+                    <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2">
+                      <a href={`/admin/learners/${r.user.id}`} className="text-sm font-medium hover:underline">
+                        {r.user.name}
+                      </a>
+                      <span className="t-small faint">
+                        {[r.user.phone, r.user.email].filter(Boolean).join(' · ')}
+                        {r.pricingPlan && r.pricingPlan.pricePaise > 0 ? ` · ${formatMoney(r.pricingPlan.pricePaise, r.pricingPlan.currency)}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </Card>
       </div>
     </div>

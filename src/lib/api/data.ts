@@ -88,7 +88,8 @@ const courseSelect = {
 
 export async function myCourses(tenant: TenantContext, user: ApiUser) {
   const rows = await db.enrollment.findMany({
-    where: { organizationId: tenant.organizationId, userId: user.id, status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
+    // Event places are listed by GET /api/v1/events, not as courses.
+    where: { organizationId: tenant.organizationId, userId: user.id, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, product: { type: { not: 'EVENT' } } },
     orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     select: courseSelect,
   });

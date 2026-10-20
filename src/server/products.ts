@@ -8,6 +8,8 @@ import { requireTenant } from '@/lib/tenant';
 import { slugify, uniqueSlug } from '@/lib/slug';
 import { recordAudit } from '@/lib/audit';
 import type { ActionState } from '@/server/courses';
+import { fromLocalInput } from '@/lib/clock';
+import { HOLDS_SEAT } from '@/lib/seats';
 
 /**
  * Events and memberships.
@@ -41,6 +43,8 @@ const event = z.object({
   endsAt: z.string().optional().or(z.literal('')),
   isOnline: z.boolean(),
   venue: z.string().trim().max(240).optional().or(z.literal('')),
+  summary: z.string().trim().max(2000).optional().or(z.literal('')),
+  joinUrl: z.string().trim().max(500).optional().or(z.literal('')),
   capacity: z.coerce.number().min(0).max(100000).optional(),
   priceRupees: z.coerce.number().min(0).max(1000000),
   status: z.enum(['DRAFT', 'PUBLISHED']),
@@ -57,6 +61,8 @@ export async function saveEvent(_prev: ActionState, formData: FormData): Promise
       endsAt: formData.get('endsAt') || '',
       isOnline: formData.get('isOnline') === 'on',
       venue: formData.get('venue') || '',
+      summary: formData.get('summary') || '',
+      joinUrl: formData.get('joinUrl') || '',
       capacity: formData.get('capacity') || 0,
       priceRupees: formData.get('priceRupees') || 0,
       status: formData.get('status') || 'DRAFT',
@@ -64,29 +70,67 @@ export async function saveEvent(_prev: ActionState, formData: FormData): Promise
     if (!parsed.success) return { error: parsed.error.issues[0].message };
 
     const d = parsed.data;
-    const start = new Date(d.startsAt);
-    const end = d.endsAt ? new Date(d.endsAt) : null;
+    // The form's times are the academy's clock, not the server's.
+    const start = fromLocalInput(d.startsAt, tenant.timezone);
+    const end = d.endsAt ? fromLocalInput(d.endsAt, tenant.timezone) : null;
+    if (!start) return { error: 'That start time does not look right.' };
     if (end && end < start) return { error: 'It ends before it starts.' };
     if (!d.isOnline && !d.venue) return { error: 'An in-person event needs a venue.' };
+    if (d.joinUrl && !/^https:\/\/\S+$/i.test(d.joinUrl)) return { error: 'The joining link should start with https://' };
 
+    const pricePaise = Math.round(d.priceRupees * 100);
     const eventData = {
       startsAt: start,
       endsAt: end,
       isOnline: d.isOnline,
       venue: d.venue || null,
+      summary: d.summary || null,
+      joinUrl: d.isOnline ? d.joinUrl || null : null,
       capacity: d.capacity || null,
     };
 
     if (d.id) {
       const owned = await db.product.findFirst({
         where: { id: d.id, organizationId: tenant.organizationId, type: 'EVENT' },
-        select: { id: true },
+        select: {
+          id: true,
+          pricingPlans: { where: { isActive: true }, orderBy: { sortOrder: 'asc' }, take: 1, select: { id: true, pricePaise: true, _count: { select: { enrollments: true } } } },
+          _count: { select: { enrollments: { where: HOLDS_SEAT } } },
+        },
       });
       if (!owned) return { error: 'Event not found.' };
+      if (d.capacity && d.capacity < owned._count.enrollments) {
+        return { error: `${owned._count.enrollments} people already have a place, so the capacity cannot be ${d.capacity}.` };
+      }
 
       await db.product.update({
         where: { id: d.id },
-        data: { title: d.title, status: d.status, event: { update: eventData } },
+        data: { title: d.title, status: d.status, event: { upsert: { create: eventData, update: eventData } } },
+      });
+
+      // A new price. The old plan is kept, inactive, when anyone holds a place
+      // on it, because what they paid is history; otherwise it is just changed.
+      const plan = owned.pricingPlans[0];
+      if (!plan) {
+        await db.pricingPlan.create({ data: { productId: d.id, name: pricePaise > 0 ? 'Ticket' : 'Free', pricePaise, sortOrder: 0 } });
+      } else if (plan.pricePaise !== pricePaise) {
+        if (plan._count.enrollments > 0) {
+          await db.$transaction([
+            db.pricingPlan.update({ where: { id: plan.id }, data: { isActive: false } }),
+            db.pricingPlan.create({ data: { productId: d.id, name: pricePaise > 0 ? 'Ticket' : 'Free', pricePaise, sortOrder: 0 } }),
+          ]);
+        } else {
+          await db.pricingPlan.update({ where: { id: plan.id }, data: { pricePaise, name: pricePaise > 0 ? 'Ticket' : 'Free' } });
+        }
+      }
+
+      await recordAudit({
+        organizationId: tenant.organizationId,
+        actorId: user.id,
+        action: 'event.updated',
+        entity: 'Product',
+        entityId: d.id,
+        after: { title: d.title, status: d.status, pricePaise, capacity: d.capacity || null },
       });
     } else {
       const slug = await uniqueSlug(slugify(d.title), async (candidate) =>
@@ -109,8 +153,8 @@ export async function saveEvent(_prev: ActionState, formData: FormData): Promise
           event: { create: eventData },
           pricingPlans: {
             create: {
-              name: d.priceRupees > 0 ? 'Ticket' : 'Free',
-              pricePaise: Math.round(d.priceRupees * 100),
+              name: pricePaise > 0 ? 'Ticket' : 'Free',
+              pricePaise,
               sortOrder: 0,
             },
           },

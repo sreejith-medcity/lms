@@ -15,6 +15,7 @@ import { scheduleFromPlan } from '@/lib/dues';
 import { conversionHints } from '@/lib/attribution-server';
 import { grantPackInTx, withdrawPacks } from '@/lib/exams/packs';
 import { HOLDS_SEAT, firstWithRoom } from '@/lib/seats';
+import { eventWhen } from '@/lib/event-rules';
 
 /**
  * The one place a payment becomes access.
@@ -885,8 +886,16 @@ async function tellTheWorld(input: {
   if (input.enrollmentIds.length) {
     const enrolments = await db.enrollment.findMany({
       where: { id: { in: input.enrollmentIds } },
-      select: { id: true, productId: true, batchId: true, product: { select: { title: true } } },
+      select: {
+        id: true,
+        productId: true,
+        batchId: true,
+        product: { select: { title: true, slug: true, type: true, event: { select: { startsAt: true, endsAt: true, isOnline: true, venue: true } } } },
+      },
     });
+    const zone = enrolments.some((e) => e.product.event)
+      ? ((await db.organization.findUnique({ where: { id: input.organizationId }, select: { timezone: true } }))?.timezone ?? 'Asia/Calcutta')
+      : 'Asia/Calcutta';
     for (const e of enrolments) {
       await happened({
         organizationId: input.organizationId,
@@ -897,12 +906,21 @@ async function tellTheWorld(input: {
         batchId: e.batchId,
         data: { orderNo: input.orderNo, enrollmentId: e.id, item: e.product.title, member, source: 'PURCHASE' },
       });
+      const ticket = e.product.type === 'EVENT' ? e.product.event : null;
       await notifyLearner({
         organizationId: input.organizationId,
-        eventKey: 'course.welcome',
+        eventKey: ticket ? 'event.registered' : 'course.welcome',
         userId: input.userId,
         subjectId: e.id,
-        context: { item: e.product.title, url: `/learn/${e.productId}`, organization: organization?.name ?? '' },
+        context: ticket
+          ? {
+              item: e.product.title,
+              when: eventWhen(ticket.startsAt, ticket.endsAt, zone),
+              where: ticket.isOnline ? 'Online. The joining link appears on the event page shortly before it starts.' : (ticket.venue ?? ''),
+              url: `/event/${e.product.slug}`,
+              organization: organization?.name ?? '',
+            }
+          : { item: e.product.title, url: `/learn/${e.productId}`, organization: organization?.name ?? '' },
       });
     }
   }

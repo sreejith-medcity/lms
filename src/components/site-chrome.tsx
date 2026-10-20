@@ -145,6 +145,7 @@ export async function SiteFooter() {
           ))}
           <FooterLink href="/courses">All courses</FooterLink>
           <FooterLink href="/tests">Mock tests</FooterLink>
+          <FooterLink href="/events">Events</FooterLink>
         </FooterColumn>
 
         <FooterColumn title="Academy">

@@ -18,6 +18,7 @@ import { getTranslator } from '@/lib/i18n/server';
 import { settingBool } from '@/lib/settings/store';
 import { atRisk, currentStreak } from '@/lib/badges';
 import { streakFor } from '@/lib/badges-data';
+import { myEvents } from '@/lib/event-tickets';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,8 @@ export default async function MyLearning({
       userId: user.id,
       organizationId: tenant.organizationId,
       status: { notIn: ['CANCELLED', 'ARCHIVED'] },
+      // A place at an event is not a course to work through; events have their own list below.
+      product: { type: { not: 'EVENT' } },
     },
     orderBy: [{ lastActivityAt: 'desc' }, { createdAt: 'desc' }],
     include: {
@@ -103,6 +106,8 @@ export default async function MyLearning({
           select: { id: true, title: true, startsAt: true },
         })
       : [];
+
+  const events = await myEvents(tenant.organizationId, user.id);
 
   const inProgress = enrollments.filter((e) => e.progressPercent > 0 && e.progressPercent < 100);
   const notStarted = enrollments.filter((e) => e.progressPercent === 0);
@@ -262,6 +267,28 @@ export default async function MyLearning({
                   </li>
                 );
               })}
+            </ul>
+          </Card>
+        </Section>
+      )}
+
+      {events.length > 0 && (
+        <Section title={t('Your events')} action={<Link href="/events" className="t-small underline">{t('All events')}</Link>}>
+          <Card padded={false}>
+            <ul className="divide-y">
+              {events.map((e) => (
+                <li key={e.id}>
+                  <Link href={`/event/${e.slug}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-[var(--surface-2)]">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{e.title}</span>
+                      <span className="t-small faint">
+                        {e.when} · {e.isOnline ? t('Online') : (e.venue ?? '')}
+                      </span>
+                    </span>
+                    {e.joinUrl ? <Badge tone="ok">{t('join now')}</Badge> : e.phase === 'LIVE' ? <Badge tone="ok">{t('happening now')}</Badge> : <Badge>{t('you are going')}</Badge>}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </Card>
         </Section>

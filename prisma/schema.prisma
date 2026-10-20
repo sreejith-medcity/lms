@@ -1045,6 +1045,11 @@ model Event {
   isOnline   Boolean   @default(true)
   capacity   Int?
   visibility String    @default("PUBLIC")
+  /// A paragraph on the public page: who it is for, what happens.
+  summary    String?
+  /// The meeting link of an online event. Shown only to people registered,
+  /// and only from shortly before it starts.
+  joinUrl    String?
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 

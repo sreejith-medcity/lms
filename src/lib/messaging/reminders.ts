@@ -96,3 +96,80 @@ export async function queueUpcomingReminders(organizationId: string): Promise<Re
 
   return { classes: upcoming.length, queued };
 }
+
+/**
+ * Event reminders: the day before and an hour before, to everyone holding a
+ * place. The day-before one is only sent while the event is still most of a
+ * day away, so somebody who registers in the afternoon for an evening talk
+ * gets the hour reminder and not a "tomorrow" that is wrong.
+ */
+const EVENT_LEADS = [
+  { key: 'day', from: 20 * 60, to: 24 * 60, soon: 'tomorrow' },
+  { key: 'hour', from: 0, to: 60, soon: 'starting soon' },
+] as const;
+
+export async function queueEventReminders(organizationId: string, now = new Date()): Promise<ReminderResult> {
+  const minute = 60_000;
+  let classes = 0;
+  let queued = 0;
+  let zone: string | null = null;
+  let organizationName = '';
+
+  for (const lead of EVENT_LEADS) {
+    const events = await db.event.findMany({
+      where: {
+        startsAt: { gt: new Date(now.getTime() + lead.from * minute), lte: new Date(now.getTime() + lead.to * minute) },
+        product: { organizationId, type: 'EVENT', status: 'PUBLISHED', deletedAt: null },
+      },
+      select: {
+        productId: true,
+        startsAt: true,
+        endsAt: true,
+        isOnline: true,
+        venue: true,
+        product: {
+          select: {
+            title: true,
+            slug: true,
+            enrollments: {
+              where: { organizationId, status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
+              select: { user: { select: { id: true, name: true, email: true, phone: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!events.length) continue;
+
+    if (zone === null) {
+      const organization = await db.organization.findUnique({ where: { id: organizationId }, select: { timezone: true, name: true } });
+      zone = organization?.timezone ?? 'Asia/Calcutta';
+      organizationName = organization?.name ?? '';
+    }
+
+    for (const event of events) {
+      const people = event.product.enrollments.map((row) => row.user);
+      if (!people.length || !event.startsAt) continue;
+      classes += 1;
+      const when = `${formatDayLabel(dayKey(event.startsAt, zone), zone, true)}, ${formatTime(event.startsAt, zone)}`;
+      const result = await queueNotifications({
+        organizationId,
+        eventKey: 'event.reminder',
+        recipients: people.map((person) => ({ userId: person.id, email: person.email, phone: person.phone })),
+        dedupeKey: `event.reminder:${lead.key}:${event.productId}`,
+        context: {
+          item: event.product.title,
+          soon: lead.soon,
+          when,
+          where: event.isOnline ? 'It is online: the joining link is on the event page from half an hour before.' : `At ${event.venue ?? 'the academy'}.`,
+          url: `/event/${event.product.slug}`,
+          organization: organizationName,
+        },
+        contextFor: (person) => ({ name: people.find((p) => p.id === person.userId)?.name ?? 'there' }),
+      });
+      queued += result.queued;
+    }
+  }
+
+  return { classes, queued };
+}

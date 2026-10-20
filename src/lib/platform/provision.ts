@@ -43,7 +43,7 @@ const NOTIFICATION_EVENTS = [
   'session.reminder', 'session.start', 'session.cancelled', 'session.absentee',
   'attendance.absent', 'attendance.late', 'attendance.corrected', 'result.published', 'fee.reminder', 'notice.published',
   'payment.received', 'payment.failed', 'instalment.due', 'misc_fee.raised',
-  'course.welcome', 'course.completed', 'certificate.issued', 'assessment.marked',
+  'course.welcome', 'event.registered', 'event.reminder', 'course.completed', 'certificate.issued', 'assessment.marked',
   'assignment.set', 'assignment.graded', 'report_card.issued', 'lesson_question.answered',
   'help.replied', 'badge.earned', 'reward.earned', 'data_request.closed',
 ];

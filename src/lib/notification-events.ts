@@ -57,6 +57,13 @@ export const NOTIFICATION_EVENTS: { group: string; events: NotificationEvent[] }
     ],
   },
   {
+    group: 'Events',
+    events: [
+      { key: 'event.registered', label: 'They registered for an event', who: 'The person who registered, with the date, the place and a calendar file', live: true },
+      { key: 'event.reminder', label: 'An event is coming up', who: 'Everyone holding a place: the day before and an hour before', live: true },
+    ],
+  },
+  {
     group: 'Online tutoring',
     events: [
       { key: 'tutoring.assigned', label: 'A tutor and class time were set', who: 'The learner, and the tutor', live: true },

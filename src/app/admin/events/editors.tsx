@@ -4,16 +4,9 @@ import { useActionState } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveEvent } from '@/server/products';
 import type { ActionState } from '@/server/courses';
-import { Button, Checkbox, Field, FormError, FormSuccess, Input, Select } from '@/components/ui';
+import { Button, Checkbox, Field, FormError, FormSuccess, Input, Select, Textarea } from '@/components/ui';
 
 const initial: ActionState = {};
-
-function forInput(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export function EventForm({
   event,
@@ -25,7 +18,10 @@ export function EventForm({
     endsAt: string;
     isOnline: boolean;
     venue: string;
+    summary: string;
+    joinUrl: string;
     capacity: number;
+    priceRupees: number;
     status: string;
   };
 }) {
@@ -48,12 +44,12 @@ export function EventForm({
           <Input
             name="startsAt"
             type="datetime-local"
-            defaultValue={forInput(event?.startsAt ?? '')}
+            defaultValue={event?.startsAt ?? ''}
             required
           />
         </Field>
         <Field label="Ends">
-          <Input name="endsAt" type="datetime-local" defaultValue={forInput(event?.endsAt ?? '')} />
+          <Input name="endsAt" type="datetime-local" defaultValue={event?.endsAt ?? ''} />
         </Field>
       </div>
 
@@ -68,15 +64,21 @@ export function EventForm({
         <Input name="venue" defaultValue={event?.venue} maxLength={240} placeholder="Kannur campus, hall 2" />
       </Field>
 
+      <Field label="Joining link" hint="For an online event. Only people with a place see it, from half an hour before.">
+        <Input name="joinUrl" type="url" defaultValue={event?.joinUrl} maxLength={500} placeholder="https://zoom.us/j/..." />
+      </Field>
+
+      <Field label="About it" hint="Who it is for and what happens. Shown on the event page.">
+        <Textarea name="summary" defaultValue={event?.summary} maxLength={2000} rows={4} />
+      </Field>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Capacity" hint="0 for no limit">
           <Input name="capacity" type="number" min={0} max={100000} defaultValue={event?.capacity ?? 0} />
         </Field>
-        {!event && (
-          <Field label="Ticket price (₹)" hint="0 for free">
-            <Input name="priceRupees" type="number" min={0} step="0.01" defaultValue={0} />
-          </Field>
-        )}
+        <Field label="Ticket price (₹)" hint="0 for free">
+          <Input name="priceRupees" type="number" min={0} step="0.01" defaultValue={event?.priceRupees ?? 0} />
+        </Field>
       </div>
 
       <Field label="Status">
@@ -99,7 +101,7 @@ export function EventForm({
 
       {event && (
         <p className="t-small faint">
-          The ticket price is edited on the product&rsquo;s pricing, alongside every other plan.
+          A new price applies to places taken from now on. What earlier people paid stays on their record.
         </p>
       )}
     </form>

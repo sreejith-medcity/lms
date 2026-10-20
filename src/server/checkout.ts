@@ -20,6 +20,7 @@ import { credit, loyaltyConfig, pointsToPaise, redeemablePoints } from '@/lib/wa
 import { scheduleFromPlan } from '@/lib/dues';
 import { prerequisiteBlock } from '@/lib/learning-paths-data';
 import { attributionJson, requestAttribution } from '@/lib/attribution-server';
+import { eventProblem } from '@/lib/event-tickets';
 
 /**
  * Checkout starts here, and every number on it is computed here.
@@ -79,6 +80,9 @@ export async function startCheckout(
     if (product.isAddonOnly) {
       return { ok: false, error: 'This is offered alongside a course rather than on its own.' };
     }
+    // An event that is full or over is not sold, whatever page the buyer came from.
+    const eventClosed = await eventProblem(tenant.organizationId, product.id);
+    if (eventClosed) return { ok: false, error: eventClosed };
 
     const plan = product.pricingPlans.find((p) => p.id === pricingPlanId) ?? product.pricingPlans[0];
     if (!plan) return { ok: false, error: 'This course has no price set. Please contact the academy.' };
@@ -371,6 +375,11 @@ export async function startCartCheckout(input: {
             ? 'That plan is paid for on its own. Open the course and enrol from there.'
             : 'Your cart is empty.',
       };
+    }
+
+    for (const line of basket.lines) {
+      const eventClosed = await eventProblem(tenant.organizationId, line.productId);
+      if (eventClosed) return { ok: false, error: `${line.title}: ${eventClosed}` };
     }
 
     const signedIn = await getSessionUser();

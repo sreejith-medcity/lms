@@ -4,7 +4,7 @@ import { authorizeCron } from '@/lib/cron';
 import { runAsPlatform } from '@/lib/db-scope';
 import { drain } from '@/lib/messaging/drain';
 import { purgeExpiredOtps } from '@/lib/otp';
-import { queueUpcomingReminders } from '@/lib/messaging/reminders';
+import { queueEventReminders, queueUpcomingReminders } from '@/lib/messaging/reminders';
 import { queueFeeReminders } from '@/lib/messaging/fee-reminders';
 import { sendDueCampaigns } from '@/lib/messaging/campaigns';
 import { runDueWorkflows } from '@/lib/workflows';
@@ -70,6 +70,10 @@ async function handle(request: Request) {
     // Queue before draining, so a class starting in the next hour is reminded
     // about on this run rather than the next one.
     const reminders = await queueUpcomingReminders(organization.id);
+    const events = await queueEventReminders(organization.id).catch((err) => {
+      console.error('[cron] events', err instanceof Error ? err.message : err);
+      return { classes: 0, queued: 0 };
+    });
     const fees = await queueFeeReminders(organization.id);
     // Online no-shows past the check time: their parents' alerts join this
     // run's drain rather than waiting for the next.
@@ -87,7 +91,7 @@ async function handle(request: Request) {
     // The Edmingle import, a little each run while its switch is on, with
     // whatever is left of this run's time after the messages have gone.
     const edmingle = await runEdmingleAuto(organization.id, Math.max(0, 48_000 - (Date.now() - started)));
-    results[organization.name] = { ...result, reminders, fees, noShows, workflows, campaigns, ...(edmingle ? { edmingle } : {}) };
+    results[organization.name] = { ...result, reminders, events, fees, noShows, workflows, campaigns, ...(edmingle ? { edmingle } : {}) };
   }
 
   const purged = await purgeExpiredOtps();

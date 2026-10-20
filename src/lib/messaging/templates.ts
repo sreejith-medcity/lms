@@ -110,6 +110,14 @@ const DEFAULTS: Record<string, Default> = {
     subject: 'You are enrolled in {{item}}',
     body: 'Hello {{name}}, you are enrolled in {{item}}. Start here: {{url}}',
   },
+  'event.registered': {
+    subject: 'You are registered for {{item}}',
+    body: 'Hello {{name}}, you have a place at {{item}}, {{when}}. {{where}} Details and a calendar file: {{url}}',
+  },
+  'event.reminder': {
+    subject: '{{item}} is {{soon}}',
+    body: 'Hello {{name}}, {{item}} is {{soon}}: {{when}}. {{where}} Details: {{url}}',
+  },
   'course.completed': {
     subject: 'You finished {{item}}',
     body: 'Hello {{name}}, you have finished {{item}}. Well done.',
