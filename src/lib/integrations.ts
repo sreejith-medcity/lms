@@ -1591,13 +1591,16 @@ export const INTEGRATIONS: IntegrationDef[] = [
     id: 'vimeo',
     name: 'Vimeo',
     category: 'storage',
-    priority: 3,
-    purpose: 'Hosting for promotional video and open lessons, where protection matters less than the player.',
-    status: 'planned',
-    landsIn: 'Later',
+    priority: 2,
+    purpose:
+      'Lesson video on the academy’s own Vimeo account. Each upload is sent to Vimeo and locked down: hidden from vimeo.com, playable only on the academy’s own addresses, no download, no comments; the player shows no title, logo, share buttons, settings menu or right-click menu. Videos already on the account can be linked from the library without uploading again.',
+    status: 'wired',
     alternativeTo: 'bunny',
-    requires: 'A Vimeo account on a plan that allows API uploads, and a token with upload and video_files scopes.',
-    fields: [KEY('accessToken', 'Access token')],
+    requires:
+      'A paid Vimeo plan (domain-level privacy and the locked player need one), and a personal access token from developer.vimeo.com: create an app, then generate an authenticated token with the Public, Private, Edit, Upload, Delete and Video Files scopes.',
+    fallback: 'Videos play straight from the bucket in the page’s own player.',
+    docsUrl: 'https://developer.vimeo.com/api/guides/start',
+    fields: [KEY('accessToken', 'Personal access token', undefined, 'Authenticated, with Public, Private, Edit, Upload, Delete and Video Files.')],
   },
   {
     id: 'google_drive',

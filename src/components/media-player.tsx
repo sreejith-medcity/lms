@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { savePosition } from '@/server/notes';
+import { VimeoFrame } from '@/components/vimeo-frame';
 
 /**
  * Video and audio that remember where you were.
@@ -46,7 +47,7 @@ export function MediaPlayer({
   const [corner, setCorner] = useState(0);
   // 'asking' until the stream question is answered, so the file is not
   // loaded and then swapped out under the viewer.
-  const [source, setSource] = useState<{ kind: 'file' } | { kind: 'hls'; url: string } | { kind: 'asking' }>(
+  const [source, setSource] = useState<{ kind: 'file' } | { kind: 'hls'; url: string } | { kind: 'embed'; url: string } | { kind: 'asking' }>(
     streamUrl && kind === 'video' ? { kind: 'asking' } : { kind: 'file' },
   );
 
@@ -54,10 +55,10 @@ export function MediaPlayer({
     if (!streamUrl || kind !== 'video') return;
     let cancelled = false;
     fetch(streamUrl, { cache: 'no-store' })
-      .then(async (res) => (res.ok ? ((await res.json()) as { hls?: string }) : null))
+      .then(async (res) => (res.ok ? ((await res.json()) as { hls?: string | null; embed?: string | null }) : null))
       .then((data) => {
         if (cancelled) return;
-        setSource(data?.hls ? { kind: 'hls', url: data.hls } : { kind: 'file' });
+        setSource(data?.embed ? { kind: 'embed', url: data.embed } : data?.hls ? { kind: 'hls', url: data.hls } : { kind: 'file' });
       })
       .catch(() => {
         if (!cancelled) setSource({ kind: 'file' });
@@ -183,6 +184,21 @@ export function MediaPlayer({
     onPause: () => persist(true),
     onEnded: () => persist(true),
   };
+
+  // On Vimeo: its own player, locked down, with the same memory and watermark.
+  if (source.kind === 'embed') {
+    return (
+      <VimeoFrame
+        embedUrl={source.url}
+        title="Lesson video"
+        materialId={materialId}
+        startAt={startAt}
+        durationSeconds={durationSeconds}
+        onTimeUpdate={onTimeUpdate}
+        watermark={watermark}
+      />
+    );
+  }
 
   return (
     <div className="space-y-2">

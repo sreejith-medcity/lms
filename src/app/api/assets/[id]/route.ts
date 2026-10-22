@@ -9,7 +9,7 @@ import { settingBool, settingText } from '@/lib/settings/store';
 import { redirectResponse } from '@/lib/http-headers';
 import { assignmentsWhereFor, learnerEnrolments } from '@/lib/assignment-access';
 import { getParentSession } from '@/lib/parent-session';
-import { playbackFor } from '@/lib/video';
+import { playbackFor, VIMEO_KEY } from '@/lib/video';
 import { meetFor, parseMeetAssetKey, recordingLinks } from '@/lib/medcity-meet';
 
 export const dynamic = 'force-dynamic';
@@ -324,9 +324,14 @@ export async function GET(
     const playback = await playbackFor(tenant.organizationId, asset);
     if (!playback) return new NextResponse('No stream', { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
     return NextResponse.json(
-      { hls: playback.hlsUrl, thumbnail: playback.thumbnailUrl, expiresAt: playback.expiresAt.toISOString() },
+      { hls: playback.hlsUrl, embed: playback.embedUrl ?? null, thumbnail: playback.thumbnailUrl, expiresAt: playback.expiresAt.toISOString() },
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
+  }
+
+  // A video linked from Vimeo has no bytes here; it plays only in Vimeo's player.
+  if (asset.storageKey.startsWith(VIMEO_KEY)) {
+    return new NextResponse('This video plays from Vimeo', { status: 404, headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   const wantsDownload = query.get('download') === '1';

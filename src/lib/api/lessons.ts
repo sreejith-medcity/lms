@@ -2,7 +2,7 @@ import { db } from '@/lib/db';
 import { curriculumGate } from '@/lib/curriculum-access';
 import { MATERIAL_LABELS } from '@/lib/progress';
 import { readUrlFor } from '@/lib/storage';
-import { playbackFor } from '@/lib/video';
+import { playbackFor, VIMEO_KEY } from '@/lib/video';
 import type { Segment } from '@/lib/captions';
 import type { TenantContext } from '@/lib/tenant';
 import type { ApiUser } from './auth';
@@ -47,13 +47,24 @@ export async function lessonDetail(tenant: TenantContext, user: ApiUser, materia
   let fileUrl: string | null = null;
   let downloadUrl: string | null = null;
   let stream: { hls: string; thumbnail: string | null; expiresAt: string } | null = null;
+  // A video that lives only on Vimeo has no file to hand out: it plays in
+  // Vimeo's locked player, which the app reaches through the web lesson page.
+  let embedUrl: string | null = null;
   if (m.asset && m.type !== 'SCORM') {
     const streaming = m.type === 'VIDEO' || m.type === 'AUDIO';
-    fileUrl = readUrlFor(m.asset.storageKey, { expiresIn: streaming ? 7200 : 600, mimeType: m.asset.mimeType });
-    if (m.isDownloadable) downloadUrl = readUrlFor(m.asset.storageKey, { expiresIn: 600, mimeType: m.asset.mimeType, downloadName: m.asset.fileName });
+    const onlyOnVimeo = m.asset.storageKey.startsWith(VIMEO_KEY);
+    if (!onlyOnVimeo) {
+      fileUrl = readUrlFor(m.asset.storageKey, { expiresIn: streaming ? 7200 : 600, mimeType: m.asset.mimeType });
+      if (m.isDownloadable) downloadUrl = readUrlFor(m.asset.storageKey, { expiresIn: 600, mimeType: m.asset.mimeType, downloadName: m.asset.fileName });
+    }
     if (streaming) {
       const p = await playbackFor(tenant.organizationId, m.asset);
-      if (p) stream = { hls: p.hlsUrl, thumbnail: p.thumbnailUrl, expiresAt: p.expiresAt.toISOString() };
+      if (p?.hlsUrl) stream = { hls: p.hlsUrl, thumbnail: p.thumbnailUrl, expiresAt: p.expiresAt.toISOString() };
+      if (p?.embedUrl) {
+        embedUrl = p.embedUrl;
+        // The bucket copy of a video sent to Vimeo is not offered to the app's own player either.
+        fileUrl = null;
+      }
     }
   }
   const segments = (m.asset?.transcript?.segments ?? null) as Segment[] | null;
@@ -74,7 +85,9 @@ export async function lessonDetail(tenant: TenantContext, user: ApiUser, materia
     summary: m.asset?.transcript?.summary ?? null,
     chapters: (m.asset?.transcript?.chapters ?? null) as { title: string; start: number }[] | null,
     /** Interactive packages open on the web, signed in through /auth/web. */
-    webPath: m.type === 'SCORM' ? `/learn/${ent.productId}/${m.id}` : null,
+    webPath: m.type === 'SCORM' || embedUrl ? `/learn/${ent.productId}/${m.id}` : null,
+    /** Set when the video plays only in Vimeo's player: open `webPath` rather than playing a file. */
+    embedOnly: Boolean(embedUrl),
     progress: { positionSeconds: progress?.positionSeconds ?? 0, percent: Math.round(progress?.percent ?? 0), completed: Boolean(progress?.completedAt) },
   };
 }

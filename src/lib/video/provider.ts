@@ -2,8 +2,10 @@ import type { StreamState } from '@/lib/video/tokens';
 
 /**
  * A video platform: it takes a file, turns it into adaptive HLS, and hands
- * out playback links that expire. Three of them speak this; the rest of
- * the product speaks only this.
+ * out playback links that expire. Four of them speak this; the rest of the
+ * product speaks only this. Vimeo is the odd one: it plays only in its own
+ * player, locked to the academy's domains, so it hands out an embed address
+ * instead of a stream.
  */
 
 export interface IngestResult {
@@ -21,7 +23,10 @@ export interface StreamStatus {
 }
 
 export interface Playback {
-  hlsUrl: string;
+  /** An adaptive stream for the page's own player; null for Vimeo. */
+  hlsUrl: string | null;
+  /** Vimeo's player, locked down, for a platform that plays only in its own. */
+  embedUrl?: string | null;
   thumbnailUrl: string | null;
   expiresAt: Date;
 }
@@ -34,13 +39,19 @@ export interface CaptionTrack {
 }
 
 export interface VideoProvider {
-  id: 'cloudflare_stream' | 'mux' | 'bunny';
+  id: 'cloudflare_stream' | 'mux' | 'bunny' | 'vimeo';
   name: string;
   /** Ask the platform to pull the file from a URL we mint and start encoding. */
   ingestFromUrl(sourceUrl: string, meta: { name: string; assetId: string }): Promise<IngestResult>;
   status(ids: { streamId: string; playbackId?: string | null }): Promise<StreamStatus>;
   playback(ids: { streamId: string; playbackId?: string | null }, expiresAt: Date): Promise<Playback>;
   remove(streamId: string): Promise<void>;
+  /**
+   * Lock a video down: hidden from the platform's own site, playable only on
+   * these domains, no download. Returns what could not be applied (a setting
+   * the account's plan does not offer), so the office can be told.
+   */
+  protect?(streamId: string, domains: string[]): Promise<string[]>;
   /** Ask the platform to write captions from the audio, where it can. */
   generateCaptions?(ids: { streamId: string; playbackId?: string | null }, language: string): Promise<void>;
   /** The caption tracks it has, and the VTT of one. */

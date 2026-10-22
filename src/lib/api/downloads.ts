@@ -5,6 +5,7 @@ import { readUrlFor } from '@/lib/storage';
 import { licenceUntil, offlineVerdict, OFFLINE_LICENCE_DAYS, sizeLabel, type OfflineVerdict } from '@/lib/offline';
 import type { TenantContext } from '@/lib/tenant';
 import type { ApiUser } from './auth';
+import { VIMEO_KEY } from '@/lib/video';
 
 /**
  * The lessons of one course the learner may download, with links to fetch
@@ -76,7 +77,7 @@ export async function courseDownloads(tenant: TenantContext, user: ApiUser, prod
         const verdict = offlineVerdict({
           type: m.type,
           isDownloadable: m.isDownloadable,
-          hasFile: Boolean(m.asset),
+          hasFile: Boolean(m.asset) && !m.asset!.storageKey.startsWith(VIMEO_KEY),
           drmProtected: Boolean(m.asset?.drmProtected),
           locked: Boolean(gate.lockOf(m.id, section.id)),
         });

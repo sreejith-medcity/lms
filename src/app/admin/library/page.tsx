@@ -7,6 +7,7 @@ import { Stat, StatGrid } from '@/components/stat';
 import { settingText } from '@/lib/settings/store';
 import { anthropicReady } from '@/lib/anthropic';
 import { AssetGrid, LibraryUploader, StorageStatus } from './panels';
+import { VimeoPanel } from './vimeo-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,6 +103,12 @@ export default async function LibraryPage() {
         <Card>
           <LibraryUploader />
         </Card>
+
+        {streaming === 'vimeo' && (
+          <Card>
+            <VimeoPanel />
+          </Card>
+        )}
 
         {rows.length === 0 ? (
           <EmptyState

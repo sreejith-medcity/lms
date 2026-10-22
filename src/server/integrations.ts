@@ -256,6 +256,25 @@ export async function testIntegration(provider: string): Promise<ActionState> {
       }
     }
 
+    if (provider === 'vimeo') {
+      const { vimeoAccount } = await import('@/lib/video/vimeo');
+      try {
+        const me = await vimeoAccount(resolved.values.accessToken);
+        const basic = me.plan === 'basic' || me.plan === 'free';
+        await recordIntegrationEvent({ organizationId: tenant.organizationId, provider, direction: 'CHECK', action: 'Credential check', ok: true, detail: `Vimeo answered as ${me.name || 'an account'} (${me.plan || 'plan unknown'}).` });
+        return {
+          ok: true,
+          message: `Vimeo is connected as ${me.name || 'this account'}, on the ${me.plan || 'unknown'} plan.${
+            basic ? ' A free or basic plan cannot lock videos to your domains or hide the player’s controls; a paid plan is needed for that.' : ' Choose Vimeo under Settings, Player, Video platform to start sending videos to it.'
+          }`,
+        };
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        await recordIntegrationEvent({ organizationId: tenant.organizationId, provider, direction: 'CHECK', action: 'Credential check', ok: false, detail });
+        return { error: detail };
+      }
+    }
+
     if (provider === 'medcity_meet') {
       const { meetFor } = await import('@/lib/medcity-meet');
       const client = await meetFor(tenant.organizationId);

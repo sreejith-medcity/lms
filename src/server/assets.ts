@@ -17,7 +17,7 @@ import {
   uploadTargetFor,
 } from '@/lib/storage';
 import type { ActionState } from '@/server/courses';
-import { forgetStream, queueTranscode, refreshStream } from '@/lib/video';
+import { forgetStream, linkVimeoVideo, protectAllVideos, queueTranscode, refreshStream, VIMEO_KEY } from '@/lib/video';
 import { settingBool } from '@/lib/settings/store';
 
 /**
@@ -208,6 +208,7 @@ export async function deleteAsset(assetId: string): Promise<ActionState> {
         sizeBytes: true,
         streamProvider: true,
         streamId: true,
+        streamPlaybackId: true,
         _count: { select: { materials: true, recordings: true } },
       },
     });
@@ -223,7 +224,7 @@ export async function deleteAsset(assetId: string): Promise<ActionState> {
       return { error: `This file is used by ${where}. Remove it there first.` };
     }
 
-    await deleteObject(asset.storageKey);
+    if (!asset.storageKey.startsWith(VIMEO_KEY)) await deleteObject(asset.storageKey);
     await forgetStream(tenant.organizationId, asset);
     await db.asset.delete({ where: { id: asset.id } });
     await meter(tenant.tenantId, 'STORAGE_BYTES', -Number(asset.sizeBytes));
@@ -254,6 +255,36 @@ export async function checkEncoding(assetId: string): Promise<ActionState> {
     const state = await refreshStream(tenant.organizationId, assetId, { force: true });
     revalidatePath('/admin/library');
     return { ok: true, message: state ? `Now ${state.toLowerCase()}.` : 'Not sent anywhere yet.' };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** A video already on the academy's Vimeo, added to the library and locked to the academy's addresses. */
+export async function addFromVimeo(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  try {
+    const { tenant, user } = await guard();
+    const link = String(formData.get('link') ?? '').trim();
+    if (!link) return { error: 'Paste the Vimeo link or the video number.' };
+    const result = await linkVimeoVideo(tenant.organizationId, link, user.id);
+    if (!result.ok) return { error: result.error };
+    revalidatePath('/admin/library');
+    const notes = result.notes.length ? ` Note: ${result.notes.join('; ')}.` : '';
+    return { ok: true, message: `${result.name} is in the library, locked to your addresses. Attach it to a lesson like any other video.${notes}` };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Lock every Vimeo video to the academy's addresses again, after an address is added. */
+export async function relockVimeoVideos(): Promise<ActionState> {
+  try {
+    const { tenant } = await guard();
+    const result = await protectAllVideos(tenant.organizationId);
+    revalidatePath('/admin/library');
+    if (result.done === 0 && result.problems.length) return { error: result.problems[0] };
+    const notes = result.problems.length ? ` Not everything applied: ${result.problems.slice(0, 3).join('; ')}.` : '';
+    return { ok: true, message: `${result.done} video${result.done === 1 ? '' : 's'} locked to your addresses.${notes}` };
   } catch (err) {
     return fail(err);
   }
