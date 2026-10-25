@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { dayKey } from '@/lib/clock';
+import { teknolyvUrl } from '@/lib/teknolyv-url';
 
 /**
  * A learner's calendar: their classes, one-to-one lessons, homework due
@@ -51,7 +52,7 @@ export function classItem(
     allDay: s.isHoliday,
     day: dayKey(s.startsAt, timeZone),
     url: '/learn',
-    joinUrl: cancelled || s.isHoliday ? null : s.joinUrl,
+    joinUrl: cancelled || s.isHoliday ? null : teknolyvUrl(s.joinUrl),
     status,
   };
 }

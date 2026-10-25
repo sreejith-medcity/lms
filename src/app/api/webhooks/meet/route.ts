@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
   const meet = await resolveIntegration(tenant.organizationId, 'medcity_meet');
   const secret = meet?.values.webhookSecret;
-  if (!secret) return NextResponse.json({ error: 'Medcity Meet is not connected here.' }, { status: 503 });
+  if (!secret) return NextResponse.json({ error: 'Teknolyv is not connected here.' }, { status: 503 });
 
   const signatureOk = verifyMeetSignature(secret, raw, request.headers.get('x-mm-signature'));
   const eventId = envelope.id ?? `${envelope.event ?? 'unknown'}:${envelope.data?.code ?? ''}:${Date.now()}`;
@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       direction: 'IN',
       action: envelope.event ?? 'unknown',
       ok: false,
-      detail: 'The signature did not match, so nothing was done with it. Check the webhook secret on the Medcity Meet card.',
+      detail: 'The signature did not match, so nothing was done with it. Check the webhook secret on the Teknolyv card.',
     });
     return NextResponse.json({ error: 'Bad signature.' }, { status: 401 });
   }

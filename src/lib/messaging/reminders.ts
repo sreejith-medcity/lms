@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { queueNotifications } from '@/lib/notify';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
+import { teknolyvUrl } from '@/lib/teknolyv-url';
 
 /**
  * Class reminders, queued by the clock rather than by somebody remembering.
@@ -83,7 +84,7 @@ export async function queueUpcomingReminders(organizationId: string): Promise<Re
         title: session.title,
         date: formatDayLabel(dayKey(session.startsAt, zone), zone, true),
         time: formatTime(session.startsAt, zone),
-        joinUrl: session.joinUrl ?? '',
+        joinUrl: teknolyvUrl(session.joinUrl) ?? '',
         organization: organization?.name ?? '',
       },
       contextFor: (person) => ({

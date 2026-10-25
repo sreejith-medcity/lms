@@ -8,6 +8,7 @@ import { PAYOUT_STATUS_LABEL, hoursLabel, monthWindow } from '@/lib/payouts';
 import { myDesk } from '@/lib/teaching-data';
 import { Badge, Card, EmptyState, PageHeader } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
+import { teknolyvUrl } from '@/lib/teknolyv-url';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -119,7 +120,7 @@ export default async function DeskPage() {
                       </div>
                       <div className="flex gap-2">
                         {(s.hostUrl || s.joinUrl) && (
-                          <a href={s.hostUrl ?? s.joinUrl ?? '#'} target="_blank" rel="noreferrer" className="rounded-[var(--radius-sm)] border px-2.5 py-1 text-xs hover:bg-[var(--surface-2)]">
+                          <a href={teknolyvUrl(s.hostUrl ?? s.joinUrl) ?? '#'} target="_blank" rel="noreferrer" className="rounded-[var(--radius-sm)] border px-2.5 py-1 text-xs hover:bg-[var(--surface-2)]">
                             Start
                           </a>
                         )}

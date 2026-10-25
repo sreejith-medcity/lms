@@ -6,6 +6,7 @@ import { Badge, Card, EmptyState, Section } from '@/components/ui';
 import { Stat, StatGrid } from '@/components/stat';
 import { storageConfigured } from '@/lib/storage';
 import { AttendanceRow, CancelSession, ClassNotices, MeetingPanel, Recordings } from './controls';
+import { teknolyvUrl } from '@/lib/teknolyv-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,8 +102,8 @@ export default async function SessionDetail({ params }: { params: Promise<{ id: 
           <Card>
             <MeetingPanel
               sessionId={session.id}
-              joinUrl={session.joinUrl}
-              hostUrl={session.hostUrl}
+              joinUrl={teknolyvUrl(session.joinUrl)}
+              hostUrl={teknolyvUrl(session.hostUrl)}
               meetingId={session.providerMeetingId}
               finished={session.endsAt < new Date()}
             />

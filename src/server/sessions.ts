@@ -216,7 +216,7 @@ export async function createMeetingNow(sessionId: string): Promise<ActionState> 
     if (result.reason) return { error: `The class platform refused: ${result.reason}` };
     return {
       error:
-        'Nothing was created. The class may already be in the past, have a link typed in by hand, or no class platform (Medcity Meet or Zoom) is connected for this academy.',
+        'Nothing was created. The class may already be in the past, have a link typed in by hand, or no class platform (Teknolyv or Zoom) is connected for this academy.',
     };
   } catch (err) {
     return fail(err);

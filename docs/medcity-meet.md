@@ -1,12 +1,14 @@
-# Live classes on Medcity Meet
+# Live classes on Teknolyv
 
-Medcity Meet (meet.medcitylms.in) is our own class platform. It replaces Zoom for live classes because it has no limit on how many classes run at the same time.
+Teknolyv (formerly Medcity Meet, now at https://teknolyv.com) is our own class platform. It replaces Zoom for live classes because it has no limit on how many classes run at the same time.
+
+The API lives at `https://teknolyv.com/api/v1` and is the default when `MEET_API_URL` is left blank. A stored API URL on the old host `https://meet.medcitylms.in` is moved to `https://teknolyv.com` at runtime (`teknolyvUrl` in `src/lib/medcity-meet.ts`), and so is any join or recording link Teknolyv hands back on the old host, so the old copy can be switched off without editing each academy. Internal names (`medcity_meet`, `MEET_*`, the `medcity-meet:` asset prefix) are unchanged so stored settings keep working.
 
 ## Connect it (once per academy)
 
-1. In Meet: Integrations → Create key (name it after this academy) → copy the `mk_live_...` key.
-2. In Meet: Integrations → Add endpoint → `https://<this academy's LMS domain>/api/webhooks/meet` (or `/api/meet/webhook`, the same thing) → copy the `whsec_...` secret.
-3. Here: Admin → Settings → Integrations → Medcity Meet → paste both → Save → Test.
+1. In Teknolyv (https://teknolyv.com): Integrations → Create key (name it after this academy) → copy the `mk_live_...` key.
+2. In Teknolyv: Integrations → Add endpoint → `https://<this academy's LMS domain>/api/webhooks/meet` (or `/api/meet/webhook`, the same thing) → copy the `whsec_...` secret.
+3. Here: Admin → Settings → Integrations → Teknolyv → paste both → Save → Test.
 
 Or set `MEET_API_KEY` and `MEET_WEBHOOK_SECRET` (and optionally `MEET_API_URL`) in the environment.
 
@@ -21,8 +23,8 @@ Or set `MEET_API_KEY` and `MEET_WEBHOOK_SECRET` (and optionally `MEET_API_URL`) 
 
 ## Code
 
-- `src/lib/medcity-meet.ts`: API client, join links, webhook signature, recording asset keys
+- `src/lib/medcity-meet.ts`: API client, join links, webhook signature, recording asset keys, old host mapping
 - `src/lib/zoom-sessions.ts`: `provisionMeetings` picks Meet when connected, else Zoom; move and cancel follow the class's provider
 - `src/lib/live-join.ts` and `src/app/live/[id]/join`: the personal join link
 - `src/app/api/webhooks/meet/route.ts`: started, ended, attendance, recording
-- Meet's API: https://github.com/sreejith-medcity/meet/blob/main/deploy/LMS-API.md
+- Teknolyv's API: https://github.com/sreejith-medcity/meet/blob/main/deploy/LMS-API.md

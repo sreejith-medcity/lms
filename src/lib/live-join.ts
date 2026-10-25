@@ -1,4 +1,5 @@
 import { meetFor, joinLinkFor } from '@/lib/medcity-meet';
+import { teknolyvUrl } from '@/lib/teknolyv-url';
 
 /**
  * Where Join sends this person. For a Medcity Meet class that is a link made
@@ -11,10 +12,10 @@ export async function joinTargetFor(
   user: { id: string; name: string; email: string | null; kind: 'LEARNER' | 'STAFF' },
 ): Promise<{ url: string } | { error: string }> {
   if (session.provider !== 'MEET' || !session.providerMeetingId) {
-    return session.joinUrl ? { url: session.joinUrl } : { error: 'The join link is not ready yet. Try again nearer the time.' };
+    return session.joinUrl ? { url: teknolyvUrl(session.joinUrl) } : { error: 'The join link is not ready yet. Try again nearer the time.' };
   }
   const meet = await meetFor(organizationId);
-  if (!meet) return { error: 'Medcity Meet is not connected for this academy any more. Tell the office.' };
+  if (!meet) return { error: 'Teknolyv is not connected for this academy any more. Tell the office.' };
   try {
     const url = await joinLinkFor(meet, session.id, { id: user.id, name: user.name, email: user.email, host: user.kind === 'STAFF' });
     return { url };

@@ -58,7 +58,7 @@ export default async function TutoringHours({ searchParams }: { searchParams: Pr
           </Table>
         )}
         <p className="t-small faint">
-          {hoursLabel(total)} in all. An hour counts once the class is held: the tutor submitted the register, or the class ended on Medcity Meet or Zoom. {unconfirmed > 0 ? `${unconfirmed} classes have passed with neither and add nothing until the register is in.` : ''}
+          {hoursLabel(total)} in all. An hour counts once the class is held: the tutor submitted the register, or the class ended on Teknolyv or Zoom. {unconfirmed > 0 ? `${unconfirmed} classes have passed with neither and add nothing until the register is in.` : ''}
         </p>
       </Section>
 

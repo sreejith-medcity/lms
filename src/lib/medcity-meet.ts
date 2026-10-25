@@ -1,8 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { resolveIntegration } from '@/lib/integration-store';
+import { TEKNOLYV_ORIGIN, TEKNOLYV_API_URL, teknolyvUrl } from '@/lib/teknolyv-url';
 
 /**
- * Medcity Meet, our own class platform (meet.medcitylms.in).
+ * Teknolyv (formerly Medcity Meet), our own class platform (teknolyv.com).
  *
  * It replaces Zoom for the reason Zoom was a problem: one Zoom seat runs one or
  * two meetings at a time, and an academy runs forty. Meet has no such limit.
@@ -36,12 +37,14 @@ export interface MeetClient {
 
 export const meetRef = (sessionId: string) => `lms-${sessionId}`;
 
+export { TEKNOLYV_ORIGIN, TEKNOLYV_API_URL, teknolyvUrl };
+
 export async function meetFor(organizationId: string): Promise<MeetClient | null> {
   const resolved = await resolveIntegration(organizationId, 'medcity_meet');
   if (!resolved) return null;
   const { apiUrl, apiKey, webhookSecret } = resolved.values;
   if (!apiKey) return null;
-  const base = (apiUrl || 'https://meet.medcitylms.in/api/v1').replace(/\/+$/, '');
+  const base = teknolyvUrl(apiUrl?.trim() || TEKNOLYV_API_URL).replace(/\/+$/, '');
 
   return {
     webhookSecret: webhookSecret || null,
@@ -54,7 +57,7 @@ export async function meetFor(organizationId: string): Promise<MeetClient | null
       });
       const data = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
       if (!response.ok) {
-        throw new MeetError(data.error?.message ?? `Meet answered ${response.status}`, response.status, data.error?.code ?? 'error');
+        throw new MeetError(data.error?.message ?? `Teknolyv answered ${response.status}`, response.status, data.error?.code ?? 'error');
       }
       return data as T;
     },
@@ -100,7 +103,7 @@ export async function createClass(
       notify: false,
     }),
   });
-  return res.meeting;
+  return { ...res.meeting, joinUrl: teknolyvUrl(res.meeting.joinUrl) };
 }
 
 export async function moveClass(client: MeetClient, sessionId: string, input: { title: string; startsAt: Date; minutes: number }) {
@@ -129,7 +132,7 @@ export async function joinLinkFor(
       ...(person.email ? { email: person.email } : {}),
     }),
   });
-  return res.url;
+  return teknolyvUrl(res.url);
 }
 
 export interface MeetRecording {
@@ -141,7 +144,8 @@ export interface MeetRecording {
 
 export async function recordingLinks(client: MeetClient, code: string, recordingId: string): Promise<MeetRecording | null> {
   const res = await client.request<{ recordings: MeetRecording[] }>(`/meetings/${encodeURIComponent(code)}/recordings`);
-  return res.recordings.find((r) => r.id === recordingId) ?? null;
+  const found = res.recordings.find((r) => r.id === recordingId);
+  return found ? { ...found, playbackUrl: teknolyvUrl(found.playbackUrl), downloadUrl: teknolyvUrl(found.downloadUrl) } : null;
 }
 
 /** Meet signs with `t=<seconds>,v1=<hex HMAC-SHA256 of "<t>.<body>">`. Ten minutes of clock drift allowed. */

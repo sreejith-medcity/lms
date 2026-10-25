@@ -6,6 +6,7 @@ import { Card, EmptyState } from '@/components/ui';
 import { creditsLeft } from '@/lib/booking-slots';
 import { dayKey, formatDayLabel, formatTime } from '@/lib/clock';
 import { BookSlot, CancelMine } from './booking';
+import { teknolyvUrl } from '@/lib/teknolyv-url';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Book a one to one', robots: { index: false, follow: false } };
@@ -113,7 +114,7 @@ export default async function BookOneToOne() {
                 <span className="flex items-center gap-3">
                   {s.joinUrl && (
                     <a
-                      href={s.joinUrl}
+                      href={teknolyvUrl(s.joinUrl)}
                       target="_blank"
                       rel="noreferrer noopener"
                       className="t-small underline"
